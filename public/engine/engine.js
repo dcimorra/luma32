@@ -37,11 +37,14 @@ export class Engine {
     this.last = performance.now();
     this.acc = 0;
     const step = 1000 / 60;
+    // ?turbo=N (testing only): N ticks of game time per tick of the clock. Everything the
+    // game does counts ticks (save.time too), so it plays the same, only N times sooner.
+    const turbo = Math.min(8, Math.max(1, Number(new URLSearchParams(location.search).get('turbo')) || 1));
     const loop = (now) => {
-      this.acc += Math.min(250, now - this.last);
+      this.acc += Math.min(250, now - this.last) * turbo;
       this.last = now;
       let n = 0;
-      while (this.acc >= step && n < 4) {
+      while (this.acc >= step && n < 4 * turbo) {
         this.update();
         this.acc -= step;
         n++;

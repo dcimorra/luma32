@@ -18,6 +18,20 @@ node tools/shot.mjs "http://127.0.0.1:8765/?game=<id>" /tmp/out script.json
   errors and `[luma]` warnings come back with each command. It closes itself after 10
   minutes without a command, but stop it yourself: an open browser is memory the whole
   machine pays for.
+- **Play long stretches at `&turbo=4`** in the URL: the game runs four times sooner and
+  plays the same — everything counts ticks, `save.time` too, and drive/shot divide every
+  `wait`, `hold` and `gap` by the turbo, so a script means the same game time at any speed.
+  Screenshots and timings read the same; only the wall clock is shorter.
+- **To get through a stretch, `tools/play.mjs`, not an autoplayer of your own.** On a
+  drive.mjs browser it plays with real keys: walks the engine's path to the objective (or
+  through the warps to its map), faces it and presses A, reads every box, picks choices,
+  and prints every line, objective and `[luma]` warning, with `save.time`:
+  ```bash
+  node tools/play.mjs <game>-<role> --jump 12 --secs 100 --choice 1,0 --stopobj obj.c4_
+  ```
+  `--target <actorId>` walks to someone instead; `STUCK` and `!!` lines are where a player
+  would be lost too — look there by hand. Writing and debugging a harness of your own is
+  what used to eat the first half hour of every review round.
 - **Every browser you open, you close.** `shot.mjs` and `sheet.mjs` close theirs (and
   give up after 5 minutes if a script hangs). Never write a script of your own that
   launches Chromium and stays up; if you need something drive.mjs lacks, ask for it in

@@ -5,18 +5,25 @@
 //       { eval: js } | { shot: name } | { screen: name }
 // `shot`/`screen` names are joined to `prefix` (`<prefix>-<name>.png`); an absolute
 // path ending in .png is used as it is.
+//
+// On a page opened with ?turbo=N the game runs N times faster, and every `wait`, `hold`
+// and `gap` here is divided by N: a script means the same game time at any speed (a hold
+// of 250 ms walks one cell either way). A hold never drops under 20 ms, one frame.
 export async function runSteps(page, steps, { prefix = '/tmp/luma', say = console.log } = {}) {
   const file = (name) => (name.startsWith('/') && name.endsWith('.png') ? name : `${prefix}-${name}.png`);
+  const turbo = Math.min(8, Math.max(1, Number(new URL(page.url()).searchParams.get('turbo')) || 1));
+  const ms = (t) => t / turbo;
+  const press = (t) => Math.max(20, t / turbo);
   for (const step of steps) {
     if (step.goto) await page.goto(step.goto);
     if (step.reload) await page.reload();
-    if (step.wait) await page.waitForTimeout(step.wait);
+    if (step.wait) await page.waitForTimeout(ms(step.wait));
     if (step.key) {
       for (let i = 0; i < (step.times || 1); i++) {
         await page.keyboard.down(step.key);
-        await page.waitForTimeout(step.hold || 60);
+        await page.waitForTimeout(press(step.hold || 60));
         await page.keyboard.up(step.key);
-        await page.waitForTimeout(step.gap || 60);
+        await page.waitForTimeout(press(step.gap || 60));
       }
     }
     // presses an on-screen control with the mouse (pointer events), optionally off-centre
@@ -27,9 +34,9 @@ export async function runSteps(page, steps, { prefix = '/tmp/luma', say = consol
       for (let i = 0; i < (step.times || 1); i++) {
         await page.mouse.move(x, y);
         await page.mouse.down();
-        await page.waitForTimeout(step.hold || 80);
+        await page.waitForTimeout(press(step.hold || 80));
         await page.mouse.up();
-        await page.waitForTimeout(step.gap || 80);
+        await page.waitForTimeout(press(step.gap || 80));
       }
     }
     // waits until a JS expression is true in the page (e.g. a scene is on top)

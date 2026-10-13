@@ -20,6 +20,13 @@ The cartridge id (`public/games/<id>/`) and the scope: the whole game, some chap
 some set pieces. If the scope isn't given, review the start of every chapter and every
 ★ set piece of the beat list.
 
+In a commission, round 1 plays the whole game. A later round comes with the scope the
+house set at the end of the note: the last review's defects and the files changed since.
+Play exactly that — each defect where it was, and every chapter those files feed, from its
+jump, as thoroughly as round 1 — and carry the rest of the scores over, marked as carried.
+A shared file (the story's core, a map several chapters use) widens it to every place it
+reaches; don't narrow it to save time.
+
 ## Read first, and only this
 
 - `.claude/skills/luma32-games/SKILL.md` (the index, "Done means").
@@ -56,7 +63,12 @@ it. The audit proves the data; it doesn't play. Everything below still has to be
   script.json`, or, to play a stretch command by command on one open page,
   `node tools/drive.mjs start rev-<id> <url>` … `node tools/drive.mjs stop rev-<id>`
   (testing.md). Close every browser you open before you finish; never write a browser
-  server of your own. Turn the dev overlay off (F2) for the screenshots you judge; on (F2)
+  server of your own.
+- **Open it with `&turbo=4`** and get through stretches with `node tools/play.mjs
+  rev-<id> …` (testing.md): it walks to each objective with real keys and prints every
+  line, choice, objective and warning. Don't write an autoplayer of your own — the house's
+  is there so your time goes to judging, not to debugging a harness. Where it prints
+  `STUCK` or `!!`, and at every place you judge, play by hand. Turn the dev overlay off (F2) for the screenshots you judge; on (F2)
   to read cells and ids.
 - Reach the start of a chapter with the cartridge's dev jumps (F3) or flags by `eval`
   — then **play it with real keys**: arrows, Z (A), X (B), Enter (START). No teleports
