@@ -1,7 +1,13 @@
 // Synthesised sound, nothing to download: a four-voice-and-then-some chiptune
 // sequencer for music, plus one-shot effects. Games describe songs as text patterns
 // (see README, "Music") and may add their own effects built on `tone` and `burst`.
+// A song may also play real instruments, recorded notes the way the GBA's own music
+// was made (README "Real instruments"): those are downloaded, each the first time a
+// song needs it.
+import { INSTRUMENTS as REAL, MARK, SEEK } from './instruments/index.js';
+
 const MUTE_KEY = 'luma32.muted';
+const REAL_KEY = 'luma32.real';
 
 let ctx = null;
 let master = null;
@@ -64,6 +70,7 @@ export function unlock() {
     sfxBus.connect(roomSend);
     if (roomWanted) room(roomWanted.mix, roomWanted.size);
     if (wanted) music(wanted.name, wanted.opts);
+    prefetchReal();
   }
   if (ctx.state === 'suspended') ctx.resume();
 }
@@ -178,7 +185,8 @@ const INSTRUMENTS = {
   pad: { wave: 'sawtooth', gain: 0.025, lp: 1300, attack: 0.25, detune: true },
 };
 
-function playNote(chan, freq, at, len) {
+function playNote(chan, freq, at, len, real = null) {
+  if (real && playReal(real, chan, freq, at, len)) return;
   const inst = { ...(INSTRUMENTS[chan.inst] || INSTRUMENTS.pulse50), ...chan };
   const gain = (inst.gain ?? 0.07) * (chan.vol ?? 1);
   let dest = musicBus;
@@ -210,6 +218,151 @@ const DRUMS = {
   t: (at, v, dest) => tone({ at, freq: 180, to: 90, len: 0.15, wave: 'tri', gain: 0.25 * v, dest }),
   r: (at, v, dest) => burst({ at, len: 0.02, type: 'bandpass', freq: 2500, q: 3, gain: 0.25 * v, dest }),
 };
+
+// ---------- real instruments ----------
+
+// What each of the console's own instruments becomes in a game's orchestra, which every
+// game has unless it says `orchestra: false`; `orchestra: { pad: 'choir' }` changes some,
+// a channel's `real` changes its own.
+export const ORCHESTRA = {
+  pulse12: 'harp', pulse25: 'flute', pulse50: 'clarinet', tri: 'horn', saw: 'brass', bass: 'fingerbass',
+  sine: 'panflute', bell: 'celesta', pluck: 'guitar', pad: 'strings', drums: 'kit',
+};
+// How loud each of the console's instruments sounds (RMS of a held note), so a real one
+// standing in for it keeps the song's mix; recorded notes are levelled to REAL_RMS.
+const SYNTH_RMS = { pulse12: 0.046, pulse25: 0.06, pulse50: 0.06, tri: 0.09, saw: 0.03, bass: 0.115, sine: 0.07, bell: 0.045, pluck: 0.045, pad: 0.03, drums: 0.08 };
+const REAL_RMS = 0.2;
+// the drum letters, as keys of the General MIDI kit
+const KIT = { k: 36, s: 38, h: 42, o: 46, c: 49, t: 45, r: 37 };
+
+let orchestra = true;        // the game's: true, { inst: 'real name' }, or null (chiptune)
+const banks = new Map();     // real name -> { buffer, off, def } | Promise | null (failed)
+
+// The player's choice in Options, for games that have an orchestra: real or chiptune.
+export const realOn = () => localStorage.getItem(REAL_KEY) !== '0';
+export function setReal(on) {
+  localStorage.setItem(REAL_KEY, on ? '1' : '0');
+  // the song starts again with its new instruments
+  const w = wanted;
+  if (w && ctx) { stopMusic(0.2); wanted = null; music(w.name, w.opts); }
+}
+
+// The game's orchestra (cart.js, from game.orchestra): on unless it says false. And
+// whether it has one at all.
+export function setOrchestra(conf) { orchestra = conf === undefined ? true : conf || null; prefetchReal(); }
+export const hasOrchestra = () => !!orchestra || [...songs.values()].some((s) => s.orchestra || Object.values(s.channels || {}).some((c) => REAL[c.inst] || REAL[c.real]));
+
+// The real instrument a channel plays, or null for the console's own: its `real`, its
+// `inst` when that names one (no real instrument shares a name with one of the console's,
+// so `inst: 'bass'` is always the console's bass), or what the song's or the game's
+// orchestra makes of it.
+// `real: false` keeps a channel chiptune; the player's "chiptune" keeps them all.
+export function realOf(song, chan) {
+  if (chan.real === false || !realOn()) return null;
+  if (REAL[chan.real]) return chan.real;
+  if (REAL[chan.inst]) return chan.inst;
+  const o = song.orchestra ?? orchestra;
+  if (!o) return null;
+  return (typeof o === 'object' && o[chan.inst]) || ORCHESTRA[chan.inst || 'pulse50'] || null;
+}
+
+// Fetches and decodes an instrument once; resolves with it, or null if it can't be had.
+function loadReal(name) {
+  if (banks.has(name)) return Promise.resolve(banks.get(name));
+  const def = REAL[name];
+  if (!def || !ctx) return Promise.resolve(null);
+  const p = fetch(new URL(`./instruments/${def.file}`, import.meta.url))
+    .then((r) => { if (!r.ok) throw new Error(r.status); return r.arrayBuffer(); })
+    .then((b) => ctx.decodeAudioData(b))
+    .then((buffer) => {
+      // the mark: wherever this decoder put the file's first sample
+      const d = buffer.getChannelData(0);
+      const lim = Math.min(d.length, Math.round(buffer.sampleRate * SEEK));
+      let at = 0;
+      for (let i = 1; i < lim; i++) if (Math.abs(d[i]) > Math.abs(d[at])) at = i;
+      const bank = { buffer, off: at / buffer.sampleRate - MARK, def };
+      banks.set(name, bank);
+      return bank;
+    })
+    .catch((err) => { console.warn(`[luma] instrument ${name} could not load: ${err.message || err}`); banks.set(name, null); return null; });
+  banks.set(name, p);
+  return p;
+}
+const readyReal = (name) => { const b = banks.get(name); return b && !(b instanceof Promise) ? b : null; };
+
+// The real instruments a song plays, as things are now.
+function realsOf(song) {
+  const out = new Set();
+  for (const chan of Object.values(song.channels || {})) { const r = realOf(song, chan); if (r) out.add(r); }
+  return out;
+}
+
+// Every instrument the game's songs play, one after another, once sound is on: a scene
+// change then never waits for one.
+let prefetching = false;
+function prefetchReal() {
+  if (!ctx || prefetching) return;
+  const all = new Set();
+  for (const s of songs.values()) for (const r of realsOf(s)) if (!banks.has(r)) all.add(r);
+  if (!all.size) return;
+  prefetching = true;
+  (async () => { for (const r of all) await loadReal(r); prefetching = false; })();
+}
+
+// One note on a real instrument; false if it isn't loaded (the console's own plays it).
+function playReal(name, chan, freq, at, len) {
+  const bank = readyReal(name);
+  if (!bank) return false;
+  const midi = 69 + 12 * Math.log2(freq / 440);
+  const notes = bank.def.notes;
+  const n = notes.find((z) => midi >= z.lo - 0.5 && midi <= z.hi + 0.5) || notes[midi < notes[0].root ? 0 : notes.length - 1];
+  const level = ((SYNTH_RMS[chan.inst] ?? 0.06) / REAL_RMS) * (chan.vol ?? 1) * (n.gain ?? 1);
+  sample(bank, n, Math.pow(2, (midi - n.root + n.tune) / 12), at, len, level, chan.echo ?? 0);
+  return true;
+}
+
+// A recorded note: from its place in the file, at a rate, held `len` seconds (looping
+// if it loops) and let go over its release; null `len` plays it out (a drum).
+function sample(bank, n, rate, at, len, level, echo = 0) {
+  const src = ctx.createBufferSource();
+  src.buffer = bank.buffer;
+  src.playbackRate.value = rate;
+  const begin = bank.off + n.at;
+  const g = ctx.createGain();
+  const rel = Math.max(0.04, Math.min(0.5, n.release));
+  g.gain.setValueAtTime(0, at);
+  g.gain.linearRampToValueAtTime(level, at + 0.004);
+  let end;
+  if (len == null) {
+    end = at + n.len / rate;
+  } else {
+    // a note that doesn't loop can't outlast its recording
+    const hold = n.loop ? len : Math.min(len, n.len / rate - 0.01);
+    g.gain.setValueAtTime(level, at + Math.max(0.004, hold));
+    g.gain.linearRampToValueAtTime(0.0001, at + Math.max(0.004, hold) + rel);
+    end = at + Math.max(0.004, hold) + rel;
+  }
+  if (n.loop) {
+    src.loop = true;
+    src.loopStart = begin + n.loop[0];
+    src.loopEnd = begin + n.loop[1];
+  }
+  src.connect(g).connect(musicBus);
+  if (echo && echoIn) { const s = ctx.createGain(); s.gain.value = echo; g.connect(s).connect(echoIn); }
+  src.start(at, begin, n.loop ? undefined : n.len);
+  src.stop(end + 0.02);
+}
+
+// A drum letter on the real kit; false if it isn't loaded.
+function playKit(name, letter, at, v) {
+  const bank = readyReal(name);
+  const key = KIT[letter];
+  if (!bank || key === undefined) return false;
+  const n = bank.def.notes.find((z) => z.lo === key);
+  if (!n) return false;
+  sample(bank, n, Math.pow(2, n.tune / 12), at, null, (SYNTH_RMS.drums / REAL_RMS) * v * (n.gain ?? 1));
+  return true;
+}
 
 function tokens(str) { return String(str).trim().split(/\s+/).filter(Boolean); }
 
@@ -249,7 +402,7 @@ function compile(song) {
   return out;
 }
 
-export function defineSongs(defs) { for (const [k, v] of Object.entries(defs)) songs.set(k, v); }
+export function defineSongs(defs) { for (const [k, v] of Object.entries(defs)) songs.set(k, v); prefetchReal(); }
 export function defineEffects(defs) { for (const [k, v] of Object.entries(defs)) effects.set(k, v); }
 export const currentSong = () => wanted?.name ?? null;
 
@@ -277,6 +430,11 @@ export function music(name, opts = {}) {
   const pats = compile(song);
   const order = song.song || Object.keys(song.patterns);
   const stepDur = 60 / song.bpm / (song.steps ?? 4);
+  // the real instruments it plays: each channel's, decided once; the song waits for
+  // them (a few seconds at most, then whatever isn't there plays as chiptune)
+  const reals = {};
+  for (const [cname, chan] of Object.entries(song.channels || {})) reals[cname] = realOf(song, chan);
+  const missing = [...new Set(Object.values(reals))].filter((r) => r && !readyReal(r) && banks.get(r) !== null);
   const bus = ctx.createGain();
   // opts.fadeIn (seconds): the new song rises while the old one fades, a crossfade
   if (opts.fadeIn) {
@@ -289,9 +447,19 @@ export function music(name, opts = {}) {
   let step = 0;
   let nextAt = ctx.currentTime + 0.08;
   const swing = song.swing ?? 0;
-  const state = { name, bus, stopped: false, startAt: nextAt, stepDur, bpm: song.bpm };
+  const state = { name, bus, stopped: false, startAt: nextAt, stepDur, bpm: song.bpm, waiting: missing.length > 0 };
+  if (state.waiting) {
+    const go = () => {
+      if (!state.waiting) return;
+      state.waiting = false;
+      nextAt = ctx.currentTime + 0.05;
+      state.startAt = nextAt;
+    };
+    Promise.all(missing.map(loadReal)).then(go);
+    setTimeout(go, 4000);
+  }
   const tick = () => {
-    if (state.stopped) return;
+    if (state.stopped || state.waiting) return;
     while (nextAt < ctx.currentTime + 0.2) {
       const pat = pats[order[idx]];
       for (const [cname, events] of Object.entries(pat.chans)) {
@@ -302,8 +470,8 @@ export function music(name, opts = {}) {
           const at = nextAt + (step % 2 ? swing * stepDur : 0);
           // route this note through the song bus
           musicBusSwap(bus, () => {
-            if (ev.drum) for (const d of ev.drum) DRUMS[d]?.(at, chan.vol ?? 1, bus);
-            else playNote(chan, ev.freq * Math.pow(2, (chan.transpose ?? 0) / 12), at, ev.len * stepDur * (chan.gate ?? 0.92));
+            if (ev.drum) { for (const d of ev.drum) if (!(reals[cname] && playKit(reals[cname], d, at, chan.vol ?? 1))) DRUMS[d]?.(at, chan.vol ?? 1, bus); }
+            else playNote(chan, ev.freq * Math.pow(2, (chan.transpose ?? 0) / 12), at, ev.len * stepDur * (chan.gate ?? 0.92), reals[cname]);
           });
         }
       }

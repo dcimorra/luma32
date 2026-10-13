@@ -87,6 +87,16 @@ These are what a generated soundtrack sounds like; each is a reject:
      may drop them; their return is an event.
    - Customise instruments per channel (`wave`, `lp`, `attack`, `decay`, `detune`,
      `vibrato`) so each song has its own timbre.
+   - **Real instruments** (README "Real instruments") are the default: every song is
+     heard on an orchestra. Pick the instruments that are the game's world (a harp and
+     strings for a fae court, a harpsichord and violin for a ballroom, a koto for a
+     shrine, an electric piano and synth strings for a city at night) in
+     `orchestra: { ... }`, and per voice with `real`: the default mapping fits no world
+     in particular. Write the parts for the instrument
+     heard: a flute breathes (phrases with rests), strings hold, a piano and a harp ring
+     and fade (no long held notes on them), a pizzicato or a marimba are short. A game
+     that wants the console's chiptune says `orchestra: false`; it is a choice of the
+     world, like the palette, and is said in the mood map.
 8. **Dynamics without volume automation**: thin the texture (drop the counter-melody,
    the drums) for the second A or the B, add a voice for the climax. A loop that never
    changes density becomes wallpaper in 30 seconds.

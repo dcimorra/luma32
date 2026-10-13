@@ -14,6 +14,8 @@
 // faces drawn by the engine (and by a tile's own `side`), a person and a sign on top,
 // a dropping-off edge, and whoever walks behind the tower hidden by it.
 // flyover (dev menu): the plaza from the air in Mode 7, gliding north and turning.
+// concert (dev menu): a song on real instruments — piano, strings, flute, a harp, the kit —
+// and Options' "Instrumentos" to hear it as chiptune.
 // ?dev=1 adds the overlay (F2) and the jump menu (F3).
 import { SCREEN_W } from '../../engine/gfx.js';
 import { drawText, drawBig, measure, measureBig } from '../../engine/font.js';
@@ -393,7 +395,30 @@ export default {
   strings: ['locales/es/common.json'],
   theme: { ui: { speakers: { ana: { color: '#b04a3a', voice: 700 }, bo: { color: '#408040', voice: 500 }, guard: { color: '#5a5a7a', voice: 450 }, sage: { color: '#6a4a8a', voice: 650 }, walker: { color: '#a06a30', voice: 600 } } } },
   tiles, dolls, maps, portraits, figures,
-  songs: {},
+  songs: {
+    // real instruments by name, and one chiptune voice heard as a harp
+    concert: {
+      bpm: 92,
+      channels: {
+        melody: { inst: 'flute', vol: 1 },
+        arp: { inst: 'pulse12', real: 'harp', vol: 0.8, echo: 0.25 },
+        chords: { inst: 'strings', vol: 0.9 },
+        piano: { inst: 'piano', vol: 0.7 },
+        low: { inst: 'cello', vol: 0.9 },
+        drums: { inst: 'drums', real: 'kit', vol: 0.7 },
+      },
+      patterns: {
+        A: {
+          melody: 'E5 - - - D5 - C5 - D5 - - - - - . . C5 - - - B4 - A4 - B4 - - - - - . .',
+          arp: 'A3 C4 E4 A4 E4 C4 A3 C4 F3 A3 C4 F4 C4 A3 F3 A3 C3 E3 G3 C4 G3 E3 C3 E3 G3 B3 D4 G4 D4 B3 G3 B3',
+          chords: 'A3 - - - - - - - F3 - - - - - - - C4 - - - - - - - G3 - - - - - - -',
+          piano: 'A4 . . . C5 . . . A4 . . . F4 . . . G4 . . . E4 . . . D4 . . . B3 . . .',
+          low: 'A2 - - - - - - - F2 - - - - - - - C3 - - - - - - - G2 - - - - - - -',
+          drums: 'k . h . s . h . k . h k s . h h',
+        },
+      },
+    },
+  },
   player: 'hero',
   title: {
     intro: 20,
@@ -426,6 +451,7 @@ export default {
     // getting about: on foot (the sea, the chasm and the cliff are walls), then with every ability
     { label: 'shore, on foot', run: async (api) => { for (const k of ['swim', 'dive', 'fly', 'climb']) api.revoke(k); await api.warp('shore', 6, 9, 'down'); } },
     { label: 'shore, every ability', run: async (api) => { for (const k of ['swim', 'dive', 'fly', 'climb']) api.grant(k); await api.warp('shore', 6, 9, 'down'); } },
+    { label: 'concert (real instruments)', run: async (api) => { await api.warp('town', 7, 6, 'up'); api.music('concert'); } },
     { label: 'hill (heights)', run: async (api) => { await api.warp('hill', 7, 9, 'up'); } },
     // Mode 7: the plaza from the air, gliding north and turning
     { label: 'flyover', run: async (api) => { await api.warp('plaza', 12, 10, 'up'); await api.flyover({ from: [12, 12], to: [12, 2], turn: 30, ms: 5000 }); } },

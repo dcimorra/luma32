@@ -4,7 +4,7 @@ import { SCREEN_W, SCREEN_H, TILE, Painter, canvas } from './gfx.js';
 import { doll as makeDoll } from './doll.js';
 import { Dialog, Choice, Card, Menu, List, Log, Credits, textSpeed, setTextSpeed, speakerName, banner as showBanner, frame, getTheme, stripMarkup } from './ui.js';
 import { drawText, measure } from './font.js';
-import { music, sfx, hasSfx, ambience, isMuted, setMuted, musicLayer, room, setSpots, mixSpots, rumble, canRumble, rumbleOn, setRumble } from './audio.js';
+import { music, sfx, hasSfx, ambience, isMuted, setMuted, musicLayer, room, setSpots, mixSpots, rumble, canRumble, rumbleOn, setRumble, realOn, setReal, hasOrchestra } from './audio.js';
 import { t, tv, has } from './i18n.js';
 import { isFull, setFull, isWeb } from './shell.js';
 import { Stage } from './stage.js';
@@ -2596,6 +2596,8 @@ export class StoryApi {
     const items = [
       ...(isWeb() ? [] : [{ id: 'view', label: t('console.menu.view'), value: () => t(isFull() ? 'console.menu.view_full' : 'console.menu.view_shell'), toggle: () => setFull(!isFull()) }]),
       { id: 'sound', label: t('console.menu.sound'), value: () => t(isMuted() ? 'console.menu.off' : 'console.menu.on'), toggle: () => setMuted(!isMuted()) },
+      // real instruments or the console's own, in a game that has an orchestra
+      ...(hasOrchestra() ? [{ id: 'real', label: t('console.menu.instruments'), value: () => t(realOn() ? 'console.menu.instruments_real' : 'console.menu.instruments_chip'), toggle: () => setReal(!realOn()) }] : []),
       { id: 'text', label: t('console.menu.text'), value: () => t(`console.menu.text_${textSpeed()}`), toggle: () => setTextSpeed({ slow: 'normal', normal: 'fast', fast: 'slow' }[textSpeed()]) },
       ...(this.game.guide !== false ? [{ id: 'guide', label: t('console.menu.guide'), value: () => t(guideOn() ? 'console.menu.on' : 'console.menu.off'), toggle: () => setGuide(!guideOn()) }] : []),
       ...(canRumble() ? [{ id: 'rumble', label: t('console.menu.rumble'), value: () => t(rumbleOn() ? 'console.menu.on' : 'console.menu.off'), toggle: () => { setRumble(!rumbleOn()); rumble(60); } }] : []),

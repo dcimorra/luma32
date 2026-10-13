@@ -673,6 +673,46 @@ One token per step: a note (`C#4`), `-` holds, `.` rests. Channels shorter than 
 repeat. Instruments: `pulse12 pulse25 pulse50 tri bass saw sine bell pluck pad`, and
 `drums` with `k s h o c t r`.
 
+## Real instruments
+
+Songs play recorded instruments instead of the console's chiptune, the way the GBA's own
+music was made (Golden Sun, the Final Fantasy ports): notes of real instruments, pitched
+to every key. **It is the default**: every game has an orchestra unless it says
+`orchestra: false`, and every song written for the chiptune is heard on it. They come from FluidR3_GM (MIT, Frank Wen; the notice is in
+`engine/instruments/LICENSE.txt`), cut down to a few notes each by `tools/instruments.mjs`
+into `engine/instruments/` — 2.8 MB in all, each MP3 downloaded the first time a song
+needs it, and the game's all fetched in the background once sound is on.
+
+```js
+// the whole game (default true): every channel becomes the real instrument that stands
+// in for its own — pulse12 harp · pulse25 flute · pulse50 clarinet · tri horn · saw brass
+// bass fingerbass · sine panflute · bell celesta · pluck guitar · pad strings · drums kit
+orchestra: { pad: 'choir', pulse25: 'oboe' },     // the same, some changed: the world's own
+orchestra: false,                                 // the console's chiptune, every song
+// a song: its own `orchestra` (true, a map, or false to stay chiptune)
+// a channel
+lead: { inst: 'violin', vol: 1 },                  // a real instrument by name
+arp: { inst: 'pulse12', real: 'harp' },            // chiptune written, harp heard
+ctr: { inst: 'pulse25', real: false },             // stays chiptune whatever the orchestra
+```
+
+Real instruments: `piano epiano harpsichord celesta glockenspiel musicbox vibraphone
+marimba organ accordion guitar steelguitar fingerbass fretless violin cello pizzicato harp
+timpani strings choir trumpet trombone horn brass sax oboe bassoon clarinet flute panflute
+whistle ocarina sitar koto kalimba bagpipe fiddle taiko`, and `kit` for drums (`k s h o c t
+r` on a real kit). No real instrument shares a name with one of the console's: `inst:
+'bass'` names the console's bass, which the orchestra then plays as `fingerbass`.
+
+- A real instrument keeps the song's mix: it plays as loud as the console's instrument it
+  stands in for (`vol` as before), with `echo`, `transpose`, `gate` and layers.
+  `wave`, `lp`, `detune` and `vibrato` are the chiptune's and don't apply.
+- A song waits for its instruments (a few seconds at most; then what is missing plays as
+  chiptune) and never starts half one, half the other.
+- In a game with an orchestra, Options has "Instrumentos: REALES / CHIPTUNE" (REALES to
+  begin with), for the player; the song playing changes at once.
+- `node tools/instruments.mjs build <FluidR3_GM.sf2>` makes the set again (the list, the
+  range and the notes kept of each are at the top of the tool).
+
 ## Warnings the engine prints
 
 Things that play wrong without throwing are printed once each as `[luma] <game> · <map>: …`

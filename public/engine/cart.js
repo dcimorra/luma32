@@ -5,13 +5,14 @@ import { World } from './world.js';
 import { SaveSlot, slotsOf } from './save.js';
 import { setTheme, setPortraits } from './ui.js';
 import { paintShell } from './shell.js';
-import { defineSongs, defineEffects, music, ambience } from './audio.js';
+import { defineSongs, defineEffects, setOrchestra, music, ambience } from './audio.js';
 import { t } from './i18n.js';
 
 export async function runCartridge(engine, game) {
   setTheme(game.theme?.ui || {});
   setPortraits(game.portraits);
   paintShell(game.theme?.shell);
+  setOrchestra(game.orchestra);
   defineSongs(game.songs || {});
   defineEffects(game.effects || {});
   await game.setup?.();
