@@ -24,6 +24,12 @@ function merge(into, from) {
   }
 }
 
+// Strings that come as data, not as a file (a group a player named): merged like a file's.
+export function addStrings(strings, cart) {
+  if (!cartCatalogs.has(cart)) cartCatalogs.set(cart, {});
+  merge(cartCatalogs.get(cart), strings);
+}
+
 // cart: the cartridge id the files belong to; omitted for the console's own strings.
 // A game's catalogue comes encoded from the server (server/protect.mjs, encodeJSON): the
 // same keystream undoes it.

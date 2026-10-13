@@ -762,3 +762,14 @@ dialog.account .account__patreon-mark svg { width: 100%; height: 100%; }
 dialog.account .account__patreon:focus-visible { outline: 2px solid #5fd0ff; outline-offset: 2px; }
 dialog.account .account__danger { background: none; color: #ff7d8f; box-shadow: inset 0 0 0 1px #ff7d8f; }
 dialog.account form .account__danger { background: #ff5d73; color: #1a0610; box-shadow: none; }
+
+/* ---------- until the console comes on ---------- */
+/* While the engine's files arrive (before boot.js lights the LED) the dark screen breathes
+   a soft glow, so a slow connection does not look like a dead console. */
+.screen-wrap::after {
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  background: radial-gradient(40% 30% at 50% 50%, rgba(95, 208, 255, .22), transparent 70%);
+  animation: luma-waking 1.4s ease-in-out infinite alternate;
+}
+body:has(#led.is-on) .screen-wrap::after { content: none; }
+@keyframes luma-waking { from { opacity: .15; } to { opacity: 1; } }

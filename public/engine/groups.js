@@ -97,6 +97,45 @@ export function drawSearch(ctx, x, y, f, sel) {
   drawText(ctx, label, x + Math.round((W - measure(label)) / 2), y + H - 15, glass);
 }
 
+// The art of a group whose player uploaded a cover: the image filling the front, cropped to
+// it, its pixels kept sharp. The spine takes the image's average colour, darkened.
+export function imageArt(img) {
+  let spine = '#3a2a5a';
+  try {
+    const c = new OffscreenCanvas(1, 1).getContext('2d');
+    c.drawImage(img, 0, 0, 1, 1);
+    const [r, g, b] = c.getImageData(0, 0, 1, 1).data;
+    spine = `rgb(${Math.round(r * 0.6)}, ${Math.round(g * 0.6)}, ${Math.round(b * 0.6)})`;
+  } catch { /* the default spine */ }
+  return {
+    spine,
+    cover(ctx, x, y, w, h) {
+      const k = Math.max(w / img.width, h / img.height);
+      const dw = img.width * k;
+      const dh = img.height * k;
+      const smooth = ctx.imageSmoothingEnabled;
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(img, x + (w - dw) / 2, y + (h - dh) / 2, dw, dh);
+      ctx.imageSmoothingEnabled = smooth;
+    },
+  };
+}
+
+// The colours of a group without art of its own, picked by its id so it keeps them.
+const BOX_COLORS = [
+  { top: '#140c34', bottom: '#5a1a3a', ink: '#f0d890', glow: '#ff8ab0' },
+  { top: '#06142e', bottom: '#1a4a6a', ink: '#e8f4ff', glow: '#5fd0ff' },
+  { top: '#0e1a0c', bottom: '#2f5a24', ink: '#f4f0c0', glow: '#9ae06a' },
+  { top: '#1e0c06', bottom: '#7a3a12', ink: '#ffe8b0', glow: '#ffb050' },
+  { top: '#120a20', bottom: '#3a2a6a', ink: '#e8e0ff', glow: '#b09aff' },
+];
+export function defaultArt(id) {
+  let h = 0;
+  for (const ch of id) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  const colors = BOX_COLORS[h % BOX_COLORS.length];
+  return { spine: colors.bottom, cover: boxArt(colors) };
+}
+
 // The art a new group starts with. colors: { top, bottom, ink, glow } as #rrggbb.
 export function boxArt({ top = '#1a1440', bottom = '#5a1a3a', ink = '#f0d890', glow = '#ff8ab0' } = {}) {
   const mix = (a, b, k) => `#${[1, 3, 5].map((i) => Math.round(parseInt(a.slice(i, i + 2), 16) * (1 - k) + parseInt(b.slice(i, i + 2), 16) * k).toString(16).padStart(2, '0')).join('')}`;

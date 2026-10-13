@@ -14,13 +14,17 @@ const blink = (f, rate = 30) => Math.floor(f / rate) % 2 === 0;
 
 // ---------- power on ----------
 
+// loading: { ready, done, total } while the cartridges load behind the logo (boot.js): the
+// logo waits for them before fading out, with a bar of how many have come.
 export class BootLogo {
-  constructor() { this.f = 0; this.chimed = false; this.pointer = true; }
+  constructor(loading = null) { this.f = 0; this.chimed = false; this.pointer = true; this.loading = loading; this.wait = 0; }
 
   update(e) {
+    const waiting = this.loading && !this.loading.ready;
+    if (waiting && this.f >= 150) { this.wait++; return; }
     this.f++;
     if (this.f === 70 && !this.chimed) { this.chimed = true; chime(); }
-    if (this.f > 40 && (e.input.pressed('a') || e.input.pressed('start') || clicked(e.input))) this.f = Math.max(this.f, 175);
+    if (this.f > 40 && !waiting && (e.input.pressed('a') || e.input.pressed('start') || clicked(e.input))) this.f = Math.max(this.f, 175);
     if (this.f >= 190) this.done();
   }
 
@@ -52,6 +56,18 @@ export class BootLogo {
     if (f > 110) {
       const c = t('console.boot.legal');
       drawText(ctx, c, centerX(c), 138, '#9a98a8');
+    }
+    // still loading cartridges: a thin bar fills with them, a light running along it
+    const l = this.loading;
+    if (l && f > 120 && (!l.ready || f < 165)) {
+      const w = 80;
+      const x = Math.round((SCREEN_W - w) / 2);
+      ctx.fillStyle = '#d8d4e6';
+      ctx.fillRect(x, 124, w, 3);
+      ctx.fillStyle = '#e8445c';
+      ctx.fillRect(x, 124, Math.round(w * (l.total ? l.done / l.total : 0)), 3);
+      ctx.fillStyle = 'rgba(255,255,255,0.8)';
+      ctx.fillRect(x + ((f + this.wait) * 2) % w, 124, 4, 3);
     }
     if (f > 165) {
       ctx.globalAlpha = Math.min(1, (f - 165) / 25);

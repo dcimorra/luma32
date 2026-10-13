@@ -26,7 +26,7 @@ games and saves in the cloud and plays them on any device.
 
 ```sh
 node server/serve.mjs                       # http://localhost:8765/
-node tools/add-game.mjs someone/their-game  # a game from GitHub onto your shelf
+node tools/add-game.mjs dcimorra/luma32-example  # the example game, from GitHub
 ```
 
 Node 20 or later, nothing to install. Any static file server over `public/` works too

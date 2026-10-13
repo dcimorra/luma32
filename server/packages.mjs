@@ -203,7 +203,9 @@ export class Packages {
     if (this.store.inLibrary(account.id, sha)) return { pkg: this.store.packageOf(sha), added: false };
     if (usage + bytes > QUOTA) throw Object.assign(fail('quota', 413), { need: bytes, free: Math.max(0, QUOTA - usage) });
     let pkg = this.store.packageOf(sha);
-    if (!pkg) {
+    // a package the database knows but whose files are gone (a restored backup, a disk
+    // cleaned by hand) is written again from this zip
+    if (!pkg || !fs.existsSync(path.join(this.pathOf(sha), 'game.js'))) {
       const meta = describe(files);
       const target = this.pathOf(sha);
       const tmp = `${target}.${process.pid}.${Date.now()}.tmp`;
@@ -214,7 +216,7 @@ export class Packages {
       }
       fs.rmSync(target, { recursive: true, force: true });
       fs.renameSync(tmp, target);
-      pkg = this.store.addPackage({ sha, ...meta, bytes, files: files.length });
+      pkg = this.store.packageOf(sha) || this.store.addPackage({ sha, ...meta, bytes, files: files.length });
     }
     this.store.link(account.id, sha, source);
     return { pkg, added: true };
