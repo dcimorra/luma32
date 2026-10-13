@@ -1,0 +1,101 @@
+{
+  "meta": {
+    "title": "LAB",
+    "tagline": "Banco de pruebas del motor"
+  },
+  "speakers": {
+    "ana": "Ana",
+    "bo": "Bo",
+    "guard": "Guardia",
+    "sage": "Farolera",
+    "walker": "Caminante",
+    "pip": "Pip"
+  },
+  "place": {
+    "town": "El pueblo",
+    "cave": "La cueva",
+    "plaza": "La plaza",
+    "shore": "La costa",
+    "reef": "El arrecife"
+  },
+  "obj": {
+    "town": "Ve al pozo de la plaza: la puerta del este del pueblo lleva allí.",
+    "sage": "Habla con la farolera, al norte de la plaza."
+  },
+  "town": {
+    "ana_1": "Hola. Soy la prueba de los retratos.",
+    "ana_ask": "¿Qué quieres probar?",
+    "opt_bag": "La mochila",
+    "opt_stage": "El escenario",
+    "opt_panel": "Un panel",
+    "opt_none": "Nada",
+    "bag": "MOCHILA",
+    "picked": "Has elegido: {item}.",
+    "stage_1": "Esto es un escenario a pantalla completa.",
+    "stage_2": "Y yo salgo con mi muñeco, ampliado.",
+    "stage_3": "Se cierra con un fundido.",
+    "bo_seen": "¡Te he visto! Esto solo pasa una vez.",
+    "bo_after": "Ya nos conocemos."
+  },
+  "item": {
+    "n0": "Poción",
+    "n1": "Antídoto",
+    "n2": "Cuerda",
+    "n3": "Llave vieja",
+    "n4": "Mapa",
+    "n5": "Baya",
+    "n6": "Linterna",
+    "note0": "Cura un poco.",
+    "note1": "Quita el veneno.",
+    "note2": "Para bajar a pozos.",
+    "note3": "No sabes qué abre.",
+    "note4": "Muestra la zona.",
+    "note5": "Sabe dulce.",
+    "note6": "Alumbra las cuevas oscuras."
+  },
+  "stats": {
+    "title": "ESTADO",
+    "hp": "PS",
+    "xp": "EXP",
+    "blurb": "Barras, panel y texto con salto de línea: las piezas para las pantallas propias de un cartucho."
+  },
+  "plaza": {
+    "lamp": "Una farola de hierro. Huele a aceite.",
+    "well": "El pozo está helado.",
+    "guard": "Ronda, ronda y más ronda.",
+    "sage_1": "Es hora de cambiar las farolas.",
+    "guard_reply": "¡Ya era hora! Desde aquí no veo nada.",
+    "sage_2": "Listo. Mira cómo cambia la plaza.",
+    "walker": "Voy con prisa, me esperan dentro.",
+    "reader": "Aquí se lee de maravilla. {p}{wave}Escucha el agua{/}{p=600} y {c=accent}no pienses en nada{/}.",
+    "kneeler": "{shake}¡Brrr!{/} El agua está helada.",
+    "guard_bark": "Todo en orden.",
+    "chat_1": "¿Has visto qué frío?",
+    "chat_2": "Ni los patos salen.",
+    "greet": "¡Buenas!"
+  },
+  "quests": {
+    "lamps": {
+      "title": "Las farolas",
+      "note": "La farolera necesita ayuda con las farolas de la plaza.",
+      "done": "Las farolas ya están encendidas."
+    }
+  },
+  "col": {
+    "coins": "Monedas"
+  },
+  "credits": {
+    "made": "Hecho con",
+    "engine": "LUMA 32",
+    "thanks": "Gracias por jugar"
+  },
+  "party": {
+    "pip": "Voy contigo a donde vayas."
+  },
+  "shore": {
+    "top": "Desde aquí arriba se ve toda la costa.",
+    "gull": "¡Cra! ¡Cra!",
+    "swimmer": "El agua está buenísima. ¿No te metes?",
+    "pearl": "Una perla dentro de la almeja."
+  }
+}

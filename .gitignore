@@ -1,0 +1,4 @@
+node_modules/
+tools/node_modules/
+# games you add stay yours: each is its own project
+/public/games/*/

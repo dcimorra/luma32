@@ -1,0 +1,8 @@
+{
+  "name": "luma32-tools",
+  "private": true,
+  "description": "Test tooling for the console; not part of the site.",
+  "dependencies": {
+    "playwright-core": "1.63.0"
+  }
+}

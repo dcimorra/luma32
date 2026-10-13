@@ -1,0 +1,13 @@
+{
+  "name": "luma32",
+  "version": "1.0.0",
+  "description": "LUMA 32: a handheld console that only exists in the browser, and the engine its games run on.",
+  "type": "module",
+  "license": "MIT",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "start": "node server/serve.mjs",
+    "add-game": "node tools/add-game.mjs"
+  },
+  "repository": { "type": "git", "url": "https://github.com/dcimorra/luma32.git" }
+}

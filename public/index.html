@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<!-- No viewport-fit=cover and a "default" status bar, not "black-translucent": with the
+     translucent bar an installed app on iOS stops insetting the page and paints the
+     outer strips itself, the bottom one as a band under the console. With "default" the
+     status bar keeps its own room at the top (coloured by theme-color, which paintShell
+     sets) and the console reaches the bottom edge. napnap.es does the same. -->
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="theme-color" content="#0b0b10">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<title>LUMA 32</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="engine/icon.svg" type="image/svg+xml">
+<!-- iOS takes no SVG for the home screen: without a PNG an installed app has no icon.
+     Full bleed, because iOS rounds the corners itself (and paints transparent ones black).
+     iOS fetches it on its own, without Safari's cookies: it must not sit behind a password. -->
+<link rel="apple-touch-icon" sizes="180x180" href="engine/icon-180.png">
+<meta name="apple-mobile-web-app-title" content="LUMA 32">
+<link rel="preload" href="engine/fonts/instrument-sans-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="engine/shell.css">
+<script>
+  // Registered from the page (always fetched fresh), not from a module that may be stale.
+  // The first time it takes over, reload once so every file comes through it.
+  if ('serviceWorker' in navigator) {
+    const first = !navigator.serviceWorker.controller;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (first && !sessionStorage.getItem('luma32.sw')) { sessionStorage.setItem('luma32.sw', '1'); location.reload(); }
+    });
+    navigator.serviceWorker.register('sw.js');
+    // the refresh of the games kept for offline is asked by engine/host.js, once it knows whose
+  }
+</script>
+<script type="module" src="engine/boot.js"></script>
+</head>
+<body>
+<div class="room">
+  <div class="device" id="device">
+    <div class="shoulder shoulder--l" aria-hidden="true"></div>
+    <div class="shoulder shoulder--r" aria-hidden="true"></div>
+    <div class="face">
+      <div class="bezel">
+        <div class="bezel__top">
+          <span class="led" id="led" aria-hidden="true"></span>
+          <span class="bezel__power" data-i18n="console.shell.power"></span>
+          <span class="bezel__rule"></span>
+        </div>
+        <div class="screen-wrap">
+          <canvas id="screen" width="240" height="160"></canvas>
+          <div class="glass" aria-hidden="true"></div>
+        </div>
+        <div class="bezel__brand">
+          <span class="brand">LUMA<b>32</b></span>
+          <span class="brand__sub" data-i18n="console.shell.colour"></span>
+        </div>
+      </div>
+
+      <div class="pad pad--dir" id="dpad" role="group">
+        <div class="cross" aria-hidden="true">
+          <i class="cross__arm cross__arm--h"></i><i class="cross__arm cross__arm--v"></i>
+          <i class="cross__dimple"></i>
+          <i class="cross__tri cross__tri--u"></i><i class="cross__tri cross__tri--d"></i>
+          <i class="cross__tri cross__tri--l"></i><i class="cross__tri cross__tri--r"></i>
+        </div>
+      </div>
+
+      <div class="pad pad--ab" role="group">
+        <button class="btn btn--b" data-btn="b" type="button"><span>B</span></button>
+        <button class="btn btn--a" data-btn="a" type="button"><span>A</span></button>
+      </div>
+
+      <div class="pad pad--sys" role="group">
+        <button class="pill" data-btn="select" type="button"><i></i><span data-i18n="console.shell.select"></span></button>
+        <button class="pill" data-btn="start" type="button"><i></i><span data-i18n="console.shell.start"></span></button>
+      </div>
+
+      <div class="grille" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+    </div>
+  </div>
+  <p class="keys" id="keys"></p>
+  <button class="view-toggle" id="view-toggle" type="button"><i></i><i></i><i></i><i></i></button>
+  <!-- on a desktop or a tablet, START for the mouse: shown while the world has control -->
+  <button class="web-menu" type="button"><i></i><span data-i18n="console.shell.menu"></span></button>
+</div>
+</body>
+</html>

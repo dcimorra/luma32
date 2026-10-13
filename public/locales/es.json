@@ -1,0 +1,206 @@
+{
+  "console": {
+    "name": "LUMA 32",
+    "boot": {
+      "legal": "© 2026 LUMA. Reviviendo la nostalgia."
+    },
+    "shell": {
+      "power": "POWER",
+      "colour": "COLOR",
+      "start": "START",
+      "select": "SELECT",
+      "keys": [
+        {
+          "key": "← ↑ ↓ →",
+          "label": "mover"
+        },
+        {
+          "key": "Z",
+          "label": "A"
+        },
+        {
+          "key": "X",
+          "label": "B (correr)"
+        },
+        {
+          "key": "Intro",
+          "label": "START"
+        },
+        {
+          "key": "Mayús",
+          "label": "SELECT"
+        }
+      ],
+      "view_full": "Pantalla completa",
+      "view_shell": "Ver la consola",
+      "menu": "MENÚ"
+    },
+    "shelf": {
+      "title": "CARTUCHOS",
+      "insert": "Pulsa A para insertar",
+      "insert_click": "Haz clic para insertar",
+      "insert_tap": "Toca para insertar",
+      "account": "Entrar",
+      "empty": "No hay cartuchos para ti todavía.",
+      "login": "Para jugar, entra o regístrate.",
+      "login_hint": "Pulsa A para continuar",
+      "login_hint_click": "Haz clic para continuar",
+      "login_hint_tap": "Toca para continuar",
+      "offline": "Conéctate a internet para seguir.",
+      "offline_hint": "Pulsa A para volver a probar",
+      "offline_hint_click": "Haz clic para volver a probar",
+      "offline_hint_tap": "Toca para volver a probar",
+      "trial_over": "Tu invitación ha terminado.",
+      "account_hint": "SELECT: tu cuenta",
+      "account_hint_click": "Clic arriba a la derecha: tu cuenta",
+      "account_hint_tap": "Toca arriba a la derecha: tu cuenta",
+      "rating": "+{age}",
+      "group_count": "{n} JUEGOS",
+      "group_count_one": "1 JUEGO",
+      "collection": "COLECCIÓN",
+      "open_group": "Pulsa A para abrir",
+      "open_group_click": "Haz clic para abrir",
+      "open_group_tap": "Toca para abrir",
+      "back": "B: volver",
+      "back_click": "Clic derecho o ◀: volver",
+      "back_tap": "Toca ◀ para volver",
+      "search": "BUSCAR",
+      "search_title": "Buscar",
+      "search_tagline": "Por título, historia, saga o tipo de juego.",
+      "search_hint": "Pulsa A para escribir",
+      "search_hint_click": "Haz clic para escribir",
+      "search_hint_tap": "Toca para escribir",
+      "results": "BUSCAR: «{q}»",
+      "no_results": "Ningún cartucho coincide."
+    },
+    "title": {
+      "press": "PULSA START",
+      "press_click": "HAZ CLIC PARA EMPEZAR",
+      "press_tap": "TOCA PARA EMPEZAR",
+      "continue": "Continuar",
+      "new": "Nueva partida",
+      "eject": "Cambiar de cartucho",
+      "confirm": "¿Borrar la partida guardada?",
+      "confirm_yes": "Sí, empezar de cero",
+      "confirm_no": "No",
+      "slot_title": "Elige una ranura",
+      "slot_empty": "— vacía —",
+      "confirm_slot": "¿Sobrescribir esa partida?"
+    },
+    "menu": {
+      "resume": "Seguir",
+      "save": "Guardar",
+      "sound": "Sonido",
+      "on": "SÍ",
+      "off": "NO",
+      "title": "Volver al título",
+      "objective": "OBJETIVO",
+      "saved": "Partida guardada.",
+      "title_confirm": "¿Volver a la pantalla de título? Lo que no hayas guardado se perderá.",
+      "yes": "Sí",
+      "no": "No",
+      "view": "Vista",
+      "view_full": "PANTALLA",
+      "view_shell": "CONSOLA",
+      "log": "Historial",
+      "journal": "Diario",
+      "text": "Texto",
+      "text_slow": "LENTO",
+      "text_normal": "NORMAL",
+      "text_fast": "RÁPIDO",
+      "rumble": "Vibración",
+      "guide": "Guía",
+      "autosaved": "Guardado",
+      "options": "Opciones",
+      "back": "Volver",
+      "report": "Reportar un problema"
+    },
+    "account": {
+      "close": "Cerrar"
+    },
+    "journal": {
+      "title": "DIARIO",
+      "open": "en curso",
+      "done": "hecha",
+      "failed": "fallida",
+      "empty": "Aún no hay nada apuntado.",
+      "banner_open": "Nueva misión: {name}",
+      "banner_done": "Misión cumplida: {name}",
+      "banner_failed": "Misión fallida: {name}",
+      "found": "{name} {n}/{total}",
+      "found_open": "{name}: {n}"
+    },
+    "credits": {
+      "end": "FIN",
+      "time": "Tiempo de juego",
+      "hours": "{h} h {m} min",
+      "minutes": "{m} min",
+      "found": "Encontrado",
+      "press": "Pulsa A",
+      "press_click": "Haz clic",
+      "press_tap": "Toca la pantalla"
+    },
+    "resume": {
+      "recap": "Para seguir: {objective}"
+    },
+    "report": {
+      "title": "Reportar un problema",
+      "intro": "¿Te has quedado atascado o algo no funciona? Cuéntanoslo. Enviamos también dónde estás y tu partida, para poder verlo igual que tú.",
+      "kind_label": "Qué pasa",
+      "kind": {
+        "stuck": "No puedo avanzar",
+        "bug": "Algo funciona mal",
+        "other": "Otra cosa"
+      },
+      "text": "Cuéntalo",
+      "text_placeholder": "Qué estabas haciendo y qué esperabas que pasara…",
+      "send": "Enviar",
+      "back": "Volver al juego",
+      "received": "¡Gracias! Lo revisaremos y, cuando esté arreglado, te llegará un correo.",
+      "reviewing": "¡Gracias! Ya lo estamos revisando. Cuando esté arreglado, te llegará un correo.",
+      "error": {
+        "missing_text": "Cuéntanos qué ha pasado.",
+        "too_many": "Has enviado muchos reportes hoy. Prueba mañana.",
+        "no_session": "Tienes que haber entrado en tu cuenta.",
+        "too_large": "Tu partida es demasiado grande para enviarla.",
+        "network": "No se ha podido enviar. Prueba otra vez en un momento."
+      },
+      "whose_intro": "Este juego lo ha hecho otra persona: LUMA 32 solo pone la consola. ¿Qué crees que falla?",
+      "whose_game": "El juego: avisar a quien lo hizo",
+      "whose_console": "La consola: avisar a LUMA 32",
+      "author_intro": "Cuéntalo y se lo hacemos llegar a quien hizo el juego, con dónde estás y tu partida.",
+      "next": "Seguir",
+      "author_github": "Abrir una incidencia en GitHub",
+      "author_github_note": "Se abre GitHub con todo escrito: revísalo y envíalo desde allí.",
+      "author_support": "Ir a la ayuda del autor",
+      "author_none": "Este juego no dice cómo avisar a quien lo hizo. Copia los detalles y házselos llegar por donde lo conseguiste.",
+      "copy": "Copiar los detalles",
+      "copied": "Copiado.",
+      "console_intro": "Cuéntanos qué hace mal la consola. Enviamos también dónde estás y tu partida.",
+      "console_received": "¡Gracias! Lo revisaremos.",
+      "issue_title": "{kind}: {map}",
+      "details": {
+        "game": "Juego",
+        "map": "Mapa",
+        "cell": "Casilla",
+        "objective": "Objetivo",
+        "engine": "Consola",
+        "browser": "Navegador",
+        "log": "Avisos de la consola",
+        "save": "Partida",
+        "save_too_big": "La partida es demasiado grande para ir aquí."
+      }
+    },
+    "search": {
+      "title": "Buscar cartuchos",
+      "label": "Qué buscas",
+      "placeholder": "Un título, una saga, un tipo de juego…",
+      "hint": "Escribe y pulsa Buscar.",
+      "found": "{n} cartuchos coinciden.",
+      "found_one": "1 cartucho coincide.",
+      "none": "Ninguno coincide todavía.",
+      "go": "Buscar"
+    },
+    "air": "Aire"
+  }
+}
