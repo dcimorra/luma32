@@ -25,7 +25,7 @@ const MAX_ENTRIES = 5000;
 const MAX_UNPACKED = 300 * 1024 * 1024;
 export const MAX_ZIP = 100 * 1024 * 1024;
 // folders of a game that are about making it, not playing it (offline.mjs skips the same)
-const SKIP_DIRS = new Set(['refs', 'reports', 'tests', 'test', 'node_modules', '__MACOSX']);
+const SKIP_DIRS = new Set(['refs', 'reports', 'tests', 'test', 'docs', 'screenshots', 'node_modules', '__MACOSX']);
 const GAME_ID = /^[a-z0-9_-]{1,40}$/;
 export const SHA = /^[a-f0-9]{64}$/;
 

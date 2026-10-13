@@ -53,6 +53,10 @@ A game is code: add only games from people you trust.
 
 ## Making a game
 
+**[luma32-example](https://github.com/dcimorra/luma32-example)** is a short, complete game
+made the way a game should be: its layout, its `luma.json`, how to make one from it and
+how to publish it. Copy it to start yours.
+
 Start from `.claude/skills/luma32-games/` — the guide to making a cartridge, written for
 [Claude Code](https://claude.com/claude-code) (open this folder in it and ask for a game),
 and readable by anybody. Its `templates/` has a cartridge to copy. The sections below are
