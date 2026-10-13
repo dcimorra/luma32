@@ -45,7 +45,8 @@ node tools/add-game.mjs ~/Downloads/the-game.zip         # a zip
 node tools/add-game.mjs ~/src/my-game                    # a folder on this computer, linked
 ```
 
-A repository or a zip is unpacked into `public/games/<id>/`, keeping only what a game runs
+One repository, one game: a repository with more than one `game.js` (outside each other's
+folders) is refused unless the path says which. A repository or a zip is unpacked into `public/games/<id>/`, keeping only what a game runs
 on (scripts, JSON, images, fonts, audio). A folder is linked, not copied, so what you edit
 there is what plays. `?game=<id>` in the address skips the shelf.
 

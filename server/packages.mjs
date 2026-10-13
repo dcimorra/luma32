@@ -84,7 +84,7 @@ function cleanPath(name) {
 
 // The zip's entries as a package: the folder holding the shallowest game.js (inside
 // `within` when given, the path a GitHub link pointed at), only what a game runs on.
-// Two game.js at the same depth: the first by name, so the same zip always gives the same.
+// A second game.js outside that folder is refused (several_games): one repository, one game.
 // Returns { files: [{ path, data }], bytes }.
 export function unpack(entries, within = '') {
   let clean = entries.map((e) => ({ e, path: cleanPath(e.name) })).filter((x) => x.path);
@@ -96,6 +96,10 @@ export function unpack(entries, within = '') {
     .sort((a, b) => a.split('/').length - b.split('/').length || (a < b ? -1 : 1));
   if (!games.length) throw fail('no_game_js');
   const root = games[0].slice(0, -'game.js'.length);
+  // one repository, one game: another game.js outside this one's folder is another game,
+  // and taking one of them in silence would hide the rest. The path says which.
+  const others = games.filter((g) => !g.startsWith(root));
+  if (others.length) throw Object.assign(fail('several_games'), { games: [games[0], ...others].map((g) => g.slice(0, -'/game.js'.length) || '.') });
   let total = 0;
   const files = [];
   for (const { e, path: p } of clean) {

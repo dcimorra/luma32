@@ -60,7 +60,13 @@ if (fs.existsSync(local) && fs.statSync(local).isDirectory()) {
     zip = await fetchGithub(gh);
     within = gh.path;
   }
-  const { files } = unpack(readZip(zip), within);
+  let files;
+  try { ({ files } = unpack(readZip(zip), within)); } catch (err) {
+    // one repository, one game: with several, say which folders there are
+    if (err.message !== 'several_games') throw err;
+    console.error(`more than one game in there: add one by its folder (${err.games.map((g) => `${what.replace(/\/+$/, '')}/${g}`).join(', ')})`);
+    process.exit(1);
+  }
   const meta = describe(files);
   const target = place(meta.id);
   for (const f of files) {
