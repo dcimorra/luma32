@@ -1,5 +1,10 @@
 # LUMA 32
 
+<p align="center">
+  <img src="docs/desktop.png" alt="LUMA 32 on a desktop: the screen fills the window" width="68%">
+  <img src="docs/phone.png" alt="LUMA 32 on a phone: the handheld" width="22%">
+</p>
+
 A handheld console that only exists in the browser, and the engine its games run on. The
 engine draws a 240×160 screen (the GBA's resolution) at 60 Hz: on a phone inside a drawn
 handheld with an on-screen d-pad, A, B, START and SELECT; on a desktop or a tablet as the
