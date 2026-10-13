@@ -141,11 +141,11 @@ export function drawGuide(world, ctx, e, cx, cy) {
   const dy = Math.max(g.y - p.y, 0, p.y - (g.y + g.h - 1));
   if (dx + dy <= 1 && !g.exit) return;
   // the top of what is there: a person's head, a prop's top, the cell
-  let top = g.y * TILE - 2;
-  if (g.actor) top = Math.round(g.actor.py) - 14;
+  let top = g.y * TILE - 2 - world.elev(g.x, g.y);
+  if (g.actor) top = Math.round(g.actor.py) - g.actor.ez - 14;
   else {
     const prop = world.props.find((pr) => g.x >= pr.x && g.x < pr.x + pr.w && pr.y >= g.y && pr.y - pr.h + 1 <= g.y + g.h - 1);
-    if (prop) top = (prop.y + 1 - prop.h) * TILE - 2;
+    if (prop) top = (prop.y + 1 - prop.h) * TILE - 2 - world.elev(prop.x, prop.y);
   }
   const bob = Math.floor(e.frame / 16) % 2;
   const sx = (g.x + g.w / 2) * TILE - cx;
@@ -180,7 +180,7 @@ function reachable(world) {
       const ny = y + dy;
       const k = `${nx},${ny}`;
       if (seen.has(k) || nx < 0 || ny < 0 || nx >= world.w || ny >= world.h) continue;
-      if (world.blocked(nx, ny, p)) continue;
+      if (world.blocked(nx, ny, p, null, [x, y])) continue;
       seen.add(k);
       q.push([nx, ny]);
     }

@@ -16,7 +16,8 @@
     "cave": "La cueva",
     "plaza": "La plaza",
     "shore": "La costa",
-    "reef": "El arrecife"
+    "reef": "El arrecife",
+    "hill": "La colina"
   },
   "obj": {
     "town": "Ve al pozo de la plaza: la puerta del este del pueblo lleva allí.",
@@ -97,5 +98,10 @@
     "gull": "¡Cra! ¡Cra!",
     "swimmer": "El agua está buenísima. ¿No te metes?",
     "pearl": "Una perla dentro de la almeja."
+  },
+  "hill": {
+    "bo": "Desde la torre se ve todo el valle.",
+    "sage": "Por el borde se baja de un salto; para subir, la escalera.",
+    "walker": "Detrás de la torre no me ves, ¿a que no?"
   }
 }

@@ -115,7 +115,7 @@ export function drawBarks(world, ctx, cx, cy) {
     const h = lines.length * 10 + 5;
     const ax = Math.round(a.px) - cx + 8 + a.ox;
     const x = Math.max(2, Math.min(SCREEN_W - w - 2, ax - Math.round(w / 2)));
-    let y = Math.round(a.py) - cy - 14 - h - (a.emote ? 14 : 0) + a.oy;
+    let y = Math.round(a.py) - a.ez - cy - 14 - h - (a.emote ? 14 : 0) + a.oy;
     // two people talking at once: the later balloon goes above the other
     for (let moved = true; moved;) {
       moved = false;

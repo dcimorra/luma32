@@ -147,11 +147,11 @@ export class Effects {
     if (typeof at === 'string' || (typeof at === 'object' && at.def && 'px' in at)) {
       const a = typeof at === 'string' ? w.actor(at) : at;
       if (!a) return null;
-      return { x: a.px + 8 + a.ox, y: a.py + (feet ? 14 : 6) + a.oy - (a.lift || 0) - Math.round(a.alt || 0) };
+      return { x: a.px + 8 + a.ox, y: a.py - (a.ez || 0) + (feet ? 14 : 6) + a.oy - (a.lift || 0) - Math.round(a.alt || 0) };
     }
-    if (Array.isArray(at)) return { x: at[0] * TILE + 8, y: at[1] * TILE + (feet ? 14 : 8) };
+    if (Array.isArray(at)) return { x: at[0] * TILE + 8, y: at[1] * TILE + (feet ? 14 : 8) - w.elev(at[0], at[1]) };
     if ('px' in at) return { x: at.px, y: at.py };
-    if ('x' in at) return { x: at.x * TILE + 8, y: at.y * TILE + (feet ? 14 : 8) };
+    if ('x' in at) return { x: at.x * TILE + 8, y: at.y * TILE + (feet ? 14 : 8) - w.elev(at.x, at.y) };
     return null;
   }
 
@@ -215,7 +215,7 @@ export class Effects {
         if (!a.trail || !a.visible || (!a.moving && !a.strolling && !a.trail.still)) continue;
         const img = a.image();
         if (!img) continue;
-        this.ghosts.push({ img, x: a.px + (TILE - img.width) / 2 + a.ox, y: a.py + TILE - img.height - 1 + a.oy - (a.lift || 0) - Math.round(a.alt || 0), born: f, color: a.trail.color, life: a.trail.life || 14 });
+        this.ghosts.push({ img, x: a.px + (TILE - img.width) / 2 + a.ox, y: a.py - (a.ez || 0) + TILE - img.height - 1 + a.oy - (a.lift || 0) - Math.round(a.alt || 0), born: f, color: a.trail.color, life: a.trail.life || 14 });
       }
     }
     this.ghosts = this.ghosts.filter((g) => f - g.born < g.life);

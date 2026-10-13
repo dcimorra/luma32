@@ -104,7 +104,8 @@ The best story games of the console made talking *playable*, without minigames:
   (`frames`, `weather`, `life.md`). A still screen for more than a second outside a
   dialogue reads as a frozen game.
 - **Depth.** Far layers that scroll slower (`parallax`), reflections, light at night
-  (`dark`, `light`).
+  (`dark`, `light`), levels you climb (`heights`), and the world from the air in Mode 7
+  (`api.flyover`).
 - **Moments with punch.** The battle swirl, Phoenix's "¡Protesto!", the level clear: a
   big beat gets a transition, a freeze, a flash, its sound and its music sting.
 - **A theme per place, a motif per person** (`music.md`); a jingle for every success.

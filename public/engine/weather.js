@@ -114,15 +114,15 @@ export function gatherLights(world, cx, cy) {
   for (const p of world.props) {
     const l = p.def.light;
     if (!l || p.hidden) continue;
-    add(l, p.x * TILE + (l.dx ?? (p.w * TILE) / 2), (p.y + 1 - p.h) * TILE + (l.dy ?? (p.h * TILE) / 2));
+    add(l, p.x * TILE + (l.dx ?? (p.w * TILE) / 2), (p.y + 1 - p.h) * TILE + (l.dy ?? (p.h * TILE) / 2) - world.elev(p.x, p.y));
   }
   for (const a of world.actors) {
     const l = a.def.light || a.light;
     if (!l || !a.visible) continue;
-    add(l, a.px + 8 + (l.dx ?? 0), a.py + (l.dy ?? 4));
+    add(l, a.px + 8 + (l.dx ?? 0), a.py - a.ez + (l.dy ?? 4));
   }
   let extra = world.map.lights;
   if (typeof extra === 'function') extra = extra(world.api);
-  for (const l of extra || []) add(l, l.x * TILE + (l.dx ?? 8), l.y * TILE + (l.dy ?? 8));
+  for (const l of extra || []) add(l, l.x * TILE + (l.dx ?? 8), l.y * TILE + (l.dy ?? 8) - world.elev(l.x, l.y));
   return out.filter((l) => l.x + l.r > 0 && l.y + l.r > 0 && l.x - l.r < SCREEN_W && l.y - l.r < SCREEN_H);
 }

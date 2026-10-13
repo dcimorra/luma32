@@ -54,6 +54,24 @@ leads**.
   after a reload.
 
 
+## Heights and Mode 7: places with depth
+
+A place that goes up — a hill fort, terraces, a tower, a palace on its steps, a raised
+road over a market — gets `heights` (README "Heights"): the engine raises the cells,
+draws their faces and hides whoever walks behind them. Don't paint a wall face as a row
+of tiles on a map with heights: the face is the raised tile's `side`.
+
+- **Levels are routes.** Stairs (`ramp`) are the only way up; `drop: true` makes edges a
+  one-way way down — a shortcut back, never the only way to a goal the player must leave
+  again. Put what the player is after on top and the stairs round the back, and the
+  climb becomes the walk.
+- **A face per material.** Give every raised ground tile a `side` (rock with strata for a
+  cliff, brick for a wall, planks for a stage); stairs draw steps. The engine's default
+  face is for a quick sketch.
+- **The air is a scene.** A flight, a dragon ride, crossing the sea, the first sight of a
+  city: `api.flyover` shows the current map from the air in Mode 7 in one line. A game
+  of its own up there (steering, a race) is a cartridge scene on `engine/mode7.js`.
+
 ## Getting about: water, sky, cliffs
 
 

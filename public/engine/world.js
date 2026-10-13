@@ -14,6 +14,7 @@ import { resolveWeather, drawWeather, drawDark, gatherLights } from './weather.j
 import { goalOf, drawGuide, audit, guideOn, setGuide, pressFrom, rectCells } from './guide.js';
 import { placeParty, tickParty, tickLife, bark, drawBarks, bumped, routeStop } from './company.js';
 import { Effects, EASE } from './vfx.js';
+import { Mode7 } from './mode7.js';
 import { can, groundStops, propStops, modeOf, tickModes, stepSpeed, stepSound, afterStep, slideOn, diveHere, diveScript, drawBreath, modeImage, liftOf, drawInMode } from './move.js';
 
 export const DIRS = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
@@ -64,6 +65,38 @@ export class Tileset {
       p.frame = f;
       d.top(p, f);
       img = p.canvas;
+      this.cache.set(key, img);
+    }
+    return img;
+  }
+
+  // The face a raised tile shows below its top, `h` pixels tall (README "Heights"): the
+  // tile's own `side(p, frame, h)`, or its bottom row carried down and shaded, with a
+  // seam at every level.
+  side(id, frame, h, level) {
+    const d = this.def(id);
+    const f = d.frames ? frame % d.frames : 0;
+    const key = `${id}#side#${f}#${h}`;
+    let img = this.cache.get(key);
+    if (!img) {
+      if (d.side) {
+        const p = new Painter(TILE, h, (d.seed ?? hashSeed(id)) + 2);
+        p.frame = f;
+        d.side(p, f, h);
+        img = p.canvas;
+      } else {
+        img = canvas(TILE, h);
+        const c = img.getContext('2d');
+        c.drawImage(this.image(id, f), 0, TILE - 1, TILE, 1, 0, 0, TILE, h);
+        c.fillStyle = 'rgba(0,0,0,0.34)';
+        c.fillRect(0, 0, TILE, h);
+        c.fillStyle = 'rgba(255,255,255,0.16)';
+        c.fillRect(0, 0, TILE, 1);
+        c.fillStyle = 'rgba(0,0,0,0.16)';
+        for (let y = level; y < h; y += level) c.fillRect(0, y, TILE, 1);
+        c.fillStyle = 'rgba(0,0,0,0.3)';
+        c.fillRect(0, h - 1, TILE, 1);
+      }
       this.cache.set(key, img);
     }
     return img;
@@ -133,6 +166,10 @@ export class Actor {
   }
 
   get busy() { return !!this.moving; }
+
+  // How far above its cell's flat place it is drawn, in pixels: the height of the ground
+  // under it (README "Heights"), eased from one cell to the next while it walks.
+  get ez() { return this.world.ezOf(this); }
 
   face(dir) { this.dir = SHORT[dir] || dir; }
 
@@ -542,7 +579,9 @@ export class World {
     for (const p of def.props || []) add(p);
     const solid = new Map();
     for (const p of props) for (let j = 0; j < p.foot[1]; j++) for (let i = 0; i < p.foot[0]; i++) solid.set(`${p.x + i},${p.y - j}`, p);
-    return { id: mapId, def, w, h, ground, props, solid };
+    // heights: one digit a cell, 0 where a row or a cell is missing
+    const heights = def.heights ? def.heights.map((r) => [...r].map((ch) => (ch >= '0' && ch <= '9' ? ch.charCodeAt(0) - 48 : 0))) : null;
+    return { id: mapId, def, w, h, ground, props, solid, heights };
   }
 
   // Maps joined edge to edge (open worlds): each connection places a neighbour at an
@@ -609,7 +648,9 @@ export class World {
     this.ground = m.ground;
     this.props = m.props;
     this.solidProps = m.solid;
+    this.heights = m.heights;
     this.loadNeighbours();
+    this.measureHeights();
     this.entities = [];
     this.slide = null;
     // actors
@@ -683,6 +724,125 @@ export class World {
   // size. Kept for scripts that edit `ground` directly and then call it.
   buildGround() {}
 
+  // ---------- heights (README "Heights") ----------
+
+  // Whether this map or a neighbour has heights at all, how many pixels a level is, and
+  // how high the highest cell rises: a map without `heights` never takes another path.
+  measureHeights() {
+    const grids = [this.heights, ...(this.neighbours || []).map((n) => n.heights)].filter(Boolean);
+    this.raised = grids.length > 0;
+    this.level = this.map.level ?? this.game.level ?? 8;
+    let top = 0;
+    for (const g of grids) for (const r of g) for (const h of r) top = Math.max(top, h);
+    this.maxElev = top * this.level;
+  }
+
+  // How high a cell stands, in levels; 0 where the map says nothing.
+  heightAt(x, y) {
+    if (!this.raised) return 0;
+    const n = this.neighbourAt(x, y);
+    if (n) return n.heights?.[y - n.oy]?.[x - n.ox] ?? 0;
+    return this.heights?.[y]?.[x] ?? 0;
+  }
+
+  // The same in pixels: how far above its flat place the cell is drawn.
+  elev(x, y) { return this.raised ? this.heightAt(x, y) * this.level : 0; }
+
+  // A bridge rising, a lift going down: a cell's height from a script.
+  setHeight(x, y, h) {
+    if (x < 0 || y < 0 || x >= this.w || y >= this.h) return;
+    this.heights ??= Array.from({ length: this.h }, () => new Array(this.w).fill(0));
+    this.heights[y] ??= [];
+    this.heights[y][x] = h;
+    this.measureHeights();
+  }
+
+  // An actor's height on screen: its cell's, eased toward the next while it walks or hops.
+  ezOf(a) {
+    if (!this.raised) return 0;
+    const from = this.elev(a.x, a.y);
+    const m = a.moving;
+    if (!m) return from;
+    const to = this.elev(m.tx, m.ty);
+    if (to === from) return from;
+    const span = (Math.abs(m.tx - a.x) + Math.abs(m.ty - a.y)) * TILE;
+    const done = Math.abs(a.px - a.x * TILE) + Math.abs(a.py - a.y * TILE);
+    return Math.round(from + (to - from) * Math.min(1, done / span));
+  }
+
+  rampAt(x, y) {
+    const id = this.tileAt(x, y);
+    return !!(id && this.game.tiles[id]?.ramp);
+  }
+
+  // Whether one can walk straight from one cell to the next as far as heights go: on the
+  // same level, or one level up or down where either cell is a ramp (stairs, a slope).
+  climbs(fx, fy, tx, ty) {
+    const a = this.heightAt(fx, fy);
+    const b = this.heightAt(tx, ty);
+    if (a === b) return true;
+    return Math.abs(a - b) === 1 && (this.rampAt(fx, fy) || this.rampAt(tx, ty));
+  }
+
+  // Off the edge of a higher cell onto a lower one, hopping down, where the map or the
+  // game says `drop: true`. There is no way back up but a ramp.
+  canDrop(x, y, dir, who) {
+    if (!this.raised || !(this.map.drop ?? this.game.drop)) return false;
+    if (this.heightAt(x, y) >= this.heightAt(who.x, who.y)) return false;
+    return !this.blocked(x, y, who, dir, false);
+  }
+
+  // A raised cell, drawn among the props and the people: its top lifted by its height, the
+  // face below down to the next cell's top, the shade it casts on its neighbours.
+  drawRaised(ctx, id, img, tx, ty, cx, cy, animF) {
+    const h = this.heightAt(tx, ty);
+    const L = this.level;
+    const x = tx * TILE - cx;
+    const top = ty * TILE - cy - h * L;
+    ctx.drawImage(img, x, top);
+    this.shadeWest(ctx, tx, ty, x, top, h);
+    const below = this.tileAt(tx, ty + 1) ? this.heightAt(tx, ty + 1) : 0;
+    if (below >= h) return;
+    const fh = (h - below) * L;
+    ctx.drawImage(this.tiles.side(id, animF, fh, L), x, top + TILE);
+    // where the face meets the ground below, a soft line of shade
+    ctx.fillStyle = 'rgba(0,0,0,0.18)';
+    ctx.fillRect(x, top + TILE + fh, TILE, 2);
+  }
+
+  // Light comes from the upper left: a cell lower than the one to its west lies in its shade.
+  shadeWest(ctx, tx, ty, x, y, h) {
+    const d = this.heightAt(tx - 1, ty) - h;
+    if (d <= 0) return;
+    ctx.fillStyle = 'rgba(0,0,0,0.2)';
+    ctx.fillRect(x, y, Math.min(TILE / 2, 2 + d * 2), TILE);
+  }
+
+  // The current map drawn flat, ground and props, nobody on it: a picture for Mode 7.
+  // `props: 'flat'` keeps only the ones lying on the ground (rugs, puddles), for scenes
+  // that stand the rest up as sprites.
+  mapImage(frame = 0, { props: which = 'all' } = {}) {
+    const c = canvas(this.w * TILE, this.h * TILE);
+    const ctx = c.getContext('2d');
+    for (let y = 0; y < this.h; y++) {
+      for (let x = 0; x < this.w; x++) {
+        const id = this.ground[y][x];
+        if (!id) continue;
+        const d = this.game.tiles[id];
+        ctx.drawImage(this.tiles.image(id, frame, d.auto ? this.edgeMask(x, y, d.auto === true ? id : d.auto) : 0), x * TILE, y * TILE);
+      }
+    }
+    const props = this.props.filter((p) => !p.hidden && (which === 'all' || p.def.flat)).sort((a, b) => (a.def.flat ? -1e6 : a.y) - (b.def.flat ? -1e6 : b.y));
+    for (const p of props) {
+      const img = this.tiles.image(p.t, frame + (p.phase || 0));
+      ctx.drawImage(img, p.x * TILE, (p.y + 1) * TILE - img.height);
+    }
+    return c;
+  }
+
+  // A cell's on-screen top-left in world pixels, height included.
+  cellTop(x, y) { return { x: x * TILE, y: y * TILE - this.elev(x, y) }; }
+
   // ---------- queries ----------
 
   tileAt(x, y) {
@@ -742,7 +902,9 @@ export class World {
     a.x = to.x; a.y = to.y; a.px = to.x * TILE; a.py = to.y * TILE;
   }
 
-  blocked(x, y, who = null, dir = null) {
+  // `from`: the cell the step starts at, for heights (README "Heights"); by default the
+  // cell behind (x, y) along `dir`. `false` leaves heights out (dropping off an edge).
+  blocked(x, y, who = null, dir = null, from = null) {
     const inside = x >= 0 && y >= 0 && x < this.w && y < this.h;
     // only the player crosses into a neighbouring map
     if (!inside && (who !== this.player || !this.neighbourAt(x, y))) return true;
@@ -753,6 +915,11 @@ export class World {
     const rule = this.canEnter(x, y, id, d, who, dir);
     if (rule === false) return true;
     if (rule === true) return !!(this.propAt(x, y) || this.bodyAt(x, y, who));
+    // a step up or down a cliff: only by a ramp, or flying
+    if (this.raised && from !== false && who) {
+      const f = from || (dir ? [x - DIRS[dir][0], y - DIRS[dir][1]] : null);
+      if (f && !this.climbs(f[0], f[1], x, y) && !can(this, who, 'fly')) return true;
+    }
     // water, sky, cliffs: solid to whoever can't swim, fly or climb (engine/move.js)
     if (groundStops(this, d, who)) return true;
     if (this.map.walls?.some?.((w) => w[0] === x && w[1] === y)) return true;
@@ -801,8 +968,8 @@ export class World {
         const ny = y + dy;
         const k = key(nx, ny);
         if (prev.has(k)) continue;
-        if (!(nx === gx && ny === gy) && this.blocked(nx, ny, actor)) continue;
-        if (nx === gx && ny === gy && this.blocked(nx, ny, actor) && this.actorAt(nx, ny, actor)) continue;
+        if (!(nx === gx && ny === gy) && this.blocked(nx, ny, actor, null, [x, y])) continue;
+        if (nx === gx && ny === gy && this.blocked(nx, ny, actor, null, [x, y]) && (this.actorAt(nx, ny, actor) || !this.climbs(x, y, nx, ny))) continue;
         prev.set(k, { from: key(x, y), dir });
         q.push([nx, ny]);
       }
@@ -827,7 +994,16 @@ export class World {
   pointedCell(pt) {
     const wx = pt.x + Math.round(this.cam.x);
     const wy = pt.y + Math.round(this.cam.y);
-    return { x: Math.floor(wx / TILE), y: Math.floor(wy / TILE), fy: wy - Math.floor(wy / TILE) * TILE };
+    const x = Math.floor(wx / TILE);
+    // with heights, the cell whose raised top is under the pointer: the nearest row wins,
+    // as it is drawn over the ones behind it
+    if (this.raised) {
+      for (let y = Math.floor((wy + this.maxElev) / TILE); y >= Math.floor(wy / TILE); y--) {
+        const top = y * TILE - this.elev(x, y);
+        if (wy >= top && wy < top + TILE) return { x, y, fy: wy - top };
+      }
+    }
+    return { x, y: Math.floor(wy / TILE), fy: wy - Math.floor(wy / TILE) * TILE };
   }
 
   // What is at a clicked cell: who or what answers A there and from which side (`ok`), or
@@ -894,7 +1070,7 @@ export class World {
     const g = this.trip;
     const mark = (x, y, color) => {
       const sx = x * TILE - cx;
-      const sy = y * TILE - cy;
+      const sy = y * TILE - cy - this.elev(x, y);
       ctx.fillStyle = color;
       for (const [ox, oy, w, h] of [[0, 0, 4, 1], [0, 0, 1, 4], [TILE - 4, 0, 4, 1], [TILE - 1, 0, 1, 4], [0, TILE - 1, 4, 1], [0, TILE - 4, 1, 4], [TILE - 4, TILE - 1, 4, 1], [TILE - 1, TILE - 4, 1, 4]]) ctx.fillRect(sx + ox, sy + oy, w, h);
     };
@@ -904,7 +1080,7 @@ export class World {
     if (miss >= 0 && miss < 30 && Math.floor(miss / 5) % 2 === 0) {
       ctx.fillStyle = '#ff4d5e';
       const sx = this.miss.x * TILE - cx + 4;
-      const sy = this.miss.y * TILE - cy + 4;
+      const sy = this.miss.y * TILE - cy + 4 - this.elev(this.miss.x, this.miss.y);
       for (let i = 0; i < 8; i++) { ctx.fillRect(sx + i, sy + i, 2, 1); ctx.fillRect(sx + 6 - i, sy + i, 2, 1); }
     }
     if (this.free || this.busy || this.engine.top() !== this || !this.engine.input.pointerOn || pt.type !== 'mouse' || !pt.over) return;
@@ -1004,7 +1180,7 @@ export class World {
       for (const [x, y] of path) ctx.fillRect(x * TILE - cx + 6, y * TILE - cy + 6, 4, 4);
       const label = String(a.id);
       const lx = Math.round(a.px) - cx + 8 - Math.round(measure(label) / 2);
-      const ly = Math.round(a.py) - cy - 18;
+      const ly = Math.round(a.py) - a.ez - cy - 18;
       ctx.fillStyle = 'rgba(0,0,0,0.6)';
       ctx.fillRect(lx - 1, ly - 1, measure(label) + 2, 10);
       drawText(ctx, label, lx, ly, a.declared ? '#ffffff' : a.def.transient ? '#80ff80' : '#ff9090');
@@ -1079,6 +1255,9 @@ export class World {
     } else if (this.canHop(nx, ny, dir, p)) {
       sfx('hop');
       p.hop(dir, { onArrive: () => this.arrived() });
+    } else if (this.canDrop(nx, ny, dir, p)) {
+      sfx('hop');
+      p.hop(dir, { n: 1, onArrive: () => this.arrived() });
     } else {
       p.face(dir);
       if (this.hook('onBump', { x: nx, y: ny, dir, tile: this.tileAt(nx, ny) })) return;
@@ -1159,6 +1338,7 @@ export class World {
     const rule = this.canEnter(x, y, id, d, who, dir);
     if (rule === false) return true;
     if (rule === true) return !!this.propAt(x, y);
+    if (this.raised && who instanceof Actor && !this.climbs(who.x, who.y, x, y) && !can(this, who, 'fly')) return true;
     if (groundStops(this, d, who)) return true;
     if (this.map.walls?.some?.((w) => w[0] === x && w[1] === y)) return true;
     return propStops(this, this.propAt(x, y), who);
@@ -1519,7 +1699,7 @@ export class World {
     // over the person; for a thing, over the player's head (a prop may be any height)
     const who = t.actor || p;
     const x = Math.round(who.px) - cx + 4;
-    const y = Math.round(who.py) - 18 - cy - bob;
+    const y = Math.round(who.py) - who.ez - 18 - cy - bob;
     const th = getTheme();
     frame(ctx, x, y, 9, 10, { border: th.border, light: th.fill, fill: th.fill });
     drawText(ctx, 'A', x + 2, y + 1, th.accent);
@@ -1543,7 +1723,7 @@ export class World {
     // a connected side does not stop the camera: the neighbour is right there
     const b = this.bounds();
     this.cam.x = this.clampCam(p.px + 8 - SCREEN_W / 2, b.x1 - b.x0, SCREEN_W, b.x0);
-    this.cam.y = this.clampCam(p.py + 8 - SCREEN_H / 2, b.y1 - b.y0, SCREEN_H, b.y0);
+    this.cam.y = this.clampCam(p.py - p.ez + 8 - SCREEN_H / 2, b.y1 - b.y0, SCREEN_H, b.y0);
   }
 
   bounds() {
@@ -1576,12 +1756,20 @@ export class World {
     // only the cells on screen are drawn, from the current map and any neighbour
     const tx0 = Math.floor(cx / TILE);
     const ty0 = Math.floor(cy / TILE);
-    for (let ty = ty0; ty <= ty0 + Math.ceil(SCREEN_H / TILE); ty++) {
+    // with heights, raised cells are sorted with the people (they hide whoever stands
+    // behind them), and rows below the screen may rise into it
+    const raised = this.raised;
+    const lifted = [];
+    const rows = Math.ceil(SCREEN_H / TILE) + (raised ? Math.ceil(this.maxElev / TILE) : 0);
+    for (let ty = ty0; ty <= ty0 + rows; ty++) {
       for (let tx = tx0; tx <= tx0 + Math.ceil(SCREEN_W / TILE); tx++) {
         const id = this.tileAt(tx, ty);
         if (!id) continue;
         const d = this.game.tiles[id];
-        ctx.drawImage(this.tiles.image(id, animF, d.auto ? this.edgeMask(tx, ty, d.auto === true ? id : d.auto) : 0), tx * TILE - cx, ty * TILE - cy);
+        const img = this.tiles.image(id, animF, d.auto ? this.edgeMask(tx, ty, d.auto === true ? id : d.auto) : 0);
+        if (raised && this.heightAt(tx, ty) > 0) { lifted.push({ id, img, tx, ty }); continue; }
+        ctx.drawImage(img, tx * TILE - cx, ty * TILE - cy);
+        if (raised) this.shadeWest(ctx, tx, ty, tx * TILE - cx, ty * TILE - cy, 0);
       }
     }
     this.map.underlay?.(ctx, this.api, { x: cx, y: cy }, e);
@@ -1590,14 +1778,18 @@ export class World {
     this.vfx.draw(ctx, cx, cy, 'back');
     // y-sorted props and actors, anchored at the bottom of their cell
     const items = [];
+    for (const c of lifted) items.push({ z: (c.ty + 1) * TILE - 0.5, fn: () => this.drawRaised(ctx, c.id, c.img, c.tx, c.ty, cx, cy, animF) });
     const addProps = (list, ox, oy) => {
       for (const p of list) {
         if (p.hidden) continue;
         const img = this.tiles.image(p.t, animF + (p.phase || 0));
+        const lift = raised ? this.elev(p.x + ox, p.y + oy) : 0;
         const x = (p.x + ox) * TILE - cx;
-        const y = (p.y + oy + 1) * TILE - img.height - cy;
+        const y = (p.y + oy + 1) * TILE - img.height - cy - lift;
         if (x > SCREEN_W || y > SCREEN_H || x + img.width < 0 || y + img.height < 0) continue;
-        items.push({ z: p.def.flat ? -1e6 + p.y + oy : p.def.over ? 1e6 : (p.y + oy + 1) * TILE + (p.def.z || 0), img, x, y });
+        // a rug on a raised cell lies on it, not under it
+        const flat = lift ? (p.y + oy + 1) * TILE - 0.25 : -1e6 + p.y + oy;
+        items.push({ z: p.def.flat ? flat : p.def.over ? 1e6 : (p.y + oy + 1) * TILE + (p.def.z || 0), img, x, y });
       }
     };
     addProps(this.props, 0, 0);
@@ -1608,7 +1800,7 @@ export class World {
         const img = a.image();
         if (!img) continue;
         const x = (a.x + n.ox) * TILE - cx + (TILE - img.width) / 2;
-        const y = (a.y + n.oy) * TILE + TILE - img.height - cy - 1;
+        const y = (a.y + n.oy) * TILE + TILE - img.height - cy - 1 - (raised ? this.elev(a.x + n.ox, a.y + n.oy) : 0);
         if (x > SCREEN_W || y > SCREEN_H || x + img.width < 0 || y + img.height < 0) continue;
         items.push({ z: (a.y + n.oy + 1) * TILE + 0.5, img, x, y, actor: a });
       }
@@ -1618,19 +1810,23 @@ export class World {
       const img = a.image();
       if (!img) continue;
       const x = Math.round(a.px) - cx + (TILE - img.width) / 2 + a.ox;
-      let y = Math.round(a.py) + TILE - img.height - cy - 1 + a.oy;
+      const ez = raised ? a.ez : 0;
+      let y = Math.round(a.py) + TILE - img.height - cy - 1 + a.oy - ez;
       // tucked in: the head on the pillow, near the top of the bed, whatever cell of it
       const bed = (img === a.doll?.poses?.lieBed || img === a.doll?.poses?.sleepBed) && a.uprightBed();
-      if (bed) y = (bed.y - bed.h + 1) * TILE - cy + 8 + a.oy;
-      // and over the bed, which sorts by its own bottom row
-      const z = bed ? (bed.y + 1) * TILE + Math.max(0, bed.def.z || 0) + 0.5 : Math.round(a.py) + TILE + 0.5;
+      if (bed) y = (bed.y - bed.h + 1) * TILE - cy + 8 + a.oy - ez;
+      // and over the bed, which sorts by its own bottom row. With heights, by the lower
+      // of the cells it is between, so the cell it walks onto or off never covers its feet
+      const row = raised ? Math.max(Math.round(a.py), a.y * TILE, a.moving ? a.moving.ty * TILE : -1e9) : Math.round(a.py);
+      const z = bed ? (bed.y + 1) * TILE + Math.max(0, bed.def.z || 0) + 0.5 : row + TILE + 0.5;
       items.push({ z, img, x, y, actor: a, lift: liftOf(this, a) });
     }
     // entities draw themselves at their box's top-left, sorted by the box's bottom
     for (const en of this.entities) {
       if (en.removed || en.hidden || !en.draw) continue;
       const b = this.box(en);
-      items.push({ z: en.z ?? b.y + b.h, fn: () => en.draw(ctx, Math.round(b.x - cx), Math.round(b.y - cy), e, en) });
+      const lift = raised ? this.elev(Math.floor((b.x + b.w / 2) / TILE), Math.floor((b.y + b.h - 1) / TILE)) : 0;
+      items.push({ z: en.z ?? b.y + b.h, fn: () => en.draw(ctx, Math.round(b.x - cx), Math.round(b.y - cy - lift), e, en) });
     }
     // tiles whose top layer covers whoever stands on them (tall grass, eaves): sorted with
     // the rest, so it hides the one in its own cell but never the head of someone below
@@ -1639,7 +1835,7 @@ export class World {
         for (let tx = tx0; tx <= tx0 + Math.ceil(SCREEN_W / TILE); tx++) {
           const id = this.tileAt(tx, ty);
           if (!id || !this.game.tiles[id].top) continue;
-          items.push({ z: (ty + 1) * TILE + 0.75, img: this.tiles.top(id, animF), x: tx * TILE - cx, y: ty * TILE - cy });
+          items.push({ z: (ty + 1) * TILE + 0.75, img: this.tiles.top(id, animF), x: tx * TILE - cx, y: ty * TILE - cy - this.elev(tx, ty) });
         }
       }
     }
@@ -1753,7 +1949,7 @@ export class World {
     const d = this.game.tiles[this.tileAt(a.x, a.y)]?.dust;
     if (d === false || this.puffs.length > 24) return;
     const [dx, dy] = DIRS[a.dir];
-    this.puffs.push({ x: a.px + 8 - dx * 5 + (Math.random() * 4 - 2), y: a.py + 14 - dy * 3, born: this.engine.frame, color: typeof d === 'string' ? d : '#f0ead8', drift: -dx * 0.15 });
+    this.puffs.push({ x: a.px + 8 - dx * 5 + (Math.random() * 4 - 2), y: a.py - a.ez + 14 - dy * 3, born: this.engine.frame, color: typeof d === 'string' ? d : '#f0ead8', drift: -dx * 0.15 });
   }
 
   drawPuffs(ctx, cx, cy) {
@@ -1780,11 +1976,11 @@ export class World {
       const img = a.image();
       if (!img) continue;
       const x = Math.round(a.px) - cx + (TILE - img.width) / 2 + a.ox;
-      const feet = Math.round(a.py) + TILE - cy;
+      const feet = Math.round(a.py) + TILE - cy - a.ez;
       ctx.save();
       ctx.beginPath();
       for (let i = -1; i <= 1; i++) for (let j = 1; j <= 2; j++) {
-        if (this.game.tiles[this.tileAt(a.x + i, a.y + j)]?.reflect) ctx.rect((a.x + i) * TILE - cx, (a.y + j) * TILE - cy, TILE, TILE);
+        if (this.game.tiles[this.tileAt(a.x + i, a.y + j)]?.reflect) ctx.rect((a.x + i) * TILE - cx, (a.y + j) * TILE - cy - this.elev(a.x + i, a.y + j), TILE, TILE);
       }
       ctx.clip();
       ctx.globalAlpha = (typeof below.reflect === 'number' ? below.reflect : 0.35) * (a.alpha ?? 1);
@@ -1797,7 +1993,7 @@ export class World {
 
   drawEmote(ctx, a, cx, cy) {
     const x = Math.round(a.px) - cx + 3 + a.ox;
-    const y = Math.round(a.py) - cy - 22 + a.oy;
+    const y = Math.round(a.py) - a.ez - cy - 22 + a.oy;
     frame(ctx, x, y, 11, 13, { border: '#202020', light: '#ffffff', fill: '#ffffff' });
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(x + 4, y + 12, 3, 2);
@@ -2044,13 +2240,55 @@ export class StoryApi {
   fadeIn(ms = 350, opts = {}) { return this.engine.fadeIn(ms / 16.67, opts.kind, this.screenAt(opts.at)); }
   letterbox(on = true, ms = 350) { return this.engine.letterbox(on, ms / 16.67); }
 
+  // The current map from the air, in Mode 7 (engine/mode7.js, README "Mode 7"): the camera
+  // glides from `from` to `to` (cells; by default from the player to `ahead` cells in
+  // front of them) at `height` pixels, turning from `angle` to `turn` (degrees, 0 is
+  // north), in `ms`. The people on the map stand where they are. A skips it. Resolves
+  // when it is over, back on the map as it was.
+  //   await api.flyover({ from: [4, 30], to: [20, 4], ms: 4000, height: 48 })
+  flyover({ from = null, to = null, ahead = 12, ms = 3000, height = 48, horizon = 40, angle = 0, turn = null, sky = ['#3a5a8a', '#b8d0e8'], fog = { color: '#b8d0e8', from: 0.45 }, outside = null, people = true, skip = true } = {}) {
+    const w = this.world;
+    const p = w.player;
+    const rad = (d) => (d * Math.PI) / 180;
+    const a0 = rad(angle);
+    const a1 = rad(turn ?? angle);
+    const start = from ? [from[0] * TILE + 8, from[1] * TILE + 8] : [p.px + 8, p.py + 8];
+    const end = to ? [to[0] * TILE + 8, to[1] * TILE + 8] : [start[0] + Math.sin(a1) * ahead * TILE, start[1] - Math.cos(a1) * ahead * TILE];
+    const m7 = new Mode7({ ground: w.mapImage(0, { props: 'flat' }), sky, fog, outside: outside || w.map.void || '#000000' });
+    // what stands up (lamps, trees, houses) stands up in the air view too
+    const standing = w.props.filter((pr) => !pr.hidden && !pr.def.flat).map((pr) => ({ img: w.tiles.image(pr.t, pr.phase || 0), x: pr.x * TILE + (pr.w * TILE) / 2, y: (pr.y + 1) * TILE - 1 }));
+    const frames = Math.max(1, Math.round(ms / 16.67));
+    let t = 0;
+    const ease = EASE.inOut;
+    const scene = {
+      update(e) {
+        t++;
+        if ((skip && t > 20 && (e.input.pressed('a') || e.input.pressed('start'))) || t >= frames) scene.done();
+      },
+      draw(ctx) {
+        const k = ease(Math.min(1, t / frames));
+        const ang = a0 + (a1 - a0) * k;
+        // the camera sits behind the point it looks at, so that point shows a little below
+        // the middle of the ground
+        const back = (height * (SCREEN_W / 2)) / Math.tan(m7.fov / 2) / ((SCREEN_H - horizon) * 0.6);
+        const x = start[0] + (end[0] - start[0]) * k - Math.sin(ang) * back;
+        const y = start[1] + (end[1] - start[1]) * k + Math.cos(ang) * back;
+        m7.cam = { x, y, angle: ang, height, horizon };
+        m7.draw(ctx);
+        const who = people ? w.actors.filter((a) => a.visible).map((a) => ({ img: a.image(), x: a.px + 8, y: a.py + 15, z: (a.lift || 0) + (a.alt || 0) })).filter((s) => s.img) : [];
+        m7.sprites(ctx, [...standing, ...who]);
+      },
+    };
+    return this.play(scene);
+  }
+
   // Where an actor (or 'player') is on screen, for an iris to close on.
   screenAt(at) {
     if (!at) return null;
     if (typeof at === 'object') return at;
     const a = this.actor(at);
     if (!a) return null;
-    return { x: a.px - this.world.cam.x + 8, y: a.py - this.world.cam.y + 2 };
+    return { x: a.px - this.world.cam.x + 8, y: a.py - a.ez - this.world.cam.y + 2 };
   }
   flash(color, ms = 200) { return this.engine.flash(color, ms / 16.67); }
   shake(ms = 300, power) { rumble(Math.min(400, ms)); return this.engine.shake(ms / 16.67, power); }

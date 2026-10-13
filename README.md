@@ -217,6 +217,7 @@ migrate is reported in the console and not offered, never loaded half-understood
   overlay(ctx, api, cam, engine),  // drawn over actors (rain, darkness)
   underlay(ctx, api, cam, engine), // drawn over the ground, under props/actors
   void: '#000', run: false, shadows: false,
+  heights: ['0011', '0122'], level: 8, drop: true,   // 2.5D (see "Heights")
 }
 ```
 
@@ -404,6 +405,70 @@ game.modes = { swim: { speed: 0.75 }, fly: { height: 12, speed: 1 } }   // the c
   before. New effects: the `bubbles` burst; sounds `splash stroke flap land dive surface
   grip slide gasp`; the doll pose `fly`.
 
+## Heights
+
+A map may stand on several levels — a mesa, a tower, terraces, a raised road — and the
+engine draws them in 2.5D: each cell's top rises `level` pixels a level (8 by default; a
+map's or the game's `level`), with its face below it down to the next cell's top, light
+from the upper left (a lower cell beside a higher one lies in its shade) and a line of
+shade where a face meets the ground. Raised cells are sorted with the props and the
+people, so whoever walks behind a wall is hidden by it, and whoever stands on top is drawn
+up there, with their shadow, hint, emote, bark, light and effects.
+
+```js
+heights: [               // one digit a cell (0-9), over `ground`; missing rows and cells are 0
+  '0000000',
+  '0111110',
+  '0112110',
+],
+level: 8,                // pixels a level (map or game)
+drop: true,              // walking off a higher cell onto a lower one hops down (map or game)
+
+// tiles
+stairs: { ramp: true, draw, side(p, frame, h) {} },   // the way between two levels
+mesa:   { draw, side(p, frame, h) {} },               // its own face, h pixels tall
+```
+
+- One may walk between cells on the same level, or one level up or down where either
+  cell is a `ramp`. Anything else is a cliff: a wall, unless `drop` lets you hop down it,
+  or you fly. Every path search, the guide, the audit and a click on the map use the same
+  rule; a click lands on the raised top under the pointer.
+- A tile's face is its `side(p, frame, h)`, painted on a 16×`h` Painter; without one the
+  engine carries the tile's bottom row down, shaded, with a seam at every level.
+- `api.setHeight(x, y, h)` raises or lowers a cell from a script (a bridge, a lift).
+- Props stand on the height of their bottom-left cell; a `flat` prop on a raised cell lies
+  on it. A map without `heights` is drawn exactly as before, pixel for pixel
+  (`tools/compare.mjs` checks it against every cartridge).
+
+## Mode 7
+
+`engine/mode7.js` lays a picture on the ground and shows it in perspective, as the GBA's
+affine backgrounds did: a flight, a sail across a sea, a race, a world map. It only draws;
+who steers and what happens is the cartridge's.
+
+```js
+import { Mode7 } from '../../engine/mode7.js';
+const m7 = new Mode7({ ground: canvas, wrap: true, outside: '#000', sky: ['#203048', '#a0c0e0'],
+                       fog: { color: '#a0c0e0', far: 800, from: 0.4 }, fov: 1.2 });
+m7.cam = { x, y, angle, height: 40, horizon: 40 };   // ground pixels; angle in radians, 0 is north
+m7.draw(ctx);                                         // in a scene's draw
+m7.sprites(ctx, [{ img, x, y, z, scale }]);           // standing up, far ones first
+m7.project(x, y, z);                                  // { x, y, scale, depth } on screen, or null
+api.mapImage(frame, { props: 'flat' })                // the current map as a picture, for ground
+```
+
+`sky` is a colour, `[top, bottom]` or `sky(ctx, cam, horizon)`. `ground` can be any canvas:
+a map (`api.mapImage()`), or one painted with a `Painter` for the occasion.
+
+The ready-made use is **`api.flyover(opts)`**: the current map from the air, the camera
+gliding from `from` to `to` (cells; by default from the player, `ahead` cells forward),
+turning from `angle` to `turn` (degrees), at `height` pixels, in `ms`; props stand up and
+the people on the map are drawn where they stand. A skips it (`skip: false` doesn't).
+
+```js
+await api.flyover({ from: [12, 30], to: [12, 4], turn: 30, ms: 5000, height: 48 });
+```
+
 ## Two bodies, one cell: never
 
 Nobody walks into a cell someone stands in, solid or not; the player passes only
@@ -424,6 +489,7 @@ desk: { size: [2, 2], foot: [2, 1], frames: 2, examine: 'key',
 `solid` (tiles), `foot` (props: solid cells from the bottom-left, default the bottom row),
 `over` (always above actors), `flat` (always below), `counter` (talk across it), `z`,
 `ledge: 'down'` (solid, but walking that way hops over it to the cell beyond),
+`ramp` and `side(p, frame, h)` (see "Heights"),
 `medium`, `push`, `low` (see "Getting about"),
 `step` (the footstep on this ground: an effect name or `soft hard wood snow water`),
 `dust` (the puff a runner kicks up here: a colour, or `false`; `dust: false` on a map or
@@ -660,9 +726,17 @@ town; the credits and every visual effect from the dev menu), with an autotiled 
 bubbles, and an echo in the cave; and a shore (from the dev menu: on foot, with every
 ability, in held flight) with sea to swim, deep water to dive into a reef with a breath bar,
 a chasm to fly over, a cliff to climb, ice, a current, a fence a flyer crosses, a gull that
-always flies and a swimmer who never leaves the water. After changing the engine, link it in
+always flies and a swimmer who never leaves the water; a hill with heights (a mesa, a tower,
+stairs, an edge to drop off, someone walking behind it) and a flyover of the plaza in Mode 7
+(both from the dev menu). After changing the engine, link it in
 (`ln -s ../../tools/lab public/games/lab`), boot `?game=lab`, then remove the link: the
 folder under `public/` is served to everyone.
+
+`node tools/compare.mjs <base url> <candidate url> [game ...]` draws every map of every
+cartridge (each whole, a screen at a time, game time stopped and `Math.random` seeded) with
+two builds of the engine and compares them pixel by pixel: serve the engine as it was on one
+port and the changed one on another, and a change that should leave old games alone is
+shown to do so.
 
 A cartridge may read a URL parameter of its own in `newGame` to start at a given point of
 its story (Matrix: `?game=matrix&dev=<chapter>`).

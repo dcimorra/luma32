@@ -10,6 +10,10 @@
 // shore (getting about, engine/move.js): sea to swim, deep water to dive into a reef
 // below with its breath bar, a chasm to fly over, a cliff to climb, ice, a current, a
 // fence a flyer crosses, a gull that always flies and a swimmer who never leaves the water.
+// hill (heights, 2.5D): a mesa one level up with a tower two up, stairs between them,
+// faces drawn by the engine (and by a tile's own `side`), a person and a sign on top,
+// a dropping-off edge, and whoever walks behind the tower hidden by it.
+// flyover (dev menu): the plaza from the air in Mode 7, gliding north and turning.
 // ?dev=1 adds the overlay (F2) and the jump menu (F3).
 import { SCREEN_W } from '../../engine/gfx.js';
 import { drawText, drawBig, measure, measureBig } from '../../engine/font.js';
@@ -50,6 +54,13 @@ const tiles = {
   current: { push: 'right', step: 'water', dust: false, frames: 2, draw(p, f) { p.fill('#3a78b8'); for (const y of [4, 11]) { p.hline(3 + f * 2, y, 5, '#a8d8f8'); p.px(8 + f * 2, y - 1, '#a8d8f8'); p.px(8 + f * 2, y + 1, '#a8d8f8'); } } },
   seabed: { draw(p) { p.fill('#3a6a80'); p.noise(0, 0, 16, 16, ['#4a7a90', '#2e5a70'], 0.15); } },
   reefrock: { solid: true, draw(p) { p.fill('#1e3a50'); p.rect(1, 2, 14, 12, '#2a4a60'); p.hline(2, 3, 10, '#3e6478'); } },
+  // heights: a mesa's grass with its own rock face; stairs (a ramp) with steps for a face;
+  // the tower's stone, whose face the engine draws from its bottom row
+  mesa: { draw(p) { p.fill(C.grass); p.noise(0, 0, 16, 16, [C.grassHi, C.grassLo], 0.15); p.hline(0, 0, 16, C.grassHi); },
+    side(p, f, h) { p.fill(C.rock); for (let y = 0; y < h; y += 4) for (let x = (y % 8 ? 3 : 0); x < 16; x += 6) p.hline(x, y, 4, C.rockLo); p.hline(0, 0, 16, C.grassLo); p.hline(0, h - 1, 16, C.rockLo); } },
+  stairs: { ramp: true, step: 'hard', draw(p) { p.fill(C.rock); p.hline(0, 0, 16, C.rockHi); p.vline(0, 0, 16, C.rockLo); p.vline(15, 0, 16, C.rockLo); },
+    side(p, f, h) { p.fill(C.rockLo); for (let y = 0; y < h; y += 3) { p.hline(1, y, 14, C.rockHi); p.hline(1, y + 1, 14, C.rock); } p.vline(0, 0, h, C.ink); p.vline(15, 0, h, C.ink); } },
+  tower: { step: 'hard', draw(p) { p.fill(C.rock); for (let y = 0; y < 16; y += 4) for (let x = (y % 8 ? 2 : 0); x < 16; x += 4) p.rect(x, y, 3, 3, C.rockHi); } },
   fence: { low: true, draw(p) { p.rect(1, 6, 2, 10, '#7a5a3a'); p.rect(13, 6, 2, 10, '#7a5a3a'); p.rect(0, 8, 16, 2, '#9a7a50'); p.rect(0, 12, 16, 2, '#9a7a50'); } },
   sign: { examine: 'shore.top', draw(p) { p.rect(7, 8, 2, 8, '#6a4a2a'); p.rect(2, 2, 12, 7, '#9a7a50'); p.hline(4, 4, 8, '#6a4a2a'); p.hline(4, 6, 6, '#6a4a2a'); } },
   clam: { draw(p) { p.ellipse(8, 11, 6, 4, '#c8b8d8'); p.hline(3, 11, 10, '#8a789a'); p.px(8, 10, '#fff8f0'); } },
@@ -192,6 +203,42 @@ const maps = {
     props: [{ t: 'kelp', x: 3, y: 12 }, { t: 'kelp', x: 15, y: 11 }, { t: 'clam', x: 9, y: 13 }],
     fx: [{ name: 'bubbles', x: 3, y: 11, every: 900 }, { name: 'bubbles', x: 15, y: 10, every: 1300 }],
     spots: [{ x: 9, y: 13, run: async (api) => { api.collect('coins', 'reef'); await api.say(null, 'shore.pearl'); } }],
+  },
+  hill: {
+    name: 'place.hill',
+    drop: true,
+    legend: { '.': 'grass', ',': 'tall', 'm': 'mesa', 's': 'stairs', 't': 'tower', '#': 'rock', D: 'cave_door' },
+    ground: [
+      '################',
+      '#..............#',
+      '#..mmmmmmmmmm..#',
+      '#..mmmtttmmmm..#',
+      '#..mmmtttmmmm..#',
+      '#..mmmtstmmmm,,#',
+      '#..mmmmmmmmmm,,#',
+      '#..mmmmsmmmmm..#',
+      '#..............#',
+      '#....,,,.......#',
+      '#..............#',
+      '#######D########',
+    ],
+    warps: [{ x: 7, y: 11, to: 'town', at: [7, 7], face: 'down' }],
+    heights: [
+      '0000000000000000',
+      '0000000000000000',
+      '0001111111111000',
+      '0001112221111000',
+      '0001112221111000',
+      '0001112221111000',
+      '0001111111111000',
+      '0001111111111000',
+    ],
+    props: [{ t: 'sign', x: 11, y: 3 }, { t: 'fence', x: 3, y: 2 }, { t: 'fence', x: 4, y: 2 }],
+    actors: [
+      { id: 'bo', doll: 'bo', x: 7, y: 3, dir: 'down', talk: async (api) => api.say('bo', 'hill.bo') },
+      { id: 'sage', doll: 'sage', x: 10, y: 6, dir: 'left', move: 'wander', radius: 1, talk: async (api) => api.say('sage', 'hill.sage') },
+      { id: 'walker', doll: 'walker', x: 7, y: 1, dir: 'right', route: { path: [[2, 1], [13, 1]], back: true }, talk: async (api) => api.say('walker', 'hill.walker') },
+    ],
   },
   plaza: {
     name: 'place.plaza',
@@ -379,6 +426,9 @@ export default {
     // getting about: on foot (the sea, the chasm and the cliff are walls), then with every ability
     { label: 'shore, on foot', run: async (api) => { for (const k of ['swim', 'dive', 'fly', 'climb']) api.revoke(k); await api.warp('shore', 6, 9, 'down'); } },
     { label: 'shore, every ability', run: async (api) => { for (const k of ['swim', 'dive', 'fly', 'climb']) api.grant(k); await api.warp('shore', 6, 9, 'down'); } },
+    { label: 'hill (heights)', run: async (api) => { await api.warp('hill', 7, 9, 'up'); } },
+    // Mode 7: the plaza from the air, gliding north and turning
+    { label: 'flyover', run: async (api) => { await api.warp('plaza', 12, 10, 'up'); await api.flyover({ from: [12, 12], to: [12, 2], turn: 30, ms: 5000 }); } },
     { label: 'shore, held flight', run: async (api) => { await api.warp('shore', 6, 9, 'down'); api.setMode('player', 'fly'); } },
     // jumps, scene-only: on the spot, sideways over a cell, up over the ledge
     { label: 'jumps', run: async (api) => {
