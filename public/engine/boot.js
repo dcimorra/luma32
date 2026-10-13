@@ -102,6 +102,8 @@ async function shelfItems(carts, groups) {
     if (typeof id !== 'string' || !/^[a-z0-9-]{1,40}$/.test(id)) continue;
     let art = null;
     if (g.title !== undefined) {
+      // the house's art brings the words it paints (cover.line1…); the title is the player's
+      if (!g.cover && g.art && /^[a-z0-9-]+$/.test(g.art)) await loadStrings([`groups/${g.art}/locales/es.json`], `group:${id}`);
       addStrings({ meta: { title: g.title, tagline: g.tagline || '' } }, `group:${id}`);
       if (g.cover) {
         const img = new Image();
