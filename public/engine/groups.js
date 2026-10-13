@@ -113,8 +113,10 @@ export function imageArt(img) {
       const k = Math.max(w / img.width, h / img.height);
       const dw = img.width * k;
       const dh = img.height * k;
+      // a big picture shrunk to the case is smoothed (pixels dropped would look broken); a
+      // small one enlarged stays sharp, as pixel art should
       const smooth = ctx.imageSmoothingEnabled;
-      ctx.imageSmoothingEnabled = false;
+      ctx.imageSmoothingEnabled = k < 1;
       ctx.drawImage(img, x + (w - dw) / 2, y + (h - dh) / 2, dw, dh);
       ctx.imageSmoothingEnabled = smooth;
     },
