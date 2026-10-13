@@ -111,9 +111,13 @@ export function reportProblem(place) {
       return b;
     };
     const toAuthor = () => ask(t('console.report.author_intro'), t('console.report.next'), async (kind, text) => {
+      // the author's own word first: the support page their luma.json gives; else, for a game
+      // from GitHub, an issue on its repository (a support page on GitHub is that too)
       const repo = githubOf(target?.source);
-      if (repo) {
-        const open = button(t('console.report.author_github'), () => window.open(issueUrl(repo, place, kind, text), '_blank', 'noopener'));
+      const issues = /^https:\/\/github\.com\/([\w.-]+\/[\w.-]+)\/issues\/?$/.exec(target?.support || '')?.[1];
+      if (issues || (repo && !target?.support)) {
+        const where = issues || repo;
+        const open = button(t('console.report.author_github'), () => window.open(issueUrl(where, place, kind, text), '_blank', 'noopener'));
         show(el('p', { className: 'account__muted', textContent: t('console.report.author_github_note') }), open, copyButton(kind, text), backToGame());
       } else if (target?.support) {
         show(el('a', { className: 'account__patreon', href: target.support, target: '_blank', rel: 'noopener noreferrer', textContent: t('console.report.author_support') }),
