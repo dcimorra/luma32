@@ -300,8 +300,8 @@ faint glow. `grade` still multiplies the whole map, before both.
 (`'ana'`), a cell of this map (`[x, y]`), or `{ map, x, y, w, h }` / `{ actor, map }`
 elsewhere. `false` says on purpose that there is no one place. The save keeps both.
 
-When the player stands still a moment, or just got a new objective, a small arrow bobs
-over the place; if it is elsewhere on the map the arrow waits at the edge of the screen
+Whenever the player has control, standing or walking, a small arrow bobs over the
+place; if it is elsewhere on the map the arrow waits at the edge of the screen
 pointing to it, and if it is on another map it points to the door or edge that leads
 there (the shortest way through the maps' warps — their `to`, so give a warp with `run`
 its `to` too — and connections). Touching it, the "A" hint takes over. `guide: false` on

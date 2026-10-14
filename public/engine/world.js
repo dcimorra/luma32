@@ -2707,7 +2707,6 @@ export class StoryApi {
     this.save.objective = key;
     this.save.goal = goalOf(this.world, at);
     this.save.goalFree = at === false;
-    this.world.goalAt = this.engine.frame;
     this.world.goalChecked = null;
   }
 

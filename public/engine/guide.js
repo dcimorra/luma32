@@ -5,7 +5,7 @@
 // elsewhere on the map, and points to the door or the edge that leads there when it is
 // on another map (found through the maps' warps — their `to` — and connections). A
 // { map } alone leads to that map; arriving there is the point.
-// A player who stops for a moment sees where to go; nobody has to open START to know.
+// It is there whenever the player has control, walking too; nobody has to open START to know.
 import { diveCell } from './move.js';
 import { SCREEN_W, SCREEN_H, TILE } from './gfx.js';
 import { getTheme } from './ui.js';
@@ -133,14 +133,11 @@ function drawArrow(ctx, dir, cx, cy) {
   }
 }
 
-// The arrow, when the player has control and has stood still a moment (or just got a
-// new objective). Off with `guide: false` on the game or a map, or in Options.
+// The arrow, whenever the player has control, standing or walking. Off with `guide: false` on the game or a map, or in Options.
 export function drawGuide(world, ctx, e, cx, cy) {
   if (world.game.guide === false || world.map.guide === false || !guideOn()) return;
   const p = world.player;
   if (!p || world.busy || world.engine.top() !== world) return;
-  const fresh = e.frame - (world.goalAt ?? -1e9) < 240;
-  if (!fresh && world.still < 45) return;
   const g = guidePoint(world);
   if (!g) return;
   // touching it already: the "A" hint takes over
