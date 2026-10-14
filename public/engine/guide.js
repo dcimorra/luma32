@@ -56,9 +56,16 @@ function exits(world, mapId) {
   return out;
 }
 
-// The first way out of the current map on the shortest way to `target`.
+// The first way out of the current map on the shortest way to `target`. Mapping it reads
+// the warps' `when`; a `when` that asks the way itself (an escort that shuts the doors off
+// its route) would recurse, so while the way is being mapped, asking again gives nothing.
 export function exitTowards(world, target) {
-  if (!target || !world.game.maps[target]) return null;
+  if (!target || !world.game.maps[target] || world.mappingWay) return null;
+  world.mappingWay = true;
+  try { return wayTowards(world, target); } finally { world.mappingWay = false; }
+}
+
+function wayTowards(world, target) {
   const prev = new Map([[world.mapId, null]]);
   const q = [world.mapId];
   while (q.length && !prev.has(target)) {
@@ -233,7 +240,7 @@ export function audit(world, { goalOnly = false } = {}) {
       const has = (r) => cells.some(([x, y]) => x >= r.x && x < r.x + (r.w || 1) && y >= r.y && y < r.y + (r.h || 1));
       const stepOn = triggers.some(has) || warps.some((w) => has(w) && !world.blocked(w.x, w.y, p));
       const answers = here.actor?.def.talk || spots.some(has) || warps.some(has) || triggers.some(has)
-        || cells.some(([x, y]) => world.propAt(x, y)?.def.examine || world.game.tiles[world.tileAt(x, y)]?.examine);
+        || cells.some(([x, y]) => world.examineAt(x, y));
       if (!answers) out.push(`objective "${key}" points at (${here.x},${here.y}) and nothing there answers A or reacts when stepped on.`);
       const ok = stepOn ? cells.some(([x, y]) => reach.has(`${x},${y}`)) : pressable(world, reach, cells);
       if (!ok) out.push(`objective "${key}" at (${here.x},${here.y}) can't be reached from where the player stands (${p.x},${p.y}).`);

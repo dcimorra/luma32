@@ -19,21 +19,22 @@ it when something hangs, flashes or goes black.
 - **`enter` runs on every arrival and on continue.** Re-entering a map or reloading must
   never replay a scene or duplicate a character.
 - **Actors are chosen on arrival.** If the story changes who should be on the current
-  map mid-visit, spawn/despawn them yourself (`api.spawn`, `api.despawn`) — walking
-  them in or out, and with the same id, doll and place the map's `actors` gives them,
-  so the next visit finds them there. Easiest: one
-  helper that advances the story's step and then adds whoever the map's `actors` now
-  want — and gives a person a cutscene brought in the `talk` the map defines for them,
-  or they stand there mute.
+  map mid-visit, set the flags and `await api.refresh()` (or `refresh: true` on the map):
+  the engine walks in whoever the map's `actors` now want, with their `talk`, and walks
+  out whoever they don't. Don't spawn the map's own people by hand, and don't warp to the
+  same map to reload it.
 - **A cutscene walk lands where the scene needs it.** In a scene, walk with
   `walkTo(x, y, { timeout: 4000, place: true })`: if one blocked cell (a table, the
   player) stops them, they stand there anyway and the scene goes on.
 - **Background behaviour**: routes and passers-by are the engine's (`route`, `crowd`,
   `life.md`); only what goes beyond them goes in the map's `update(api, e, control)`.
   Light that depends on flags or time in `grade` and `dark`.
-- **Swapping things at runtime:** `api.setTile(x, y, id)` for ground;
-  `api.world.removeProp(id)` / `addProp(...)` + `rebuildSolid()` for props. Not saved:
-  redo it in `enter` from flags.
+- **Swapping things at runtime:** a prop that depends on the story is a map prop with
+  `when` (same `id` for its two states: the wardrobe shut and open), plus `api.refresh()`
+  when it changes mid-visit. For a one-off, `api.addProp(p)` (same id replaces it in
+  place) / `api.removeProp(id)`, `api.setTile(x, y, id)` for ground — not saved: redo it
+  in `enter` from flags. An `examine` that changes with the story is a function
+  `(api, thing) => key`, on the kind or on one prop entry.
 - **Dialogue covers the bottom 50 px.** Stage conversations where the speakers are not
   under the box, or use `{ top: true }` (the name tag hangs under the box).
 - **Long card subtitles wrap**; keep them to two lines.
@@ -58,7 +59,9 @@ not a one-off; look for the kind across the whole game.
   Rule: every person's `when` ends where their chapter ends; the engine now warns on any
   missing key.
 - **A scene under a fade.** The credits played for 40 seconds behind a black screen.
-  Rule: `fadeIn` before pushing a scene, or give it `aboveFade`; the engine warns.
+  Rule: `fadeIn` before pushing a scene, or give it `aboveFade`; the engine warns. The
+  credits draw above the fade; fade in (or end) after them — control on a black screen
+  is warned and faded in by the engine, but that is a fix, not a staging.
 - **The player placed on a prop.** A chapter started with the player standing on the
   sofa the objective asked him to lie on. Rule: start points are free floor cells in
   front of things; the audit reports anyone inside a prop or a wall.

@@ -3,7 +3,7 @@
 import { SCREEN_W, SCREEN_H } from './gfx.js';
 import { drawText, drawBig, measure, measureBig, wrap, charWidth, LINE_H } from './font.js';
 import { sfx } from './audio.js';
-import { t } from './i18n.js';
+import { t, has } from './i18n.js';
 import { hint } from './shell.js';
 
 export const DEFAULT_THEME = {
@@ -62,6 +62,16 @@ export function pointRows(inp, x, y, w, h, rowY, rowH, n) {
 
 // A click (or a tap) anywhere on the screen: A, where A only goes on.
 export const clicked = (inp) => !!inp.pointer?.clicked;
+
+// A "press to go on" prompt in the words of what the player last touched: the keyboard gets
+// `<key>_key` ("PULSA INTRO") when the catalogue has it, a gamepad the plain key ("PULSA
+// START"), and the pointer, or nobody yet (a page just loaded), the device's pointer
+// wording (shell.js `hint`).
+export function pressKey(key, inp) {
+  if (inp?.lastSource === 'key' && has(`${key}_key`)) return `${key}_key`;
+  if (inp?.lastSource === 'pad') return key;
+  return hint(key);
+}
 
 // ---------- text effects ----------
 
@@ -126,7 +136,31 @@ const LINES = 3;
 // Portraits: game.portraits[speaker](ctx, x, y, frame, mood) paints a 40×40 face.
 let portraits = {};
 export function setPortraits(p) { portraits = p || {}; }
+// The painter of a speaker's face, for a cartridge's own scenes; null when there is none.
+export const getPortrait = (id) => portraits[id] || null;
 export const PORTRAIT = 40;
+
+// Lines into pages of `per`. Balanced, the pages are as even as they can be with as few
+// as filling them would need, so a speech never ends on one line alone under full boxes:
+// 4 lines read 2+2, 7 read 3+2+2, and a speech that fits one box is one box, as ever.
+// `theme.ui.balance: false` on a cartridge keeps filling each box and spilling the rest.
+export function paginate(lines, per = LINES, balance = theme.balance !== false) {
+  const n = Math.ceil(lines.length / per);
+  if (!balance || n < 2) {
+    const out = [];
+    for (let i = 0; i < lines.length; i += per) out.push(lines.slice(i, i + per));
+    return out.length ? out : [[]];
+  }
+  const out = [];
+  const base = Math.floor(lines.length / n);
+  let extra = lines.length % n;
+  for (let i = 0; i < lines.length;) {
+    const k = base + (extra-- > 0 ? 1 : 0);
+    out.push(lines.slice(i, i + k));
+    i += k;
+  }
+  return out;
+}
 
 function speakerOf(id) {
   if (!id) return null;
@@ -151,8 +185,7 @@ export class Dialog {
     this.paused = new Set();
     this.hold = 0;
     this.lines = wrap(mk.plain, TEXT_W);
-    this.pages = [];
-    for (let i = 0; i < this.lines.length; i += LINES) this.pages.push(this.lines.slice(i, i + LINES));
+    this.pages = paginate(this.lines);
     this.maps = this.pages.map((pg) => pageMap(mk.plain, pg));
     this.page = 0;
     this.shown = 0;
@@ -600,7 +633,7 @@ export class Credits {
     }
     if (this.finished) {
       big(ctx, this.end, centerX(this.end, 2), SCREEN_H / 2 - 8, '#ffffff', 2, '#000');
-      const press = t(hint('console.credits.press'));
+      const press = t(pressKey('console.credits.press', e.input));
       if (blink(e, 30)) drawText(ctx, press, centerX(press), SCREEN_H - 20, theme.dim, '#000');
     }
   }

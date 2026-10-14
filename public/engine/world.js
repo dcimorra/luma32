@@ -12,7 +12,7 @@ import { changed } from './host.js';
 import { reportProblem } from './report.js';
 import { resolveWeather, drawWeather, drawDark, gatherLights } from './weather.js';
 import { goalOf, drawGuide, audit, guideOn, setGuide, pressFrom, rectCells } from './guide.js';
-import { placeParty, tickParty, tickLife, bark, drawBarks, bumped, routeStop } from './company.js';
+import { placeParty, tickParty, tickLife, hushLife, bark, drawBarks, bumped, routeStop } from './company.js';
 import { Effects, EASE } from './vfx.js';
 import { Mode7 } from './mode7.js';
 import { can, groundStops, propStops, modeOf, tickModes, stepSpeed, stepSound, afterStep, slideOn, diveHere, diveScript, drawBreath, modeImage, liftOf, drawInMode } from './move.js';
@@ -344,7 +344,8 @@ export class Actor {
   }
 
   image() {
-    if (this.sprite) return this.world.tiles.image(this.sprite, Math.floor(this.world.engine.frame / 12));
+    // a sprite (a tile id), or one a direction: { down, up, left, right } (down if missing)
+    if (this.sprite) return this.world.tiles.image(typeof this.sprite === 'object' ? this.sprite[this.dir] || this.sprite.down : this.sprite, Math.floor(this.world.engine.frame / 12));
     if (!this.doll) return null;
     // in the air (a jump): the running stride with both feet off the ground
     if (this.jumping && this.lift > 2) return this.doll.run?.[this.dir]?.[1] || this.doll.frames[this.dir][1];
@@ -441,6 +442,13 @@ function loadSeen(game) {
   try { return new Set(JSON.parse(localStorage.getItem(seenKey(game))) || []); } catch { return new Set(); }
 }
 
+// The cells a prop blocks: `foot: [w, h]` from its bottom-left cell, or `[w, h, dx, dy]`
+// starting dx cells in from the left and dy up (a trunk in the middle of a wide canopy).
+function footCells(p, fn) {
+  const [fw, fh, dx = 0, dy = 0] = p.foot;
+  for (let j = 0; j < fh; j++) for (let i = 0; i < fw; i++) fn(p.x + dx + i, p.y - dy - j);
+}
+
 const overlap = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
 
 export class World {
@@ -454,6 +462,8 @@ export class World {
     this.player = null;
     this.map = null;
     this.busy = 0;
+    this.lent = 0;             // scripts waiting under api.control: the player has the world meanwhile
+    this.dark = 0;             // frames the player has had control on a black screen
     this.cam = { x: 0, y: 0, follow: true };
     this.turnDelay = 0;
     this.log = [];          // what has been said this session, for the backlog
@@ -546,7 +556,8 @@ export class World {
     if (!d) {
       const spec = this.game.dolls[id];
       if (!spec) throw new Error(`unknown doll: ${id}`);
-      d = makeDoll(spec);
+      // a doll already built (a creature, a winged look made by the cartridge) is used as is
+      d = spec.frames ? spec : makeDoll(spec);
       this.dolls.set(id, d);
     }
     return d;
@@ -565,20 +576,18 @@ export class World {
     for (const [ch, id] of Object.entries(def.legend)) if (id && !this.game.tiles[id]) throw new Error(`${mapId}: legend ${ch} -> unknown tile ${id}`);
     const ground = rows.map((r) => [...r.padEnd(w, ' ')].map((ch) => (ch === ' ' ? null : def.legend[ch] ?? null)));
     const props = [];
-    const add = (p) => {
-      const d = this.tiles.def(p.t);
-      const [pw, ph] = d.size || [1, 1];
-      const foot = d.foot === undefined ? (d.solid === false ? [0, 0] : [pw, 1]) : d.foot;
-      props.push({ ...p, def: d, w: pw, h: ph, foot, id: p.id });
+    const add = (p, src) => {
+      if (src?.when && !src.when(this.api)) return;
+      props.push(this.makeProp(p, src));
     };
     // props: from the objects grid (char marks the bottom-left cell) and from the list
     (def.objects || []).forEach((row, j) => [...row].forEach((ch, i) => {
       const id = def.objectLegend?.[ch];
       if (id) add({ t: id, x: i, y: j });
     }));
-    for (const p of def.props || []) add(p);
+    for (const p of def.props || []) add(p, p);
     const solid = new Map();
-    for (const p of props) for (let j = 0; j < p.foot[1]; j++) for (let i = 0; i < p.foot[0]; i++) solid.set(`${p.x + i},${p.y - j}`, p);
+    for (const p of props) footCells(p, (x, y) => solid.set(`${x},${y}`, p));
     // heights: one digit a cell, 0 where a row or a cell is missing
     const heights = def.heights ? def.heights.map((r) => [...r].map((ch) => (ch >= '0' && ch <= '9' ? ch.charCodeAt(0) - 48 : 0))) : null;
     return { id: mapId, def, w, h, ground, props, solid, heights };
@@ -653,6 +662,8 @@ export class World {
     this.measureHeights();
     this.entities = [];
     this.slide = null;
+    this.pending = false;
+    this.flagsSeen = JSON.stringify(this.save.flags);
     // actors
     const keep = this.player;
     this.actors = [];
@@ -681,8 +692,11 @@ export class World {
     placeParty(this, (d) => new Actor(d, this));
     this.cam.follow = true;
     this.centerCamera();
-    if (def.music !== undefined) music(def.music);
-    if (def.ambience !== undefined) ambience(def.ambience, this.game.ambiences?.[def.ambience]);
+    // music and ambience may be chosen by the story: a function of the api
+    const tune = typeof def.music === 'function' ? def.music(this.api) : def.music;
+    const air = typeof def.ambience === 'function' ? def.ambience(this.api) : def.ambience;
+    if (tune !== undefined) music(tune);
+    if (air !== undefined) ambience(air, this.game.ambiences?.[air]);
     // how the place rings, and the sounds that sit at its spots
     const rv = def.reverb ?? 0;
     room(typeof rv === 'object' ? rv.mix : rv, typeof rv === 'object' ? rv.size ?? 1.2 : 1.2);
@@ -697,27 +711,146 @@ export class World {
     this.save.map = mapId;
   }
 
+  // ---------- the map follows the story (README "Life on a map") ----------
+
+  // The map chose its people and its props by their `when` on arrival; the story may have
+  // moved on since. This brings the map in line with its data as the story stands: whoever
+  // the data wants and isn't here walks in from the nearest door (or is put at home where
+  // nobody sees), whoever it no longer wants walks out by one (or goes where nobody sees),
+  // and someone whose entry changed (another stretch of the story) takes on the new one
+  // where they stand. Behind a black screen it all happens at once. Someone a script spawned
+  // under the same id counts as here, so nobody is ever doubled. With no door and in plain
+  // view they wait until the player looks away. Resolves when every walk has ended.
+  refresh() {
+    if (!this.map) return Promise.resolve();
+    this.refreshProps();
+    const now = !this.showing();
+    const defs = this.map.actors || [];
+    const wanted = new Map();
+    for (const d of defs) if (!wanted.has(d.id) && (!d.when || d.when(this.api))) wanted.set(d.id, d);
+    const walks = [];
+    this.pending = false;
+    this.flagsSeen = JSON.stringify(this.save.flags);
+    for (const [id, d] of wanted) {
+      const a = this.actors.find((x) => x.id === id && x !== this.player);
+      if (a) {
+        if (a.party || !a.declared || (a.def === d && !a.leavingMap)) continue;
+        // walking out and wanted again, or the same person in another entry of the data
+        a.leavingMap = false;
+        if (a.def !== d) this.recast(a, d);
+        if (now || (!this.inView(a.x, a.y) && !this.inView(d.x, d.y))) { a.place(d.x, d.y, d.dir); a.errand = false; continue; }
+        walks.push(this.errand(a, d.x, d.y, () => { if (d.dir) a.face(d.dir); if (d.pose) a.setPose(d.pose); }));
+        continue;
+      }
+      const door = !now && this.inView(d.x, d.y) ? this.nearestDoor(d.x, d.y) : null;
+      if (!now && this.inView(d.x, d.y) && !door) { this.pending = true; continue; }
+      const actor = new Actor(door ? { ...d, x: door.x, y: door.y } : d, this);
+      if (door) { actor.def = d; actor.home = { x: d.x, y: d.y }; actor.act = null; }
+      actor.declared = true;
+      this.actors.splice(this.actors.indexOf(this.player), 0, actor);
+      if (!door) { this.unstack(actor); continue; }
+      walks.push(this.errand(actor, d.x, d.y, () => { if (d.dir) actor.face(d.dir); if (d.pose) actor.setPose(d.pose); }));
+    }
+    for (const a of [...this.actors]) {
+      if (a === this.player || a.party || !a.declared || a.leavingMap || wanted.has(a.id) || !defs.includes(a.def)) continue;
+      const gone = () => { a.drop(); this.actors = this.actors.filter((x) => x !== a); };
+      if (now || !this.inView(a.x, a.y)) { gone(); continue; }
+      const door = this.nearestDoor(a.x, a.y);
+      if (!door) { this.pending = true; continue; }
+      a.leavingMap = true;
+      walks.push(this.errand(a, door.x, door.y, () => { if (a.leavingMap) gone(); }));
+    }
+    return Promise.all(walks);
+  }
+
+  // Props with `when` in the map's data come and go in place (a door opening, a lamp lit).
+  // A prop the cartridge added itself with the same id and kind counts as that one.
+  refreshProps() {
+    let changed = false;
+    for (const p of this.map.props || []) {
+      if (!p.when) continue;
+      const want = !!p.when(this.api);
+      const mine = (q) => q.src === p || (p.id != null && q.id === p.id && q.t === p.t);
+      const here = this.props.some(mine);
+      if (want && !here) { this.props.push(this.makeProp(p, p)); changed = true; }
+      if (!want && here) { this.props = this.props.filter((q) => !mine(q)); changed = true; }
+    }
+    if (changed) this.rebuildSolid();
+  }
+
+  // Someone takes on another entry of the map's data: its look, its talk, its home.
+  recast(a, d) {
+    const look = d.doll !== a.def.doll || d.sprite !== a.def.sprite;
+    a.def = d;
+    a.home = { x: d.x, y: d.y };
+    a.solid = d.solid !== false;
+    a.visible = d.visible !== false;
+    a.act = null;
+    if (look) a.setLook(d.doll, d.sprite);
+  }
+
+  // A walk the map sends someone on by itself (in, out, to a new home): their own life
+  // (route, wander) waits until it ends. Whatever happens when they get there runs only if
+  // they did: a script that takes them over cancels it.
+  errand(a, x, y, then) {
+    a.errand = true;
+    a.act = null;
+    return a.walkTo(x, y, { timeout: 8000, place: true }).then(() => {
+      a.errand = false;
+      if (a.x === x && a.y === y && !a.gone) then?.();
+    });
+  }
+
+  // Where people come in and go out near a cell: the nearest warp, or for a door in a wall
+  // the free cell in front of it.
+  nearestDoor(x, y) {
+    const far = (c) => Math.abs(c.x - x) + Math.abs(c.y - y);
+    let best = null;
+    for (const w of this.map.warps || []) {
+      if (w.to === undefined) continue;
+      let c = { x: w.x, y: w.y };
+      if (this.blocked(c.x, c.y)) {
+        c = Object.values(DIRS).map(([dx, dy]) => ({ x: w.x + dx, y: w.y + dy }))
+          .filter((n) => n.x >= 0 && n.y >= 0 && n.x < this.w && n.y < this.h && !this.blocked(n.x, n.y))
+          .sort((a, b) => far(a) - far(b))[0];
+        if (!c) continue;
+      }
+      if (!best || far(c) < far(best)) best = c;
+    }
+    return best;
+  }
+
+  // `refresh: true` on the game or the map: the map follows the story by itself, after
+  // every script and whenever the flags change while the player walks about.
+  get autoRefresh() { return (this.map?.refresh ?? this.game.refresh) === true; }
+
   // Swaps one ground tile (a door opening, a light going out).
   setTile(x, y, id) {
     if (!this.ground[y]) return;
     this.ground[y][x] = id;
   }
 
-  addProp(p) {
+  // A prop entry ready to draw and query. `src` is the map's own entry, kept so a `when`
+  // can take it away again (refreshProps).
+  makeProp(p, src = null) {
     const d = this.tiles.def(p.t);
     const [w, h] = d.size || [1, 1];
-    const foot = d.foot === undefined ? (d.solid === false ? [0, 0] : [w, 1]) : d.foot;
-    this.props.push({ ...p, def: d, w, h, foot, id: p.id });
+    const foot = p.foot ?? (d.foot === undefined ? (d.solid === false ? [0, 0] : [w, 1]) : d.foot);
+    return { ...p, def: d, w, h, foot, id: p.id, src };
+  }
+
+  addProp(p) {
+    const prop = this.makeProp(p);
+    this.props.push(prop);
+    this.rebuildSolid();
+    return prop;
   }
 
   removeProp(id) { this.props = this.props.filter((p) => p.id !== id); this.rebuildSolid(); }
 
   rebuildSolid() {
     this.solidProps = new Map();
-    for (const p of this.props) {
-      const [fw, fh] = p.foot;
-      for (let j = 0; j < fh; j++) for (let i = 0; i < fw; i++) this.solidProps.set(`${p.x + i},${p.y - j}`, p);
-    }
+    for (const p of this.props) footCells(p, (x, y) => this.solidProps.set(`${x},${y}`, p));
   }
 
   // The ground is drawn tile by tile from the visible area each frame, so a map can be any
@@ -1015,7 +1148,7 @@ export class World {
     if (a?.def.talk) return { who: a, cells: [[a.x, a.y]], ok: () => true };
     const s = this.spotAt(x, y);
     if (s) return { cells: [[x, y], ...rectCells(s)], ok: (tx, ty, dir) => !!this.spotAt(tx, ty, dir) };
-    if (this.propAt(x, y)?.def.examine || (this.tileAt(x, y) && this.game.tiles[this.tileAt(x, y)].examine)) return { cells: [[x, y]], ok: () => true };
+    if (this.examineAt(x, y)) return { cells: [[x, y]], ok: () => true };
     if (this.warpAt(x, y, null, true) || (this.map.warps || []).some((w) => w.dir && this.warpAt(x, y, w.dir, true))) {
       return { cells: [[x, y]], bump: true, ok: (tx, ty, dir) => !!this.warpAt(tx, ty, dir, true) };
     }
@@ -1097,14 +1230,23 @@ export class World {
   // ---------- running scripts ----------
 
   async run(fn) {
+    if (!this.busy) hushLife(this);
     this.busy++;
     try { await fn(this.api); } catch (err) { console.error(err); }
-    finally { this.busy--; this.engine.input.flush(); if (!this.busy) this.endScript(); }
+    finally {
+      // a script counted in what api.control lent the player ended meanwhile
+      if (this.busy <= 0 && this.lent > 0) this.lent--;
+      else this.busy--;
+      this.engine.input.flush();
+      if (!this.busy) this.endScript();
+    }
   }
 
   // Control returns: a conversation is over, and a camera the direction moved comes home.
   endScript() {
     this.lastSpeaker = null;
+    this.scriptEnded = this.engine.frame;
+    if (this.autoRefresh) this.refresh();
     // a zoom or a wave a scene forgot to undo would stay over the game
     if (this.vfx.zoom > 1.001 || this.vfx.wave > 0.2) {
       this.lint(`view:${this.mapId}`, 'a script ended with the camera zoomed or waving: undo it before control returns (api.zoom(1), api.wave(0)).');
@@ -1212,6 +1354,9 @@ export class World {
       this.api.persist();
       this.savedAt = e.frame;
     }
+    // the map follows the story: someone left waiting for the player to look away, or the
+    // flags changed under a map that follows them by itself (`refresh: true`)
+    if (!this.busy && e.frame % 20 === 0 && (this.pending || (this.autoRefresh && JSON.stringify(this.save.flags) !== this.flagsSeen))) this.refresh();
     this.map.update?.(this.api, e, control);
     this.game.update?.(this.api, e, control);
     if (this.busy || this.engine.top() !== this) return;
@@ -1219,6 +1364,15 @@ export class World {
     if (this.busy || this.engine.top() !== this) return;
     const inp = e.input;
     const p = this.player;
+    // control back on a black screen: a script ended faded out and nothing fades it in
+    if (this.engine.fx.fade > 0.99 && !this.engine.jobs?.length) {
+      if (++this.dark === 30) {
+        this.lint(`black:${this.mapId}`, 'control returned with the screen still black: a script ended after fadeOut without fadeIn (or a warp with fade: false). Faded in.');
+        this.engine.fadeIn(20);
+      }
+    } else this.dark = 0;
+    // A that closed a conversation, pressed again at once, doesn't open it again
+    const cooling = e.frame - (this.scriptEnded ?? -99) < 12;
     if (this.devJump) { this.devJump = false; this.run((api) => this.devMenu(api)); return; }
     if (inp.pressed('start') || inp.pointer?.back) { this.run((api) => api.pauseMenu()); return; }
     if (inp.pressed('select') && this.game.onSelect) { this.run((api) => this.game.onSelect(api)); return; }
@@ -1230,11 +1384,11 @@ export class World {
     // ice keeps the player going, a current carries them (engine/move.js)
     if (this.slide && !this.free && slideOn(this)) return;
     if (this.free) {
-      if (inp.pressed('a') && !this.game.actionA) { this.interact(); return; }
+      if (inp.pressed('a') && !(this.map.actionA ?? this.game.actionA) && !cooling) { this.interact(); return; }
       this.walkFree(e, inp, p);
       return;
     }
-    if (inp.pressed('a')) { this.interact(); return; }
+    if (inp.pressed('a') && !cooling) { this.interact(); return; }
     const dir = inp.dir() || this.tripStep();
     if (this.busy) return;
     if (!dir) { this.turnDelay = 0; return; }
@@ -1457,7 +1611,7 @@ export class World {
     // and go. All of it holds still while a script runs.
     if (!this.busy) {
       for (const a of this.actors) {
-        if (a === this.player || a.moving || !a.visible) continue;
+        if (a === this.player || a.moving || !a.visible || a.errand) continue;
         if (a.def.route) { this.tickRoute(a, e); continue; }
         if (!a.def.move) continue;
         if (--a.idle > 0) continue;
@@ -1540,9 +1694,10 @@ export class World {
       }
       if (e.frame < st.next || (c.when && !c.when(this.api))) return;
       const [x, y] = c.path[0];
-      if ((this.inView(x, y) && !this.doorAt(x, y)) || this.blocked(x, y)) { st.next = e.frame + 30; return; }
       const def = { ...c, x, y, transient: true, route: { path: c.path.slice(1), once: true, pause: 0 } };
       const actor = new Actor(def, this);
+      // a swimmer or a flier starts on water or in the air: asked as itself
+      if ((this.inView(x, y) && !this.doorAt(x, y)) || this.blocked(x, y, c.mode || c.can ? actor : null)) { st.next = e.frame + 30; return; }
       const [nx, ny] = c.path[1] || c.path[0];
       actor.dir = Math.abs(nx - x) > Math.abs(ny - y) ? (nx > x ? 'right' : 'left') : (ny > y ? 'down' : 'up');
       if (!c.talk && c.doll) this.lint(`mute:${this.mapId}:${actor.id}`, `${actor.id} (crowd) doesn't answer A: give passers-by a talk too.`);
@@ -1648,9 +1803,19 @@ export class World {
       const s = this.spotAt(x, y, p.dir);
       if (s) return { spot: s, x, y };
     }
-    const examine = prop?.def.examine || (this.tileAt(fx, fy) && this.game.tiles[this.tileAt(fx, fy)].examine);
+    const examine = this.examineAt(fx, fy, prop);
     if (examine) return { examine, x: fx, y: fy };
     return { none: true, x: fx, y: fy, dx, dy, mute };
+  }
+
+  // What A on a thing says: the prop's own `examine` (this one desk), else its kind's, else
+  // the tile's. Each may be a key or a function of (api, thing) giving one, or nothing: the
+  // story's state picks the line (the lamp lit at night) without a spot.
+  examineAt(x, y, prop = this.propAt(x, y)) {
+    const pick = (ex, thing) => (typeof ex === 'function' ? ex(this.api, thing) : ex) || null;
+    const tile = this.tileAt(x, y);
+    return (prop && (pick(prop.examine, prop) ?? pick(prop.def.examine, prop)))
+      || (tile && pick(this.game.tiles[tile].examine, { x, y, tile })) || null;
   }
 
   // The live spot covering a cell (and answering from `dir`, when it asks for one).
@@ -1850,15 +2015,16 @@ export class World {
         // in the air: the shadow stays on the ground, the body rises
         const sw = a?.doll?.shadow ?? 10;
         ctx.fillStyle = `rgba(0,0,0,${0.22 * alpha})`;
-        ctx.fillRect(it.x + (16 - sw) / 2 + 1, it.y + it.img.height - 2, sw - 2, 2);
+        ctx.fillRect(it.x + (it.img.width - sw) / 2 + 1, it.y + it.img.height - 2, sw - 2, 2);
         if (alpha < 1 || a?.tint) this.vfx.body(ctx, it.img, Math.round(it.x), Math.round(it.y - it.lift), alpha, a.tint);
         else ctx.drawImage(it.img, Math.round(it.x), Math.round(it.y - it.lift));
         continue;
       }
-      if (a && !a.sprite && this.map.shadows !== false) {
-        // an animal's shadow is its own size (engine/creature.js); a person's, 10 pixels
-        const sw = a.doll?.shadow ?? 10;
-        const sx = it.x + (16 - sw) / 2;
+      if (a && (!a.sprite || a.def.shadow) && this.map.shadows !== false) {
+        // an animal's shadow is its own size (engine/creature.js); a person's, 10 pixels;
+        // a sprite's only when it asks (`shadow: true` or its width)
+        const sw = a.sprite ? (typeof a.def.shadow === 'number' ? a.def.shadow : 10) : a.doll?.shadow ?? 10;
+        const sx = it.x + (it.img.width - sw) / 2;
         ctx.fillStyle = `rgba(0,0,0,${0.22 * alpha})`;
         ctx.fillRect(sx + 1, it.y + it.img.height - 2, sw - 2, 2);
         ctx.fillRect(sx, it.y + it.img.height - 1, sw, 1);
@@ -2295,7 +2461,7 @@ export class StoryApi {
   // The phone vibrates (ms, or a pattern [on, off, on…]); nothing where it can't.
   rumble(pattern = 40) { rumble(pattern); }
   glitch(ms = 300) { sfx('glitch'); return this.engine.glitch(ms / 16.67); }
-  music(name, opts) { music(name, opts); }
+  music(name, opts) { return music(name, opts); }
   musicLayer(name, on = true) { musicLayer(name, on); }
   sfx(name, opts) { sfx(name, opts); }
   ambience(name) { ambience(name, this.world.game.ambiences?.[name]); }
@@ -2321,6 +2487,36 @@ export class StoryApi {
       a.drop();
     }
     w.actors = w.actors.filter((a) => a.id !== id || a === w.player);
+  }
+
+  // The map brought in line with its data as the story stands now (World.refresh): people
+  // whose `when` changed walk in or out, props with `when` come and go. Awaitable.
+  refresh() { return this.world.refresh(); }
+
+  // A prop for the rest of this visit (the data, with `when`, is what survives a reload).
+  // The same id again replaces it in place: the wardrobe opening.
+  addProp(p) {
+    if (p.id != null) this.world.props = this.world.props.filter((q) => q.id !== p.id);
+    return this.world.addProp(p);
+  }
+  removeProp(id) { this.world.removeProp(id); }
+
+  // The player has the world while a script waits for something they do (a fight, a
+  // chase, reaching a place): `await api.control(promise)` gives back the script's turn
+  // when it settles. Others may run meanwhile (talking to someone).
+  async control(promise) {
+    const w = this.world;
+    const n = w.busy;
+    w.lent += n;
+    w.busy = 0;
+    w.scriptEnded = this.engine.frame;
+    if (!w.cam.follow) this.follow(300);
+    try { return await (typeof promise === 'function' ? promise(this) : promise); } finally {
+      const back = Math.min(n, w.lent);
+      w.lent -= back;
+      w.busy += back;
+      if (w.busy) hushLife(w);
+    }
   }
 
   // Someone jumps, in a scene (see Actor.jump): api.jump('ana'), api.jump('ana', 'up', { n: 2 }).

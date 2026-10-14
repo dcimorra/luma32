@@ -85,6 +85,10 @@ These are what a generated soundtrack sounds like; each is a reject:
    - *Drums*: a pattern written for this song, with a fill on the last bar of each
      phrase. Calm places get no drums, or a shaker (`h`) and a soft kick. The B section
      may drop them; their return is an event.
+   - *Accents*: `!` after a note or drum (`C5!`, `k!`) is +3.5 dB, `?` is −5 dB (ghost
+     notes, an echo voice). For the hook's strong beat and a hi-hat's lilt, not every note.
+   - *Breath and wind*: `inst: 'noise'` plays a band of noise at the note's pitch (`q`,
+     higher is more whistled; `lp` to darken) — a draught, a hiss under a slow song.
    - Customise instruments per channel (`wave`, `lp`, `attack`, `decay`, `detune`,
      `vibrato`) so each song has its own timbre.
    - **Real instruments** (README "Real instruments") are the default: every song is
@@ -114,8 +118,18 @@ These are what a generated soundtrack sounds like; each is a reject:
   player should feel who matters before anyone says so.
 - **Layers for tension, not new songs**: a place's song can carry a `layer` channel
   (drums, a low pulse, strings) that a scene switches on with `api.musicLayer` when a
-  chase starts or a threat appears, and off when it passes. Switching song for every
-  change of mood breaks the place's identity.
+  chase starts or a threat appears, and off when it passes; `unless: 'name'` switches one
+  off (a night version without drums; a lead swapped at a cut-in: `lead: { unless:
+  'cutin' }`, `lead2: { layer: 'cutin' }`). Switching song for every change of mood breaks
+  the place's identity. A map's `music` may be a function of the api (the town at war).
+- **Jingles over the song**: `api.music('j_item', { over: true })` plays it over the
+  place's music, ducked, and the music comes back by itself. To replace the music and
+  come back after: `await api.music('victory'); api.music(place)` — no timers.
+- **Tempo changes**: a pattern can carry its own `bpm` (a ritardando into the last
+  phrase, a dance that speeds up); no faking it with longer steps.
+- **Effects that build their own nodes** connect them to `dest` (the second argument
+  also has `tone`, `burst`, `ctx`, `now`), so mute and the room apply; `burst` plays any
+  length.
 - **A map of moods before writing**: list every song with its mode, tempo, metre and
   lead instrument in a table at the top of `music.js`. No two neighbouring places (a
   town and its route, a route and its cave) share key, mode **and** tempo.
@@ -149,8 +163,9 @@ These are what a generated soundtrack sounds like; each is a reject:
 
 ## Listening test
 
-Songs can't be screenshot. Render them to a file and listen, or at least check length
-and the loop: boot the cartridge, call `music('<name>')` from `eval` and record with the
-browser, or have whoever commissioned the game listen to the title, one town, one route
-and the battle theme before the rest is written. Ask for that listen explicitly: a
+Songs can't be screenshot. Render them: `node tools/render-song.mjs <game> <song>
+/tmp/<song>.wav` (`--chiptune`, `--layers name`, `--sfx` for an effect, `--list`) writes a
+WAV and prints the level of every second — a silent stretch, a song much louder than the
+others, a loop seam. Then have whoever commissioned the game listen to the title, one town,
+one route and the battle theme before the rest is written. Ask for that listen explicitly: a
 soundtrack nobody heard is not done.

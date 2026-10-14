@@ -30,7 +30,8 @@ node tools/shot.mjs "http://127.0.0.1:8765/?game=<id>" /tmp/out script.json
   node tools/play.mjs <game>-<role> --jump 12 --secs 100 --choice 1,0 --stopobj obj.c4_
   ```
   `--target <actorId>` walks to someone instead; `STUCK` and `!!` lines are where a player
-  would be lost too — look there by hand. Writing and debugging a harness of your own is
+  would be lost too — look there by hand. It crosses maps by warps (only those whose
+  `when` is open) and `connections` (walking off the shared edge). Writing and debugging a harness of your own is
   what used to eat the first half hour of every review round.
 - **Every browser you open, you close.** `shot.mjs` and `sheet.mjs` close theirs (and
   give up after 5 minutes if a script hangs). Never write a script of your own that
@@ -51,7 +52,9 @@ node tools/shot.mjs "http://127.0.0.1:8765/?game=<id>" /tmp/out script.json
 - **Art without playing**: `node tools/sheet.mjs http://127.0.0.1:8765 <id> /tmp/<id>-sheet.png`
   draws every ground tile 3×3, every prop and every doll (12 frames + silhouette) on one
   PNG and prints colour counts and ground edges that stand out (`art.md` § 8). One
-  sheet replaces dozens of map screenshots while painting.
+  sheet replaces dozens of map screenshots while painting. On a big cartridge: `--only
+  dolls` (or `tiles`, `props`) and `--match <id part>`; a tall sheet comes in pages
+  (`-2.png`…); if it hangs it says what it was drawing.
 - `tools/shot.mjs` loads `playwright-core` from `tools/node_modules` and the Chromium
   that version expects from `~/.cache/ms-playwright` (missing: `npx playwright-core
   install chromium` in `tools/`); override with `PLAYWRIGHT=` / `CHROME=`.
@@ -62,7 +65,10 @@ node tools/shot.mjs "http://127.0.0.1:8765/?game=<id>" /tmp/out script.json
   each one lists, from where the player really stands: an objective without a place or
   out of reach, a place where nothing answers, a spot no cell touches, a spot on open
   floor, someone inside a prop or a wall or on another person, a warp into a wall, a
-  missing text, every `[luma]` warning and console error. It costs one browser for a
+  missing text, every `[luma]` warning and console error. `--follow [secs]` also plays
+  each jump on into its next beat (with play.mjs): a `follow:` line is where to look by
+  hand. A jump with a long set piece gets `timeout: <secs>` in `dev.jumps` (45 by
+  default). It costs one browser for a
   few minutes; run it after every block of work and before every hand-over. **A
   cartridge is not handed over with problems in it.** It needs `dev.jumps` that leave
   the game where a player would be (flags, objective with its place, map, cell): one per

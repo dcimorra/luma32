@@ -138,10 +138,24 @@ export function drawBarks(world, ctx, cx, cy) {
 
 // ---------- the little life between people ----------
 
-// Says a line (a locale key) or shows an emotion over someone, without sound.
+// Says a line (a locale key) or shows an emotion over someone, without sound. Marked as
+// the map's own life, so a scene that starts takes it away (hushLife).
 function express(world, a, line) {
-  if (EMOTE_NAMES.has(line)) { a.emote = { glyph: line, until: world.engine.frame + ms(1100), from: world.engine.frame }; return; }
+  if (EMOTE_NAMES.has(line)) { a.emote = { glyph: line, until: world.engine.frame + ms(1100), from: world.engine.frame, life: true }; return; }
   bark(world, a, world.api.text(line));
+  if (a.bark) a.bark.life = true;
+}
+
+// A script starts: background chatter, greetings and bumps said over heads stop at once
+// (they would talk over the story, or stay cut by the cinema bars), and the next exchange
+// waits a while after control returns. Barks and emotes from scripts stay.
+export function hushLife(world) {
+  const f = world.engine.frame;
+  for (const a of world.actors) {
+    if (a.bark?.life) a.bark = null;
+    if (a.emote?.life) a.emote = null;
+    if (a.def?.chat && a.chatNext !== undefined) { a.chatNext = Math.max(a.chatNext, f + ms(3000)); a.chatI -= a.chatI % (a.def.chat.lines?.length || 1); }
+  }
 }
 
 // Per frame, while nobody runs a script:

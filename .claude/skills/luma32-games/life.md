@@ -94,7 +94,9 @@ visible bug a player finds, and it never throws an error.
   should be there — from the beat that brings them to the beat that takes them away. Not
   spawned only inside `enter` at one exact step (`if (at(api, 130)) spawn(...)`), not
   only inside a cutscene: those vanish on the next visit. The engine warns (`[luma]`)
-  when the player leaves a map where someone stands only by `api.spawn`.
+  when the player leaves a map where someone stands only by `api.spawn`. When their
+  `when` turns true or false while the player is there, `await api.refresh()` walks them
+  in or out (`refresh: true` on the map does it by itself).
 - **A cutscene ends in a state the map's data already describes.** If a scene brings
   someone in or moves them, it advances the flag their `when` reads, and their declared
   position is where the scene leaves them (or where they would naturally go back to).

@@ -118,7 +118,8 @@ height, readable at 1× from across the screen.
 1. **Silhouette first.** Fill each character black (`tools/sheet.mjs` prints the
    silhouette next to the frames). The named characters of a game must be told apart by
    silhouette alone: hairstyle, hat, coat, dress, height. If two named characters have
-   the same black shape, change one — hairStyle, `hat`, `coat`, `dress`, `beard`, `ears`, `mask`, `earShape`.
+   the same black shape, change one — hairStyle, `hat`, `coat`, `dress`, `beard`, `ears`, `mask`, `earShape`,
+   `build`, `horns`, `wings`, `hold`, `crown`, `pack`.
    Background people may share silhouettes; the protagonist, the rival and the mentor
    never.
 2. **A signature colour per main character**, saturated, on a large area (cap, jacket,
@@ -138,8 +139,18 @@ height, readable at 1× from across the screen.
    hue-shifted shadows, and a one-pixel bob on step frames. Don't fight it with
    colours that are already very dark or very light: pick mid-tones.
 7. **Height is silhouette too**: `height: 'short'` for children and small people (two
-   pixels shorter, same head). Combine it with hairStyle, `hat`, `coat`, `dress` to
+   pixels shorter, same head), `'tall'` for the tall ones (16×26), `build: 'stout'` for
+   the broad. Combine it with hairStyle, `hat`, `coat`, `dress` to
    give every named character a shape of its own.
+8. **Use the engine's options before inventing a stand-in** (all in the header of
+   `engine/doll.js`): period dress is `dress: 'long' | 'wide'`, `hairStyle: 'updo' | 'wig'
+   | 'ringlets' | 'crown'`, `hat: 'bonnet' 'bicorne' 'mobcap' 'turban' 'plume' 'toque'
+   'shades' 'hood'`; royalty `crown: '#colour'`; fae and demons `horns`, `earShape`,
+   `wings` (`wingsOpen`, and the `fly` pose spreads them); a prop in the hand is `hold`
+   (`cane book fan phone briefcase tray umbrella glass gavel folder flag`); `belly: true`
+   for a pregnancy; a horse is `creature: 'horse'`. A `beanie` for a plume, a `top` hat
+   for a crown, a dog for a horse are what this list replaces. Each layer adds colours:
+   watch the count `sheet.mjs` prints.
 
 ## 7. Errors the GBA era is remembered for — don't repeat them
 

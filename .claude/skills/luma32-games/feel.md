@@ -71,7 +71,7 @@ notices first; each one came from a real play of a finished cartridge.
   screen or a door, never appearing or vanishing on the spot. Spawn them off screen (test
   it against the camera, `api.world.cam`) or at a door and walk them in; walk them out
   before despawning — off screen, or turned to a door and gone through it (`crowd` does
-  all this for passers-by). The engine warns when someone appears or vanishes in view.
+  all this for passers-by, `api.refresh()` for the map's own people). The engine warns when someone appears or vanishes in view.
   The only exceptions are cuts (a fade to black, a card, a dream) and the story's own
   magic: someone who really appears out of nowhere does it with `api.appear` /
   `api.vanish` and an effect, never with a bare `spawn`.

@@ -3,14 +3,18 @@
 // comes here (engine/doll.js) and gives back the same shape a person does, so walking,
 // running, poses, routes, companions and modes work with nothing else.
 //
-//   doll({ creature: 'dog' | 'cat' | 'bird' | 'bee', fur, markings, eyes, nose, wings,
-//          legs, outline })
+//   doll({ creature: 'dog' | 'cat' | 'bird' | 'bee' | 'horse', fur, markings, eyes, nose,
+//          wings, legs, mane, outline })
 //
 // fur: the main colour (a corgi's orange, a black cat, a grey pigeon, a bee's yellow).
 // markings: the second colour — a dog's or a cat's muzzle, chest, belly and socks, a
 //   bird's breast, a bee's stripes (default: a light tint of the fur; black for a bee).
 // nose: a dog's or a cat's nose, a bird's beak. wings: a bee's wings.
 // legs: 'short' (a corgi, a dachshund): the body one pixel nearer the ground.
+// A horse is two cells long seen from the side (32×24; 16×24 from the front and the
+//   back): markings are its blaze and socks (default white), mane its mane and tail
+//   (default a dark shade of the fur), nose its hooves and nostrils. It walks, gallops,
+//   lies down, sleeps and blinks; it doesn't sit.
 //
 // Every one has 4 directions × 3 walking frames and 3 running ones. Dogs and cats also
 // sit, lie, sleep and blink; birds hop when they walk and flap when they fly; a bee is
@@ -30,9 +34,9 @@ const sym = (rows) => rows.map((r) => r + [...r].reverse().join(''));
 const ground = (rows, up = 0) => [...Array(H - rows.length - up).fill(EMPTY), ...rows, ...Array(up).fill(EMPTY)];
 const swap = (rows, from, to) => rows.map((r) => r.replaceAll(from, to));
 
-function put(row, x, s) {
+function put(row, x, s, w = W) {
   const a = row.split('');
-  for (let i = 0; i < s.length; i++) if (s[i] !== ' ' && x + i >= 0 && x + i < W) a[x + i] = s[i];
+  for (let i = 0; i < s.length; i++) if (s[i] !== ' ' && x + i >= 0 && x + i < w) a[x + i] = s[i];
   return a.join('');
 }
 
@@ -350,7 +354,110 @@ function bee() {
   return { frames, run, poses: { fly: { left: left[0], down: down[0], up: down[0] } }, flap, idle: flap, shadow: 4 };
 }
 
-export const CREATURES = ['dog', 'cat', 'bird', 'bee'];
+// ---------- horse ----------
+//
+// Seen from the side it is two cells long (32 pixels wide, centred on its cell like any
+// sprite); from the front and the back, one. M is the mane and tail, S the blaze and the
+// socks, F the hooves and the nostrils.
+
+const HW = 32;
+const HORSE = {
+  side: [
+    '.....o.o',
+    '....oHoHo',
+    '....oHHHMo',
+    '...oHEHHMMo',
+    '..oHHHHHHMMo',
+    '.oHHHHoHHHMMo',
+    'oHHHHo.oHHHMMo',
+    'oSHHo...oHHHMMoooooooooooo',
+    'oFSo....oHHHHHHHHHHHHHHHHHoo',
+    '.oo.....oHHHHHHHHHHHHHHHHHHHoo',
+    '........oHHHHHHHHHHHHHHHHHHHoMo',
+    '........oHHHHHHHHHHHHHHHHHHHoMMo',
+    '.........oHHHHHHHHHHHHHHHHHHoMMo',
+    '.........ohHHHHHHHHHHHHHHHHhoMMo',
+    '..........ohhhhhhhhhhhhhhhhooMo',
+  ],
+  // the near and far leg of each pair, under the belly
+  legs: [12, 15, 23, 26],
+  front: [
+    '...o........o...',
+    '..oHo......oHo..',
+    '..oHHooooooHHo..',
+    '...oHHMMMMHHo...',
+    '..oHEHHMMHHEHo..',
+    '...oHHHHHHHHo...',
+    '..ooHHHSSHHHoo..',
+    '.oHHoHHSSHHoHHo.',
+    '.oHHHoHSSHoHHHo.',
+    'oHHHHoSSSSoHHHHo',
+    'oHHHHoFSSFoHHHHo',
+    'oHHHHHoooooHHHHo',
+    '.oHHHHHHHHHHHHo.',
+    '..ohHHHHHHHHho..',
+    '...oooooooooo...',
+  ],
+  back: [
+    '...o........o...',
+    '..oHo......oHo..',
+    '..oHHooooooHHo..',
+    '...oHHMMMMHHo...',
+    '...oHHHMMHHHo...',
+    '....oHHMMHHo....',
+    '..oooHHMMHHooo..',
+    '.oHHHHHMMHHHHHo.',
+    'oHHHHHHHHHHHHHHo',
+    'oHHHHHHHHHHHHHHo',
+    'oHHHHHHoMoHHHHHo',
+    'oHHHHHoMMMoHHHHo',
+    '.oHHHHoMMMoHHHo.',
+    '..ohHHoMMMoHho..',
+    '...ooooMMMoooo..',
+  ],
+};
+
+// Legs of `n` rows (the last two a sock and a hoof) at the given centres; a lifted leg is
+// a row shorter. `extra` rows are drawn between the legs (the tail from behind).
+function horseLegs(w, xs, { lift = [], n = 6, extra = [] } = {}) {
+  const rows = Array.from({ length: n }, () => '.'.repeat(w));
+  extra.forEach(([x, s], j) => { rows[j] = put(rows[j], x, s, w); });
+  xs.forEach((x, i) => {
+    const len = lift.includes(i) ? n - 1 : n;
+    for (let j = 0; j < len - 1; j++) rows[j] = put(rows[j], x - 1, j === len - 3 ? 'oSo' : j === len - 2 ? 'oFo' : 'oHo', w);
+    rows[len - 1] = put(rows[len - 1], x - 1, 'ooo', w);
+  });
+  return rows;
+}
+
+function horse() {
+  const pad = (rows, w) => rows.map((r) => r.padEnd(w, '.'));
+  const side = pad(HORSE.side, HW);
+  const [a, b, c, d] = HORSE.legs;
+  const groundW = (rows, w, up = 0) => [...Array(H - rows.length - up).fill('.'.repeat(w)), ...rows, ...Array(up).fill('.'.repeat(w))];
+  const sideAt = (xs, o = {}, up = 0) => groundW([...side, ...horseLegs(HW, xs, o)], HW, up);
+  // a walk: each diagonal pair steps in turn
+  const left = [sideAt([a, b, c, d]), sideAt([a - 1, b + 1, c + 1, d - 1], { lift: [0, 3] }), sideAt([a + 1, b - 1, c - 1, d + 1], { lift: [1, 2] })];
+  const fl = (lift) => horseLegs(W, [4, 11], { lift });
+  const down = [0, 1, 2].map((k) => groundW([...HORSE.front, ...fl(k === 1 ? [0] : k === 2 ? [1] : [])], W));
+  const tail = [[7, 'oMo'], [7, 'oMo'], [8, 'o']];
+  const up = [0, 1, 2].map((k) => groundW([...HORSE.back, ...horseLegs(W, [4, 11], { lift: k === 1 ? [1] : k === 2 ? [0] : [], extra: tail })], W));
+  // the gallop: legs flung out front and back, then gathered under it in the air
+  const run = {
+    left: [sideAt([a - 2, b - 1, c + 2, d + 3], { lift: [0, 3] }), sideAt([a + 1, b + 2, c - 2, d - 1], { lift: [0, 1, 2, 3], n: 5 }, 1), sideAt([a - 1, b - 2, c + 3, d + 2], { lift: [1, 2] })],
+    down: [down[1], groundW(down[0].slice(-H + 1), W, 1), down[2]],
+    up: [up[1], groundW(up[0].slice(-H + 1), W, 1), up[2]],
+  };
+  const lie = groundW([...side, pad(['..........oHHHHHo....oHHHHHHo', '..........ooooooo....oooooooo'], HW)].flat(), HW);
+  const poses = {
+    lie: { left: lie, down: lie, up: lie },
+    sleep: { left: swap(lie, 'E', 'H'), down: swap(lie, 'E', 'H'), up: swap(lie, 'E', 'H') },
+    blink: { left: swap(left[0], 'E', 'H'), down: swap(down[0], 'E', 'H') },
+  };
+  return { frames: { left, down, up }, run, poses, shadow: 14 };
+}
+
+export const CREATURES = ['dog', 'cat', 'bird', 'bee', 'horse'];
 
 // Every frame as rows of palette keys (right is drawn by mirroring left).
 export function creatureRows(spec) {
@@ -359,6 +466,7 @@ export function creatureRows(spec) {
     case 'cat': return quadruped(CAT, spec);
     case 'bird': return bird(spec);
     case 'bee': return bee(spec);
+    case 'horse': return horse(spec);
     default: throw new Error(`unknown creature: ${spec.creature} (${CREATURES.join(', ')})`);
   }
 }
@@ -368,7 +476,7 @@ const lit = (c, t) => mix(c, '#fff4d8', t);
 
 export function creaturePalette(spec) {
   const kind = spec.creature;
-  const fur = spec.fur || { dog: '#a87038', cat: '#686470', bird: '#8a8a94', bee: '#e8b828' }[kind];
+  const fur = spec.fur || { dog: '#a87038', cat: '#686470', bird: '#8a8a94', bee: '#e8b828', horse: '#8a5a34' }[kind];
   const marks = spec.markings || (kind === 'bee' ? '#2a2018' : tint(fur, 0.6));
   const nose = spec.nose || (kind === 'bird' ? '#d89838' : kind === 'cat' ? '#d88890' : '#201818');
   return {
@@ -378,5 +486,6 @@ export function creaturePalette(spec) {
     E: spec.eyes || '#1c1814',
     F: nose,
     W: spec.wings || '#e4eef8',
+    ...(kind === 'horse' ? { M: spec.mane || dark(fur, 0.55), F: spec.nose || '#2a2420', S: spec.markings || '#ece4d8' } : {}),
   };
 }

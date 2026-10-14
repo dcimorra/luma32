@@ -18,9 +18,31 @@
 // mask: 'domino' (a band across the eyes) | 'full' (the whole face), in maskColor
 //   (default gold). It repaints skin only, so hair, beards and hats stay on top; eyes show.
 // earShape: 'pointed' (elves, fae): long ears out past the head, through any hair.
-// creature: 'dog' | 'cat' | 'bird' | 'bee': an animal instead of a person, with its own
+// creature: 'dog' | 'cat' | 'bird' | 'bee' | 'horse': an animal instead of a person, with its own
 //   keys (fur, markings, nose, wings, legs) — see engine/creature.js.
-// height: 'short' (children, small people: two pixels shorter, same head).
+// height: 'short' (children, small people: two pixels shorter, same head) | 'tall' (two
+//   pixels taller: one torso row and one hip row more; the frame is 16×26).
+// build: 'stout' | 'big' (the same): torso, arms and coat a pixel wider on each side.
+// belly: true; a rounded belly, seen from the side (pregnancy, a paunch).
+// dress: true (a skirt to the hips) | 'long' (to the feet, hiding the legs, flaring at
+//   the hem; under a coat it shows below the coat's tails) | 'wide' (court panniers).
+// hairStyle also: crown (= braid: a crown of braids) updo (piled up, flat and wide on top,
+//   curls at the temples) wig (big and powdered, rolls over the ears, a queue behind)
+//   ringlets (long and voluminous, curly).
+// hat also: 'bonnet' (a brim framing the face) 'turban' 'plume' (a feather in the hair)
+//   'bicorne' 'mobcap' 'toque' (a chef's) 'shades' (sunglasses pushed up on the head)
+//   'hood' (a cowl over the hair, down to the shoulders; `hood: true` is the same, in
+//   hatColor or the coat's or top's colour) 'crown' (the crown below, in hatColor).
+// crown: a colour; a crown with three points on top of the head, over hair and hats.
+// horns: 'small' | 'big' | 'broken' (one big, one snapped short), in hornColor (bone).
+// glasses also: 'thin' (thin rectangular frames, in glassesColor).
+// hold: something in the hand: 'cane' 'book' 'fan' 'phone' 'briefcase' 'tray' 'umbrella'
+//   'glass' 'gavel' 'folder' 'flag', in holdColor (main) and holdAccent. It follows the
+//   hand as it swings, and drops from poses that raise the arms.
+// pack: a colour; a pack on the back (straps from the front).
+// wings: a colour (the membrane; the frame a shade darker) or { color, membrane, clipped,
+//   bound }: folded behind the shoulders. wingsOpen: true spreads them (the frame grows to
+//   28×24, centred); the fly pose spreads them anyway (unless bound).
 // outline: the silhouette's dark (default a cool near-black). Outlines are selective: the
 //   outer edge leans to the colour it surrounds and the lines inside the body (sleeve
 //   against torso, hair against face) are the darkest tone of their material.
@@ -273,7 +295,29 @@ const HAIR = {
     up: ['', '.....oooooo.....', '....oHHHHHHo....', '...oHHHHHHHHo...', '...oHHHHHHHHo...', '...oHHhHHhHHo...', '...oHHHooHHHo...', '...ohHHHHHHho...', '...o.hhHHhh.o...', '......oHHo......', '......oHHo......', '......ohHo......', '......ohho......', '.......oo.......'],
     left: ['', '.....oooooo.....', '....oHHHHHHo....', '...oHHHHHHHHo...', '...oHHHHHHHHo...', '...o..HHHHhHoo..', '..o.....HHHHoHo.', '..o......HHHoHHo', '...o.....hHHohHo', '...o......h.ohHo', '.............oho', '..............o.'],
   },
+  // a crown of braids (I is the hair's own highlight: the plaits catch the light)
+  crown: {
+    down: ['', '....oooooooo....', '...oIIHIIHIIo...', '..oHhIHhIHhIHo..', '...ohhhhhhhho...', '...oHH....HHo...', '...oH......Ho...'],
+    up: ['', '....oooooooo....', '...oHHHHHHHHo...', '..ohhhhhhhhhho..', '..oIIHIIHIIHIo..', '..oHhIHhIHhIHo..', '..ohhhhhhhhhho..', '...oHHHIIHHHo...', '...ohHHIHHHho...', '...o.hhhhhh.o...'],
+    left: ['', '....ooooooo.....', '...oIIHIIHIo....', '..ohIHhIHhIHo...', '...ohhhhhhhhIo..', '...o..HHHHhIHo..', '..o.....HHHIHo..', '..o......HHhHo..', '...o.....hHHo...'],
+  },
+  updo: {
+    down: ['.....oooooo.....', '....oHIIHHHo....', '...oHIHHHHHho...', '...ohhHHHHhho...', '...oHHHHHHHHo...', '...oHH....HHo...', '..ohH......Hho..', '..oho......oho..', '...o........o...'],
+    up: ['.....oooooo.....', '....oHHHIIHo....', '...oHHHHHHIHo...', '...ohhHHHHhho...', '...oHHHHHHHHo...', '...oHHHhhHHHo...', '..ohHHHHHHHHho..', '..ohohhhhhhoho..', '...o........o...'],
+    left: ['.....oooooo.....', '....oHIIHHHo....', '...oHIHHHHHho...', '...ohhHHHHhho...', '...oHHHHHHHHo...', '...o..HHHHhHo...', '..o.....HHHHo...', '..o......hHHo...', '...o.....oho....'],
+  },
+  wig: {
+    down: ['....oooooooo....', '...oHIHHHHHHo...', '..oHIHHHHHHHHo..', '..oHHHHHHHHHHo..', '.oHhHHhHHhHHhHo.', '.oHHo......oHHo.', '.ohHo......ohHo.', '.oHHo......oHHo.', '.ohho......ohho.', '..oo........oo..'],
+    up: ['....oooooooo....', '...oHHHHHHIHo...', '..oHHHHHHHHIHo..', '..oHHHHHHHHHHo..', '.oHHHHHHHHHHHHo.', '.oHHhHHHHHHhHHo.', '.ohHHHHHHHHHHho.', '.oHHhHHHHHHhHHo.', '.ohhohHHHHhohho.', '..oo.ohHHho.oo..', '......oEEo......', '......oHHo......', '......ohho......', '.......oo.......'],
+    left: ['....ooooooo.....', '...oHIHHHHHo....', '..oHIHHHHHHHo...', '..oHHHHHHHHHHo..', '...oHHHHHHHHHo..', '...o..HHHHHHHo..', '..o.....hHHhHo..', '..o.....HhhHHHo.', '...o....hHHhHHo.', '...o.....oo.oho.', '............oo..'],
+  },
+  ringlets: {
+    down: ['.....o.oo.o.....', '....oHoHHoHo....', '...oHHhHHhHHo...', '..oHhHHhHHhHHo..', '.oHHhHHhHHhHHHo.', '.oHhHh....hHhHo.', '.oHhH......HhHo.', 'oHhHh......hHhHo', '.oHHh......hHHo.', 'oHhHh......hHhHo', '.oHhHo....oHhHo.', '.ohHhHo..oHhHho.', '..o.oo....oo.o..'],
+    up: ['.....o.oo.o.....', '....oHoHHoHo....', '...oHHhHHhHHo...', '..oHhHHhHHhHHo..', '.oHHhHHhHHhHHHo.', '.oHhHHhHHhHHhHo.', '.oHHhHHhHHhHHHo.', 'oHhHHhHHhHHhHhHo', '.oHHhHHhHHhHHHo.', 'oHhHHhHHhHHhHhHo', '.oHhHHhHHhHHhHo.', '.ohHhHhhHhHhHho.', '..o.oo.oo.oo.o..'],
+    left: ['......o.o.o.....', '.....oHoHoHo....', '....oHHhHHhHo...', '...oHhHHhHHhHo..', '...oHHhHHhHHHHo.', '...o.hHHhHHhHhHo', '..o.....HhHHhHo.', '..o.....hHhHhHHo', '...o.....HHhHho.', '...o.....hHhHHHo', '.........oHhHho.', '.........ohHhHo.', '..........o.oo..'],
+  },
 };
+HAIR.braid = HAIR.crown;
 
 // Hats: Q is the hat's colour, q its shade, R its highlight.
 const HAT = {
@@ -297,6 +341,237 @@ const HAT = {
     up: ['', '.....oooooo.....', '....oQQRRQQo....', '...oQQRQQQQQo...', '...oQQQQQQQQo...', '...oQQQQQQQQo...', '...oqQQQQQQqo...', '...oqqqqqqqqo...', '...oooooooooo...'],
     left: ['', '.....oooooo.....', '....oQRRQQQo....', '...oQRQQQQQQo...', '...oQQQQQQQQo...', '..oqqqqqqqqqo...', '..o.....qQQqo...', '..o.....qQQqo...', '...o....oooo....'],
   },
+  bonnet: {
+    down: ['....oooooooo....', '...oQQRQQQQQo...', '..oQRQQQQQQQQo..', '..oQQqqqqqqQQo..', '..oQq......qQo..', '..oQq......qQo..', '..oQq......qQo..', '...oq......qo...', '...oo......oo...'],
+    up: ['....oooooooo....', '...oQQQQQQRQo...', '..oQQQQQQQQRQo..', '..oQQQQQQQQQQo..', '..oqQQQQQQQQqo..', '..oqqQQQQQQqqo..', '...oqqqqqqqqo...', '...oo.oqqo.oo...'],
+    left: ['.....ooooooo....', '....oQRQQQQQo...', '..ooQQQQQQQQQo..', '.oQQqQQQQQQQQo..', '.oQq..QQQQQQQo..', '.oQq...qQQQQqo..', '..oq....qqqqo...', '..o......ooo....'],
+  },
+  turban: {
+    down: ['.....oooooo.....', '....oQRQqQQo....', '...oQRQqQQQQo...', '..oQQqQQQqQQQo..', '..oqQQQRQqQQqo..', '...oqqqqqqqqo...'],
+    up: ['.....oooooo.....', '....oQQqQRQo....', '...oQQQqQQRQo...', '..oQQqQQQqQQQo..', '..oqQQqQQQqQqo..', '...oqqqqqqqqo...'],
+    left: ['.....oooooo.....', '....oQRQqQQo....', '...oQRQqQQQQo...', '..oQQqQQQqQQQo..', '..oRqQQQqQQQqo..', '...oqqqqqqqqo...'],
+  },
+  plume: {
+    down: ['..........ooo...', '.........oRRQo..', '.........oRQo...', '........ooQo....', '....ooooqqoo....'],
+    up: ['...ooo..........', '..oQRRo.........', '...oQRo.........', '....oQoo........', '....ooqqoooo....'],
+    left: ['.........ooo....', '........oRRQo...', '........oRQo....', '.......ooQo.....', '...oooooqqo.....'],
+  },
+  bicorne: {
+    down: ['', '.....oooooo.....', '..ooQQQRQQQQoo..', 'ooQQQQRQQQQQQQoo', 'oqqqqqqqqqqqqqqo', '.oooo......oooo.'],
+    up: ['', '.....oooooo.....', '..ooQQQQRQQQoo..', 'ooQQQQQQRQQQQQoo', 'oqqqqqqqqqqqqqqo', '.oooo......oooo.'],
+    left: ['', '......oooo......', '....ooQRQQoo....', '...oQQRQQQQQo...', '...oqqqqqqqqo...', '...o........o...'],
+  },
+  mobcap: {
+    down: ['.....oooooo.....', '....oQRQQQQo....', '...oQRQQQQQQo...', '..oQQQQQQQQQQo..', '..oqQqQqQqQqqo..', '...o.q.q.q.q.o..'],
+    up: ['.....oooooo.....', '....oQQQQRQo....', '...oQQQQQQRQo...', '..oQQQQQQQQQQo..', '..oqQQQQQQQQqo..', '..oqQqQqQqQqqo..', '...o.q.q.q.q.o..'],
+    left: ['.....oooooo.....', '....oQRQQQQo....', '...oQRQQQQQQo...', '..oQQQQQQQQQQo..', '..oqQqQqQQQQqo..', '...o.q.q.qQqo...', '..........qo....'],
+  },
+  toque: {
+    down: ['....oooooooo....', '...oQRQQQQQQo...', '..oQRQQQQQQQQo..', '..oQQQQQQQQQQo..', '...oqQQQQQQqo...', '...oqqqqqqqqo...', '...oo......oo...'],
+    up: ['....oooooooo....', '...oQQQQQQRQo...', '..oQQQQQQQQRQo..', '..oQQQQQQQQQQo..', '...oqQQQQQQqo...', '...oqqqqqqqqo...', '...oHHHHHHHHo...'],
+    left: ['....oooooooo....', '...oQRQQQQQQo...', '..oQRQQQQQQQQo..', '..oQQQQQQQQQQo..', '...oqQQQQQQqo...', '...oqqqqqqqqo...', '...o..HHHHHHo...'],
+  },
+  shades: {
+    down: ['', '', '', '..oGWGooGWGo....', '...oGGo.oGGo....'],
+    up: ['', '', '', '..oo........oo..'],
+    left: ['', '', '', '.oGWGGo.........', '..oGGo..........'],
+  },
+  // a cowl: the hair outside it is taken away (`hides`), the face shows in its opening
+  hood: {
+    hides: true,
+    down: ['.....oooooo.....', '....oQRQQQQo....', '...oQRQQQQQQo...', '..oQRQQQQQQQQo..', '..oQQq....qQQo..', '..oQq......qQo..', '..oQq......qQo..', '..oQq......qQo..', '..oQq......qQo..', '..oQq......qQo..', '..oQQq....qQQo..', '..oQQQo..oQQQo..', '..oQQQQQQQQQQo..', '..oqqqqqqqqqqo..'],
+    up: ['.....oooooo.....', '....oQQQQRQo....', '...oQQQQQQRQo...', '..oQQQQQQQQRQo..', '..oQQQQQQQQQQo..', '..oQQQQqQQQQQo..', '..oQQQQqQQQQQo..', '..oQQQQqQQQQQo..', '..oQQQQQqQQQQo..', '..oQQQQQqQQQQo..', '..oQQQQQqQQQQo..', '..oQQQQQQQQQQo..', '..oQQQQQQQQQQo..', '..oqqqqqqqqqqo..'],
+    left: ['.....oooooo.....', '....oQRQQQQo....', '...oQRQQQQQQo...', '..oQRQQQQQQQQo..', '..oQQQQQQQQQQo..', '..oQq...qQQQQo..', '..o.....qQQQQo..', '..o......qQQQo..', '...o.....qQQQo..', '...o.....qQQQo..', '....o...qQQQQo..', '.....oqQQQQQQo..', '....oQQQQQQQQo..', '....oqqqqqqqqo..'],
+  },
+};
+
+// A crown on top of the head, over the hair and any hat: J its colour, j its shade, A the
+// light on its points.
+const CROWN = {
+  down: ['.....o.oo.o.....', '....oAoAAoAo....', '....oJJAJJJo....', '....ojjjjjjo....'],
+  up: ['.....o.oo.o.....', '....oAoAAoAo....', '....oJJJJJJo....', '....ojjjjjjo....'],
+  left: ['.....o.o.o......', '....oAoAoAo.....', '....oJJAJJJo....', '....ojjjjjjo....'],
+};
+
+// Horns, through the hair: u their colour, v their shade.
+const HORNS = {
+  small: {
+    down: ['....o......o....', '...ouo....ouo...', '...ovo....ovo...'],
+    left: ['......o.........', '.....ouo........', '.....ovo........'],
+  },
+  big: {
+    down: ['.oo..........oo.', 'ouo..........ouo', 'ouuo........ouuo', '.ovuo......ouvo.', '..ovuo....ouvo..', '...oo......oo...'],
+    left: ['.........oo.....', '........ouo.....', '.......ouuo.....', '......ouvo......', '.....ovuo.......', '.....ooo........'],
+  },
+};
+HORNS.small.up = HORNS.small.down;
+HORNS.big.up = HORNS.big.down;
+// one horn whole, the other snapped off near the head (seen from the side, the whole one)
+HORNS.broken = {
+  down: HORNS.big.down.map((r, j) => r.slice(0, 8) + (j < 2 ? '........' : j === 2 ? '...ooo..' : r.slice(8))),
+  left: HORNS.big.left,
+};
+HORNS.broken.up = mirror(HORNS.broken.down);
+
+// A pack on the back, from behind and the side; its straps from the front. p the pack,
+// r its shade.
+const PACK = {
+  down: ['.....r....r.....', '.....r....r.....', '.....r....r.....', '.....r....r.....'],
+  up: ['.....oooooo.....', '....oppppppo....', '....orrrrrro....', '....oppppppo....', '....oppppppo....', '....orrrrrro....', '.....oooooo.....'],
+  left: ['..........oo....', '..........opo...', '..........oppo..', '..........oppo..', '..........orro..', '..........oppo..', '...........oo...'],
+};
+
+// Skirts to the feet, from the hips (row 18) down: T the skirt (the top's colour, like a
+// dress), F the shoes peeking under the hem. Walking, the hem sways a pixel to the side of
+// the foot that steps.
+const SKIRT = {
+  long: {
+    down: ['...oTTTTTTTTo...', '...oTtTTTTtTo...', '...oTtTTTTtTo...', '..oTtTTTTTTtTo..', '..otTTTTTTTTto..', '..oooFFooFFooo..'],
+    left: ['....oTTTTTTo....', '....oTTTTTTo....', '....oTTTTTTTo...', '...oTTTTTTTTo...', '...otTTTTTTTto..', '..oFFooooooooo..'],
+  },
+  wide: {
+    down: ['..oTTTTTTTTTTo..', '.oTTtTTTTTTtTTo.', '.oTtTTTTTTTTtTo.', '.oTtTTTTTTTTtTo.', '.otTTTTTTTTTTto.', '.oooooFFooFFooo.'],
+    left: ['...oTTTTTTTTo...', '..oTTTTTTTTTTo..', '..oTTTTTTTTTTo..', '..oTTTTTTTTTTo..', '..otTTTTTTTTto..', '.oFFoooooooooo..'],
+  },
+};
+
+function skirtRows(kind, dir, pose) {
+  const s = SKIRT[kind];
+  let rows = s[dir === 'left' ? 'left' : 'down'];
+  if (pose) {
+    // the two lowest rows lean a pixel towards the stepping foot; only that shoe shows
+    const lean = (dir === 'up' ? 3 - pose : pose) === 1 ? -1 : 1;
+    const shift = (r) => (lean < 0 ? r.slice(1) + '.' : '.' + r.slice(0, -1));
+    rows = rows.map((r, j) => (j >= 4 ? shift(r) : r));
+    if (dir !== 'left') {
+      const feet = rows[5];
+      const keep = lean < 0 ? [0, 8] : [8, 16];
+      rows[5] = Array.from(feet, (ch, x) => (ch === 'F' && (x < keep[0] || x >= keep[1]) ? 'o' : ch)).join('');
+    }
+  }
+  return rows;
+}
+
+// Wings, behind the body: e their frame, f the membrane. Folded, a tall narrow shape rises
+// over each shoulder; from behind they cover the back. Drawn as the left one (mirrored).
+const WING_FOLDED = {
+  down: ['', '', '', '', '.o..', 'oeo.', 'oefo', 'oefo', 'oefo', 'oefo', 'oefo', 'oeff', 'oeff', 'oefo', 'oeo.', 'oeo.', 'oeo.', '.oe.', '.oeo', '..oo'],
+  up: ['', '', '', '', '', '.o......', 'oeo.....', 'oefo....', 'oefo....', 'oefo....', 'oeffo...', 'oefffo..', 'oeffffo.', 'oefffffo', 'oefffffo', 'oeffffo.', '.oefffo.', '.oeffo..', '.oeffo..', '..oeo...', '...o....'],
+  left: ['', '', '', '', '............o...', '...........oeo..', '...........oefo.', '...........oefo.', '...........oefo.', '...........oefo.', '..........oeffo.', '.........oefffo.', '.........oefffo.', '.........oeffo..', '.........oeffo..', '.........oeffo..', '.........oefo...', '.........oefo...', '.........oeo....', '.........oo.....'],
+};
+// Spread: the left wing, outside a 16-pixel body padded by WING_PAD on each side.
+const WING_PAD = 6;
+const WING_OPEN = ['', '', '', '', 'oo........', 'oeoo......', 'oeeeoo....', 'ofeffeeo..', 'offeffffeo', 'offfeffffe', 'offffefffe', 'offfffefff', 'offfffeeff', 'offfffffff', '.offoffffo', '.oo.offfo.', '.....offo.', '......oo..'];
+
+function wingLayer(dir, open, clipped) {
+  const W = DOLL_W + (open ? 2 * WING_PAD : 0);
+  const blank = '.'.repeat(W);
+  let left;
+  if (open) {
+    const half = WING_OPEN.map((r) => (r || '').padEnd(W / 2, '.'));
+    // seen from the side only one wing shows, spread behind the back
+    if (dir === 'left') left = half.map((r) => '.'.repeat(W - 11) + [...r.slice(0, 10)].reverse().join('') + '.');
+    else left = half.map((r) => r + [...r].reverse().join(''));
+  } else if (dir === 'left') {
+    left = WING_FOLDED.left.map((r) => (r || '').padEnd(W, '.'));
+  } else {
+    const half = WING_FOLDED[dir].map((r) => (r || '').padEnd(W / 2, '.'));
+    left = half.map((r) => r + [...r].reverse().join(''));
+  }
+  // clipped wings lose their tips: the top three rows of the shape
+  if (clipped) {
+    const first = left.findIndex((r) => /[^.]/.test(r));
+    left = left.map((r, j) => (j >= first && j < first + 3 ? blank : j === first + 3 ? r.replace(/[ef]/g, 'o') : r));
+  }
+  return Array.from({ length: DOLL_H }, (_, j) => left[j] || blank);
+}
+
+// Fills the layer in only where the rows are clear: things behind the body.
+function under(rows, layer) {
+  return rows.map((r, j) => (layer[j] ? Array.from(r, (ch, i) => (ch === '.' && layer[j][i] && layer[j][i] !== '.' ? layer[j][i] : ch)).join('') : r));
+}
+
+// Things held in the hand. Z is holdColor, z its shade, w holdAccent; [dx, dy] places the
+// pattern's top-left against the hand (the right hand: screen-left from the front, the
+// near hand from the side; mirrored from behind).
+const HOLD = {
+  cane: { at: [-2, -1], rows: ['.oo', 'oZZ', 'Zo.', 'Z..', 'Z..', 'Z..', 'Z..', 'z..'] },
+  book: { at: [-2, -2], rows: ['oooo', 'oZwo', 'oZwo', 'ozwo', 'oooo'] },
+  fan: { at: [-3, -4], rows: ['.ooo.', 'owZwo', 'oZwZo', '.ozo.', '..o..'] },
+  phone: { at: [-2, -4], rows: ['ooo', 'owo', 'owo', 'ozo', '.o.'] },
+  briefcase: { at: [-3, 1], rows: ['.ooo.', 'owwwo', 'oZZZo', 'ozZzo', 'ooooo'] },
+  tray: { at: [-3, -4], rows: ['.w.o.', 'owozo', 'oooooo', '.zZZz.'] },
+  umbrella: { at: [-2, -3], rows: ['oo..', 'o.o.', '.oZo', '.oZo', '.ozo', 'oZZo', 'oZzo', 'oZzo', '.oo.', '.ow.'] },
+  glass: { at: [-2, -5], rows: ['ooo', 'owo', 'oZo', 'oZo', 'ozo', 'ooo'] },
+  gavel: { at: [-3, -5], rows: ['oooo', 'oZZo', 'ozoo', '..o.', '..ow'] },
+  folder: { at: [-2, -1], rows: ['ooo', 'oZo', 'owo', 'oZo', 'ozo', 'ooo'] },
+  flag: { at: [-3, -14], rows: ['ZZo', 'wwo', 'ZZo', '..o', '..o', '..o', '..o', '..o', '..o', '..o', '..o', '..o', '..o'] },
+};
+
+function holdRows(rows, dir, kind, off = 0) {
+  const held = HOLD[kind];
+  // the hand: the lowest skin pixel of the arm (rows 14–17) on the holding side
+  let hand = null;
+  for (let y = 17 + off; y >= 14 + off && !hand; y--) {
+    const r = rows[y];
+    for (let k = 0; k < r.length; k++) {
+      const x = dir === 'up' ? r.length - 1 - k : k;
+      if (r[x] === 'S' && (dir === 'left' || (dir === 'down' ? x <= 4 : x >= 11))) { hand = [x, y]; break; }
+    }
+  }
+  if (!hand) return rows;
+  const flip = dir === 'up';
+  const w = Math.max(...held.rows.map((r) => r.length));
+  const x0 = flip ? hand[0] - held.at[0] - w + 1 : hand[0] + held.at[0];
+  const y0 = hand[1] + held.at[1];
+  const out = rowsOf(rows);
+  held.rows.forEach((r, j) => {
+    const row = flip ? [...r.padEnd(w, '.')].reverse().join('') : r;
+    for (let i = 0; i < row.length; i++) {
+      const x = x0 + i;
+      if (row[i] === '.' || x < 0 || x >= DOLL_W || !out[y0 + j]) continue;
+      out[y0 + j][x] = row[i];
+    }
+  });
+  return joinRows(out);
+}
+
+// A rounded belly, seen from the side: the front of the lower torso a pixel or two ahead.
+function bellyRows(rows) {
+  const r = rowsOf(rows);
+  const cloth = /[A-Za-z]/.test(r[16][7]) ? r[16][7] : 'T';
+  const put = (x, y, ch) => { if (r[y][x] === '.' || r[y][x] === 'o') r[y][x] = ch; };
+  put(3, 15, 'o'); r[15][4] = r[15][4] === 'o' ? cloth : r[15][4];
+  put(2, 16, 'o'); put(3, 16, cloth); r[16][4] = r[16][4] === 'o' ? cloth : r[16][4];
+  put(3, 17, 'o'); r[17][4] = r[17][4] === 'o' ? cloth : r[17][4];
+  return joinRows(r);
+}
+
+// Stout: the columns beside the middle of the torso repeat, pushing arms and edges a pixel
+// out on each side (between rows y0 and y1). A hand at the frame's edge (the fly pose)
+// keeps its place and the arm is a pixel shorter.
+function widenRows(rows, dir, y0, y1) {
+  return rows.map((r, j) => {
+    if (j < y0 || j > y1 || !r) return r;
+    if (dir === 'left') return (r[0] === '.' ? r.slice(1, 8) : r[0] + r.slice(2, 8)) + r.slice(7, 16);
+    const left = r[0] === '.' ? r.slice(1, 5) : r[0] + r.slice(2, 5);
+    const right = r[15] === '.' ? r.slice(11, 15) : r.slice(11, 14) + r[15];
+    return left + r.slice(4, 12) + right;
+  });
+}
+
+// Tall: one torso row (15) more, and a hip row above the legs (at 19, the trousers solid).
+function tallen(rows, torso = 15, hips = 19) {
+  const out = [...rows.slice(0, torso + 1), rows[torso], ...rows.slice(torso + 1)];
+  if (hips === null) return [EMPTY, ...out];
+  const h = hips + 1;
+  return [...out.slice(0, h), out[h].replace(/b/g, 'B'), ...out.slice(h)];
+}
+
+const wingsOf = (spec) => {
+  const w = spec.wings;
+  if (!w || spec.creature) return null;
+  return typeof w === 'string' ? { membrane: w } : w;
 };
 
 // Costume ears on a headband: Y is their colour, y the inside.
@@ -360,6 +635,7 @@ const GLASSES = {
   sun: { down: { 7: '.....WGGGWG.....', 8: '.....GG..GG.....' }, left: { 7: '..oWGGo.........', 8: '...oGG..........' }, up: {} },
   round: { down: { 7: '.....GEG.GEG....' }, left: { 7: '..oEG...........' }, up: {} },
   pince: { down: { 7: '......G..G......', 8: '......GooG......' }, left: { 7: '..oG............' }, up: {} },
+  thin: { down: { 7: '.....gEggEg.....' }, left: { 7: '..ogEgggg.......' }, up: {} },
 };
 
 function compose(base, layer, offset = 0) {
@@ -372,6 +648,10 @@ function compose(base, layer, offset = 0) {
   });
   return out.map((r) => r.join(''));
 }
+
+// The hat a spec wears: `hood: true` is a hood whatever the hat; a crown is not a hat.
+const hatOf = (spec) => (spec.hood ? 'hood' : spec.hat);
+const shortRows = (rows) => [EMPTY, EMPTY, ...rows.slice(0, 15), ...rows.slice(16, 19), ...rows.slice(20)];
 
 function frameRows(dir, pose, spec, run = null) {
   const head = dir === 'down' ? HEAD_DOWN : dir === 'up' ? HEAD_UP : HEAD_LEFT;
@@ -387,15 +667,36 @@ function frameRows(dir, pose, spec, run = null) {
   }
   const beard = BEARD[spec.beard];
   if (beard && beard[dir]) rows = compose(rows, Array.from(beard[dir], (r) => r || ''));
+  const bare = rows;
   const hair = HAIR[spec.hairStyle || 'short'];
   if (hair) rows = compose(rows, hair[dir]);
+  const horns = HORNS[spec.horns];
+  if (horns) rows = compose(rows, horns[dir]);
   if (spec.earShape === 'pointed') rows = compose(rows, POINTED_EARS[dir]);
   if (spec.ears) rows = compose(rows, EARS[dir]);
-  const hat = HAT[spec.hat];
-  if (hat) rows = compose(rows, hat[dir]);
+  const hat = HAT[hatOf(spec)];
+  if (hat) {
+    rows = compose(rows, hat[dir]);
+    // a hood hides the hair outside it (a ponytail, long hair over the shoulders)
+    if (hat.hides) {
+      rows = rows.map((r, j) => {
+        const h = hat[dir][j];
+        if (j > 13) return r;
+        const a = h ? h.search(/[^.]/) : -1;
+        const b = h ? h.length - 1 - [...h].reverse().join('').search(/[^.]/) : -1;
+        return Array.from(r, (ch, x) => (a < 0 || x < a || x > b ? bare[j][x] : ch)).join('');
+      });
+    }
+  }
+  if (spec.crown || spec.hat === 'crown') rows = compose(rows, CROWN[dir]);
   if (spec.mask) rows = maskRows(rows, dir, spec.mask);
+  const skirt = SKIRT[spec.dress] ? skirtRows(spec.dress, dir, pose) : null;
   if (spec.coat) rows = compose(rows, COAT[dir], 12);
-  else if (spec.dress) rows = compose(rows, DRESS[dir], 12);
+  else if (spec.dress && !skirt) rows = compose(rows, DRESS[dir], 12);
+  // under a coat, the skirt shows below its tails
+  if (skirt) rows = compose(rows, spec.coat ? ['', '', '', ...skirt.slice(3)] : skirt, 18);
+  if (spec.belly && dir === 'left') rows = bellyRows(rows);
+  if (spec.pack) rows = compose(rows, PACK[dir], 12);
   const gl = GLASSES[spec.glasses];
   if (gl) {
     const g = gl[dir] || {};
@@ -410,17 +711,46 @@ function frameRows(dir, pose, spec, run = null) {
     // seen from the side, a runner leans into the run: the head and shoulders a pixel ahead
     if (dir === 'left') rows = rows.map((r, j) => (j < 15 ? r.slice(1) + '.' : r));
   }
+  rows = extras(rows, dir, spec, { open: spec.wingsOpen });
   // with every layer on: the legs start at row 19
   if (spec.height === 'short') {
     // one torso row and one leg row fewer, the head unchanged
-    rows = [EMPTY, EMPTY, ...rows.slice(0, 15), ...rows.slice(16, 19), ...rows.slice(20)];
+    rows = shortRows(rows);
   }
+  if (spec.height === 'tall') rows = tallen(rows);
   // the run's passing frame is in the air: everything a pixel up
   if (run === 1) return [...rows.slice(1), EMPTY];
   // the walk bobs: with the legs apart the body sits a pixel lower (the hips row folds)
   if (pose || run !== null) {
     const hips = rows.length - 5;
     rows = [EMPTY, ...rows.slice(0, hips), ...rows.slice(hips + 1)];
+  }
+  return rows;
+}
+
+// The layers that go on last, over a finished body in the standard layout (head 0–11,
+// torso 12–17, hips 18), or one moved by `off` rows (a seated pose) or shortened (`short`):
+// the stout build, the held thing, the wings.
+function extras(rows, dir, spec, { off = 0, short = false, hold = true, open = false, seated = false } = {}) {
+  const s = short ? 2 : 0;
+  if (spec.build === 'stout' || spec.build === 'big') {
+    const y1 = SKIRT[spec.dress] ? 23 : spec.coat || spec.dress ? 20 : short ? 19 : 18;
+    rows = widenRows(rows, dir, 12 + s + off, seated ? 18 + off : y1 + off);
+  }
+  if (hold && HOLD[spec.hold]) rows = holdRows(rows, dir, spec.hold, off + (short ? 1 : 0));
+  const w = wingsOf(spec);
+  if (w) {
+    const wide = open && !w.bound;
+    let layer = wingLayer(dir, wide, w.clipped);
+    if (short) layer = shortRows(layer);
+    if (seated) layer = [EMPTY, ...layer.slice(0, 19), EMPTY, EMPTY, EMPTY, EMPTY];
+    else if (off) layer = [...Array(off).fill(EMPTY), ...layer];
+    if (wide) {
+      const pad = '.'.repeat(WING_PAD);
+      rows = rows.map((r) => pad + r + pad);
+    }
+    // from behind, folded wings lie over the back
+    rows = dir === 'up' && !wide ? compose(rows, layer) : under(rows, layer);
   }
   return rows;
 }
@@ -459,6 +789,30 @@ export function palette(spec) {
     Object.assign(pal, { M: k, m: dark(k, 0.3), N: lit(k, 0.35) });
   }
   if (spec.ears) Object.assign(pal, { Y: spec.ears, y: spec.earsInner || '#f4a0b8' });
+  if (hatOf(spec) === 'hood' || spec.hat === 'crown') {
+    // a hood is cloth: the hat's colour, or the coat's, or the top's
+    const h = spec.hatColor || (typeof spec.coat === 'string' ? spec.coat : top);
+    Object.assign(pal, { Q: h, q: dark(h, 0.3), R: lit(h, 0.35) });
+  }
+  if (spec.crown || spec.hat === 'crown') {
+    const k = (typeof spec.crown === 'string' && spec.crown) || (spec.hat === 'crown' && spec.hatColor) || '#d8b040';
+    Object.assign(pal, { J: k, j: dark(k, 0.3), A: lit(k, 0.4) });
+  }
+  if (spec.horns) {
+    const k = spec.hornColor || '#e4d8bc';
+    Object.assign(pal, { u: k, v: dark(k, 0.3) });
+  }
+  if (spec.glasses === 'thin') pal.g = spec.glassesColor || '#3a3230';
+  if (HOLD[spec.hold]) {
+    const k = spec.holdColor || '#585c68';
+    Object.assign(pal, { Z: k, z: dark(k, 0.3), w: spec.holdAccent || lit(k, 0.45) });
+  }
+  if (spec.pack) Object.assign(pal, { p: spec.pack, r: dark(spec.pack, 0.3) });
+  const wg = wingsOf(spec);
+  if (wg) {
+    const m = wg.membrane || (wg.color ? lit(wg.color, 0.15) : '#584848');
+    Object.assign(pal, { e: wg.color || dark(m, 0.35), f: m });
+  }
   if (spec.beard) {
     const d = spec.beardColor || (spec.beard === 'stubble' ? mix(skin, hair, 0.45) : hair);
     Object.assign(pal, { D: d, d: dark(d, 0.25) });
@@ -468,9 +822,9 @@ export function palette(spec) {
 
 // Each material's darker tone, already in the palette: inner lines and the far edge use
 // it, so selective outlining adds no colour (a GBA sprite has 15).
-const DARK = { H: 'h', T: 't', C: 'c', Q: 'q', B: 'b', K: 'k', S: 's', U: 't', D: 'd', Y: 'y', M: 'm' };
+const DARK = { H: 'h', T: 't', C: 'c', Q: 'q', B: 'b', K: 'k', S: 's', U: 't', D: 'd', Y: 'y', M: 'm', J: 'j', u: 'v', Z: 'z', p: 'r', f: 'e' };
 // Materials whose top-left edge catches the light (one extra tone each).
-const LIT = { H: 'I', T: 'V', C: 'P', Q: 'R', M: 'N' };
+const LIT = { H: 'I', T: 'V', C: 'P', Q: 'R', M: 'N', J: 'A' };
 
 // Resolves every pixel to a palette key: selective outlines and top-left light. The
 // right-facing frame is the left one mirrored whole, light included, as GBA games did.
@@ -493,14 +847,16 @@ function shadeRows(rows, pal) {
   }));
 }
 
-function render(rows, pal, flip) {
-  const c = canvas(DOLL_W, DOLL_H);
+function render(rows, pal, flip, width = null) {
+  // 16 wide, or 28 with spread wings (a pose may write a pixel past the edge: clipped)
+  const w = width || (rows.some((r) => r.length >= DOLL_W + 2 * WING_PAD) ? DOLL_W + 2 * WING_PAD : DOLL_W);
+  const c = canvas(w, Math.max(DOLL_H, rows.length));
   const ctx = c.getContext('2d');
   shadeRows(rows, pal).forEach((row, j) => {
     row.forEach((key, i) => {
       if (!key) return;
       ctx.fillStyle = pal[key];
-      ctx.fillRect(flip ? DOLL_W - 1 - i : i, j, 1, 1);
+      ctx.fillRect(flip ? w - 1 - i : i, j, 1, 1);
     });
   });
   return c;
@@ -534,7 +890,27 @@ const LEGS_KNEEL = {
 const rowsOf = (rows) => rows.map((r) => r.split(''));
 const joinRows = (rows) => rows.map((r) => r.join(''));
 
+// Poses for a spec with a build, a held thing, wings or height 'tall': the pose of the
+// plain body, then those on top (a spec without them takes basePose as it always did).
 function poseRows(name, dir, spec) {
+  const w = wingsOf(spec);
+  const tall = spec.height === 'tall';
+  if (!spec.build && !tall && !w && !HOLD[spec.hold]) return basePose(name, dir, spec);
+  const core = { ...spec, build: undefined, wings: undefined, hold: undefined, height: tall ? undefined : spec.height };
+  let rows = basePose(name, dir, core);
+  if (!rows) return null;
+  const seated = name === 'sit' || name === 'kneel';
+  // arms up or forward let go of what they held; flying spreads the wings
+  rows = extras(rows, dir, spec, {
+    off: seated ? 1 : 0, seated, short: spec.height === 'short',
+    hold: name === 'sit' || name === 'kneel' || name === 'blink',
+    open: name === 'fly' || spec.wingsOpen,
+  });
+  if (tall) rows = seated ? tallen(rows, 16, null) : tallen(rows);
+  return rows;
+}
+
+function basePose(name, dir, spec) {
   const base = frameRows(dir, 0, spec);
   const top = base.slice(0, 19);   // head, torso, hips
   if (name === 'sit') {
@@ -588,7 +964,7 @@ function poseRows(name, dir, spec) {
   if (name === 'fly') {
     // seen from the side, the near arm points ahead (the reach); from the front and the
     // back, both arms spread out level with the shoulders, like wings
-    if (dir === 'left') return poseRows('reach', 'left', spec);
+    if (dir === 'left') return basePose('reach', 'left', spec);
     const r = rowsOf(base);
     for (const x of [2, 13]) for (let y = 15; y <= 17; y++) r[y][x] = '.';
     for (const x of [3, 12]) for (let y = 15; y <= 17; y++) if (r[y][x] !== 'o') r[y][x] = 'o';
@@ -604,11 +980,11 @@ function poseRows(name, dir, spec) {
 
 // Lying down: the standing front frame turned a quarter, head to the left.
 function lying(img, flip) {
-  const c = canvas(DOLL_H, DOLL_W);
+  const c = canvas(img.height, img.width);
   const ctx = c.getContext('2d');
   ctx.save();
-  if (flip) { ctx.translate(DOLL_H, 0); ctx.scale(-1, 1); }
-  ctx.translate(0, DOLL_W);
+  if (flip) { ctx.translate(img.height, 0); ctx.scale(-1, 1); }
+  ctx.translate(0, img.width);
   ctx.rotate(-Math.PI / 2);
   ctx.drawImage(img, 0, 0);
   ctx.restore();
@@ -618,9 +994,9 @@ function lying(img, flip) {
 // In a bed drawn upright (taller than wide): the standing front frame from the shoulders
 // up, the rest left clear so the bed's own covers show through.
 function tuckedIn(img) {
-  const c = canvas(DOLL_W, DOLL_H);
+  const c = canvas(img.width, DOLL_H);
   const ctx = c.getContext('2d');
-  ctx.drawImage(img, 0, 0, DOLL_W, 14, 0, 0, DOLL_W, 14);
+  ctx.drawImage(img, 0, 0, img.width, 14, 0, 0, img.width, 14);
   return c;
 }
 
@@ -631,7 +1007,7 @@ export const POSES = ['sit', 'kneel', 'lie', 'reach', 'cheer', 'fly', 'blink'];
 function creatureDoll(spec) {
   const pal = creaturePalette(spec);
   const k = creatureRows(spec);
-  const dirs = (set, each = (r, flip) => render(r, pal, flip)) => {
+  const dirs = (set, each = (r, flip) => render(r, pal, flip, r[0].length)) => {
     const out = {};
     for (const dir of ['down', 'up', 'left']) if (set[dir]) out[dir] = Array.isArray(set[dir][0]) ? set[dir].map((r) => each(r, false)) : each(set[dir], false);
     if (set.left) out.right = Array.isArray(set.left[0]) ? set.left.map((r) => each(r, true)) : each(set.left, true);
@@ -678,5 +1054,5 @@ export function doll(spec) {
     const side = poseRows(name, 'left', spec);
     if (side) poses[name].right = render(side, pal, true);
   }
-  return { w: DOLL_W, h: DOLL_H, frames, run, poses, spec };
+  return { w: frames.down[0].width, h: frames.down[0].height, frames, run, poses, spec };
 }

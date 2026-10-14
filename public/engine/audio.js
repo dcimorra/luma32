@@ -12,6 +12,7 @@ const REAL_KEY = 'luma32.real';
 let ctx = null;
 let master = null;
 let musicBus = null;
+let duckBus = null;           // the songs' way into musicBus, lowered under a jingle
 let sfxBus = null;
 let echoIn = null;
 let muted = localStorage.getItem(MUTE_KEY) === '1';
@@ -47,6 +48,8 @@ export function unlock() {
     musicBus = ctx.createGain();
     musicBus.gain.value = 1;
     musicBus.connect(master);
+    duckBus = ctx.createGain();
+    duckBus.connect(musicBus);
     sfxBus = ctx.createGain();
     sfxBus.connect(master);
     // a short feedback echo, the closest thing the GBA had to a room
@@ -141,21 +144,35 @@ export function tone({ at, freq = 440, to = null, len = 0.2, wave = 'pulse50', g
   o.stop(at + len + 0.02);
 }
 
-export function burst({ at, len = 0.05, type = 'highpass', freq = 3000, q = 0.8, gain = 0.1, dest = null, decay = true, rate = 1 }) {
+// A burst of filtered noise. `attack` and `release` (seconds, default 0) shape a held
+// one (`decay: false`); any length plays whole, the noise loops.
+export function burst({ at, len = 0.05, type = 'highpass', freq = 3000, q = 0.8, gain = 0.1, dest = null, decay = true, rate = 1, attack = 0, release = 0, echo = 0 }) {
   if (!ctx) return;
   at = at ?? ctx.currentTime;
   const src = ctx.createBufferSource();
   src.buffer = noise;
+  src.loop = true;
   src.playbackRate.value = rate;
   const f = ctx.createBiquadFilter();
   f.type = type;
   f.frequency.value = freq;
   f.Q.value = q;
   const g = ctx.createGain();
-  g.gain.setValueAtTime(gain, at);
+  if (attack > 0) {
+    g.gain.setValueAtTime(0, at);
+    g.gain.linearRampToValueAtTime(gain, at + attack);
+  } else g.gain.setValueAtTime(gain, at);
   if (decay) g.gain.exponentialRampToValueAtTime(0.0001, at + len);
-  else g.gain.setValueAtTime(0, at + len);
+  else if (release > 0) {
+    g.gain.setValueAtTime(gain, Math.max(at + attack, at + len - release));
+    g.gain.linearRampToValueAtTime(0, at + len);
+  } else g.gain.setValueAtTime(0, at + len);
   src.connect(f).connect(g).connect(dest || sfxBus);
+  if (echo && echoIn) {
+    const s = ctx.createGain();
+    s.gain.value = echo;
+    g.connect(s).connect(echoIn);
+  }
   src.start(at, Math.random() * 0.5);
   src.stop(at + len + 0.02);
 }
@@ -183,6 +200,8 @@ const INSTRUMENTS = {
   bell: { wave: 'sine', gain: 0.08, decay: true, harmonic: 2 },
   pluck: { wave: 'pulse25', gain: 0.07, decay: true },
   pad: { wave: 'sawtooth', gain: 0.025, lp: 1300, attack: 0.25, detune: true },
+  // breath, wind, a hiss: noise around the note's pitch (`q` how narrow), never real
+  noise: { wave: 'noise', gain: 0.25, q: 2, attack: 0.03 },
 };
 
 function playNote(chan, freq, at, len, real = null) {
@@ -197,6 +216,11 @@ function playNote(chan, freq, at, len, real = null) {
     f.connect(musicBus);
     dest = f;
     setTimeout(() => f.disconnect(), (at - ctx.currentTime + len + 1) * 1000);
+  }
+  if (inst.wave === 'noise') {
+    // a band of noise is louder the higher it sits (it is wider): levelled to A4
+    burst({ at, len, dest, type: 'bandpass', freq, q: inst.q ?? 2, gain: gain * Math.sqrt(440 / freq), decay: !!inst.decay, attack: inst.attack ?? 0.03, release: Math.min(0.08, len * 0.4), echo: chan.echo ?? 0 });
+    return;
   }
   const common = { at, len, dest, attack: inst.attack ?? 0.006, echo: chan.echo ?? 0 };
   if (inst.decay) {
@@ -366,7 +390,11 @@ function playKit(name, letter, at, v) {
 
 function tokens(str) { return String(str).trim().split(/\s+/).filter(Boolean); }
 
-// Compiles a song once: every pattern channel becomes a list of { step, freq|drum, len }.
+// A token's accent: `C4!` (or `ks!`) louder, `C4?` softer.
+const ACCENT = { '!': 1.5, '?': 0.55 };
+
+// Compiles a song once: every pattern channel becomes a list of { step, freq|drum, len,
+// vol }, and every pattern knows its step's length (its own `bpm`, or the song's).
 function compile(song) {
   if (song._compiled) return song._compiled;
   const out = {};
@@ -375,7 +403,7 @@ function compile(song) {
     let length = pat.length || 0;
     const parsed = {};
     for (const [cname, str] of Object.entries(pat)) {
-      if (cname === 'length') continue;
+      if (cname === 'length' || cname === 'bpm') continue;
       parsed[cname] = tokens(str);
       length = Math.max(length, parsed[cname].length);
     }
@@ -384,19 +412,21 @@ function compile(song) {
       const drum = song.channels[cname]?.inst === 'drums';
       for (let rep = 0; rep < length; rep += toks.length) {
         for (let i = 0; i < toks.length && rep + i < length; i++) {
-          const tok = toks[i];
+          let tok = toks[i];
           if (tok === '-' || tok === '.') continue;
-          if (drum) { events.push({ step: rep + i, drum: tok }); continue; }
+          const vol = ACCENT[tok[tok.length - 1]];
+          if (vol) tok = tok.slice(0, -1);
+          if (drum) { events.push({ step: rep + i, drum: tok, vol: vol ?? 1 }); continue; }
           const freq = noteFreq(tok);
           if (!freq) continue;
           let len = 1;
           while (i + len < toks.length && toks[i + len] === '-') len++;
-          events.push({ step: rep + i, freq, len });
+          events.push({ step: rep + i, freq, len, vol });
         }
       }
       chans[cname] = events;
     }
-    out[pname] = { length, chans };
+    out[pname] = { length, chans, stepDur: 60 / (pat.bpm ?? song.bpm) / (song.steps ?? 4) };
   }
   song._compiled = out;
   return out;
@@ -410,7 +440,8 @@ export const currentSong = () => wanted?.name ?? null;
 export const songDef = (name) => songs.get(name) ?? null;
 
 // Where the playing song is, for anything that has to stay in time with it: `step` counts
-// steps since the song's first one (fractional, never wraps, ignores swing) and `time`
+// steps since the song's first one (fractional, never wraps, ignores swing and the
+// patterns' own `bpm`) and `time`
 // the seconds since then. null when nothing is playing or audio is still locked.
 export function songClock() {
   if (!ctx || !playing) return null;
@@ -418,15 +449,63 @@ export function songClock() {
   return { name: playing.name, time, step: time / playing.stepDur, stepDur: playing.stepDur, bpm: playing.bpm };
 }
 
-// Plays a song by name (null: silence). The same song does not restart.
+const done = Promise.resolve();
+
+// Plays a song by name (null: silence). The same song does not restart while it plays.
+// Returns a promise: a `once` song's resolves when it ends (or is stopped), any other's
+// at once. opts: { fadeIn, fade, over } — `over` plays it as a jingle (below).
 export function music(name, opts = {}) {
-  if (wanted?.name === name && playing?.name === name) return;
+  if (opts.over) return jingle(name, opts);
+  if (wanted?.name === name && playing?.name === name && !playing.stopped) return playing.done;
   wanted = name ? { name, opts } : null;
-  if (!ctx) return;
+  if (!ctx) return done;
   stopMusic(opts.fade ?? 0.4);
-  if (!name) return;
+  if (!name) return done;
   const song = songs.get(name);
-  if (!song) { console.warn(`missing song: ${name}`); return; }
+  if (!song) { console.warn(`missing song: ${name}`); return done; }
+  const bus = ctx.createGain();
+  // opts.fadeIn (seconds): the new song rises while the old one fades, a crossfade
+  if (opts.fadeIn) {
+    bus.gain.setValueAtTime(0.0001, ctx.currentTime);
+    bus.gain.linearRampToValueAtTime(song.volume ?? 1, ctx.currentTime + opts.fadeIn);
+  } else bus.gain.value = song.volume ?? 1;
+  bus.connect(duckBus);
+  playing = schedule(name, song, bus);
+  return playing.done;
+}
+
+// A `once` song over the playing one, which ducks to `duck` (default 0.3) of its level
+// while it lasts and comes back after: an item, a point scored. Resolves at its end.
+const jingles = new Set();
+export function jingle(name, opts = {}) {
+  if (!ctx || !name) return done;
+  const song = songs.get(name);
+  if (!song) { console.warn(`missing song: ${name}`); return done; }
+  const bus = ctx.createGain();
+  bus.gain.value = song.volume ?? 1;
+  bus.connect(musicBus);
+  compile(song);
+  const state = schedule(name, { ...song, once: true }, bus);
+  state.duck = opts.duck ?? 0.3;
+  jingles.add(state);
+  const g = duckBus.gain;
+  g.cancelScheduledValues(ctx.currentTime);
+  g.setTargetAtTime(Math.min(...[...jingles].map((j) => j.duck)), ctx.currentTime, 0.04);
+  // the song comes back from the jingle's last step, in the audio's own time
+  state.onEnd = (endAt) => {
+    jingles.delete(state);
+    setTimeout(() => bus.disconnect(), (endAt - ctx.currentTime + 3) * 1000);
+    const rest = [...jingles].map((j) => j.duck);
+    g.cancelScheduledValues(ctx.currentTime);
+    g.setTargetAtTime(rest.length ? Math.min(...rest) : 1, endAt, rest.length ? 0.04 : 0.25);
+  };
+  return state.done;
+}
+
+// Schedules a song into `bus`, from timers, a little ahead of the clock. The state's
+// `done` resolves at a once song's end (or when stopMusic stops it); `onEnd(at)`, if
+// set, hears of that end as soon as it is scheduled.
+function schedule(name, song, bus) {
   const pats = compile(song);
   const order = song.song || Object.keys(song.patterns);
   const stepDur = 60 / song.bpm / (song.steps ?? 4);
@@ -435,19 +514,12 @@ export function music(name, opts = {}) {
   const reals = {};
   for (const [cname, chan] of Object.entries(song.channels || {})) reals[cname] = realOf(song, chan);
   const missing = [...new Set(Object.values(reals))].filter((r) => r && !readyReal(r) && banks.get(r) !== null);
-  const bus = ctx.createGain();
-  // opts.fadeIn (seconds): the new song rises while the old one fades, a crossfade
-  if (opts.fadeIn) {
-    bus.gain.setValueAtTime(0.0001, ctx.currentTime);
-    bus.gain.linearRampToValueAtTime(song.volume ?? 1, ctx.currentTime + opts.fadeIn);
-  } else bus.gain.value = song.volume ?? 1;
-  bus.connect(musicBus);
-  const prev = musicBus;
   let idx = 0;
   let step = 0;
   let nextAt = ctx.currentTime + 0.08;
   const swing = song.swing ?? 0;
   const state = { name, bus, stopped: false, startAt: nextAt, stepDur, bpm: song.bpm, waiting: missing.length > 0 };
+  state.done = song.once ? new Promise((r) => { state.end = r; }) : done;
   if (state.waiting) {
     const go = () => {
       if (!state.waiting) return;
@@ -462,26 +534,34 @@ export function music(name, opts = {}) {
     if (state.stopped || state.waiting) return;
     while (nextAt < ctx.currentTime + 0.2) {
       const pat = pats[order[idx]];
+      const dur = pat.stepDur;
       for (const [cname, events] of Object.entries(pat.chans)) {
         const chan = song.channels[cname] || {};
-        if (chan.mute || (chan.layer && !layers.has(chan.layer))) continue;
+        if (chan.mute || (chan.layer && !layers.has(chan.layer)) || (chan.unless && layers.has(chan.unless))) continue;
         for (const ev of events) {
           if (ev.step !== step) continue;
-          const at = nextAt + (step % 2 ? swing * stepDur : 0);
+          const at = nextAt + (step % 2 ? swing * dur : 0);
+          const v = (chan.vol ?? 1) * ev.vol;
           // route this note through the song bus
           musicBusSwap(bus, () => {
-            if (ev.drum) { for (const d of ev.drum) if (!(reals[cname] && playKit(reals[cname], d, at, chan.vol ?? 1))) DRUMS[d]?.(at, chan.vol ?? 1, bus); }
-            else playNote(chan, ev.freq * Math.pow(2, (chan.transpose ?? 0) / 12), at, ev.len * stepDur * (chan.gate ?? 0.92), reals[cname]);
+            if (ev.drum) { for (const d of ev.drum) if (!(reals[cname] && playKit(reals[cname], d, at, v))) DRUMS[d]?.(at, v, bus); }
+            else playNote(ev.vol ? { ...chan, vol: v } : chan, ev.freq * Math.pow(2, (chan.transpose ?? 0) / 12), at, ev.len * dur * (chan.gate ?? 0.92), reals[cname]);
           });
         }
       }
-      nextAt += stepDur;
+      nextAt += dur;
       step++;
       if (step >= pat.length) {
         step = 0;
         idx++;
         if (idx >= order.length) {
-          if (song.once) { state.stopped = true; return; }
+          if (song.once) {
+            state.stopped = true;
+            clearInterval(state.timer);
+            state.onEnd?.(nextAt);
+            setTimeout(state.end, Math.max(0, nextAt - ctx.currentTime) * 1000);
+            return;
+          }
           idx = song.loop ?? 0;
         }
       }
@@ -489,8 +569,7 @@ export function music(name, opts = {}) {
   };
   state.timer = setInterval(tick, 25);
   tick();
-  playing = state;
-  void prev;
+  return state;
 }
 
 // playNote writes to musicBus; while scheduling a song we point it at the song's own bus
@@ -507,6 +586,7 @@ function stopMusic(fade = 0.4) {
   playing = null;
   p.stopped = true;
   clearInterval(p.timer);
+  p.end?.();
   p.bus.gain.setTargetAtTime(0, ctx.currentTime, Math.max(0.01, fade / 3));
   setTimeout(() => p.bus.disconnect(), (fade + 1.5) * 1000);
 }
@@ -552,7 +632,7 @@ export function sfx(name, opts) {
   if (!ctx) return;
   const fn = effects.get(name) || BUILTIN[name];
   if (!fn) { console.warn(`missing sfx: ${name}`); return; }
-  fn(opts || {}, { tone, burst, ctx, now: ctx.currentTime });
+  fn(opts || {}, { tone, burst, ctx, now: ctx.currentTime, dest: sfxBus });
 }
 
 // A held ambience (rain, wind, hum) under the music. Returns nothing; ambience(null) stops it.

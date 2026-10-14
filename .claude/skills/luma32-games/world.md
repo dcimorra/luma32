@@ -9,13 +9,21 @@ helper. Art itself is `art.md`; who lives on the maps is `life.md`.
 - **Map first, then script.** Draw the ground as ASCII rows. The view is 3/4 from above:
   a horizontal wall is a row of wall-top over a row of wall-face; a darker "shadow" floor
   row under walls sells the depth. Props are anchored at their **bottom-left** cell and
-  y-sorted with actors; `foot` sets which cells block.
+  y-sorted with actors; `foot` sets which cells block (`[w, h, dx, dy]`: a trunk in the
+  middle of a wide tree). A prop entry may carry its own `examine` (this desk, not every
+  desk), a function of the api when the line depends on the story, and `when` to be there
+  only at some point of it.
 - **Open worlds:** join maps edge to edge with `connections` (mirror them on both maps)
   so the world feels continuous; keep warps for doors and interiors. Maps can be as big
   as needed. Build the game's rules on `canEnter`, `onStep`, `onBump`, `update`, `grade`.
 - **One world, one story on it.** Places are defined once; the story adds its people
   and scripts to them as it goes. Don't fork a map per moment of the story; gate what's
-  on it with flags.
+  on it with flags — `when` on actors and props, `music` (and `ambience`, `weather`) as a
+  function of the api, `refresh: true` where the story moves while the player is there.
+- **The air of a place**: `weather` adds `mist` (low banks: a moor, a lake at dawn) to
+  rain, snow and the rest; `light.steps` (2–8) softens a lamp's edge.
+- **A map where A isn't for talking** (a fight, a game on the map): `actionA: true` on
+  that map, not on the whole game.
 - **Write the world down** for whoever scripts the story: map ids, sizes, doors, and the
   coordinates of the spots that matter (a seat, a counter, a stage), ideally also
   exported as data so the story code reads them instead of copying numbers.

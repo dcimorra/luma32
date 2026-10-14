@@ -59,6 +59,8 @@ export function rng(seed = 1) {
 // Neighbour bits of an autotile's mask: set when that neighbour is the same ground.
 export const EDGE = { N: 1, E: 2, S: 4, W: 8, NE: 16, SE: 32, SW: 64, NW: 128 };
 
+let warnedLine = false;   // Painter.line said once that it got a NaN
+
 // A Painter draws on a small canvas with pixel primitives. Tiles, props and
 // sprites are authored as functions of a painter, so a game ships no image files.
 export class Painter {
@@ -109,6 +111,13 @@ export class Painter {
   }
 
   line(x0, y0, x1, y1, c) {
+    // a NaN would never reach its end, nor would ends a fraction apart: one bad prop must
+    // not freeze the game. Whole-number spans draw exactly as they always did.
+    if (![x0, y0, x1, y1].every(Number.isFinite)) {
+      if (!warnedLine) { warnedLine = true; console.warn(`[luma] Painter.line(${x0}, ${y0}, ${x1}, ${y1}): not a number, nothing drawn.`); }
+      return this;
+    }
+    if (!Number.isInteger(x1 - x0) || !Number.isInteger(y1 - y0)) { x0 = Math.round(x0); y0 = Math.round(y0); x1 = Math.round(x1); y1 = Math.round(y1); }
     let dx = Math.abs(x1 - x0);
     let dy = -Math.abs(y1 - y0);
     const sx = x0 < x1 ? 1 : -1;

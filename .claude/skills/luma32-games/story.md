@@ -7,11 +7,12 @@ Read before writing the cast, story scripts, cutscenes or minigames.
 
 - **Characters:** a doll spec (skin, hair + `hairStyle`, top, shirt, tie, bottom, shoes,
   `coat`, `dress`, `glasses`, and the other options listed at the top of
-  `engine/doll.js`); the engine generates 4 directions × 3 walking frames, 3 running
+  `engine/doll.js` — tall, build, long dresses, period hats, crowns, horns, wings,
+  something held: `art.md` § 6); the engine generates 4 directions × 3 walking frames, 3 running
   frames (above speed 1.5) and poses (`sit`, `kneel`, `lie`, `sleep`, `reach`, `cheer`,
   `blink`), and everyone blinks when
   standing still. An outfit change is another doll; `api.dress(id)` changes the player's.
-- **Animals are dolls too:** `{ creature: 'dog' | 'cat' | 'bird' | 'bee', fur, markings }`
+- **Animals are dolls too:** `{ creature: 'dog' | 'cat' | 'bird' | 'bee' | 'horse', fur, markings }`
   (`legs: 'short'` for a corgi; the options at the top of `engine/creature.js`). They walk,
   run, follow (`party`), take routes and sit/lie/sleep like anyone; a bird or a bee gets
   `mode: 'fly'` on its actor. Never a static prop sprite for an animal that moves.
@@ -89,7 +90,14 @@ the attention is, silences are timed.
 - Move several at once with `api.together`; cut silence with `api.wait`.
 - Walk people in a scene with `walkTo(x, y, { timeout, place: true })` (`pitfalls.md`).
 - Change the music for the moment, or add a layer to the one playing (`layer` channels,
-  `api.musicLayer`), and give the impact a `shake` or `flash`.
+  `api.musicLayer`), and give the impact a `shake` or `flash`. A jingle over the place's
+  song is `api.music(j, { over: true })`; `await api.music(once)` waits for its end.
+- **When the story moves on mid-visit, `await api.refresh()`**: whoever the map's data
+  now wants walks in from a door, whoever it no longer wants walks out, props with `when`
+  come and go. `refresh: true` on a map (or the game) does it after every script and on
+  every flag change. Set the flag, refresh — no hand-written spawns of the map's people.
+- **The player plays inside a scene**: `const r = await api.control(promise)` hands the
+  world to the player (a fight, a chase, reaching a place) and resumes when it settles.
 - **Short lines, real voices.** One or two boxes per turn, then the other speaks or
   something happens. Each named character sounds like themselves (vocabulary, rhythm,
   what they won't say); background people sound like the place. Subtext over

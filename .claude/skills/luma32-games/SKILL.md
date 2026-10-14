@@ -69,7 +69,8 @@ below, flying, climbing, ice and currents, as abilities the story grants (`world
 "Getting about") —, the guide to the objective, people who chat
 among themselves, use the place at their route stops, look up and greet (`chat`, route
 stops, `look`, `greet`, `api.bark`), people who walk over to answer in a conversation,
-people who live on the maps (wandering, routes, passers-by, positions remembered), light,
+people who live on the maps (wandering, routes, passers-by, positions remembered, walking
+in and out as the story moves: `api.refresh`), props that come and go (`when`), light,
 weather, footsteps, places that ring and sound, autotiled edges, poses and gestures,
 emotion bubbles, visual effects (bursts, appearing and vanishing, zoom), living portraits, text effects, cinema bars, transitions, far layers,
 reflections, vibration, the journal, collections, the credits, autosave and the

@@ -187,11 +187,11 @@ migrate is reported in the console and not offered, never loaded half-understood
 ```js
 {
   name: 'place.market',             // locale key: banner shown on arrival
-  music: 'office', ambience: 'office',
+  music: 'office', ambience: 'office',      // or functions of the api (undefined: leave what plays)
   legend: { '#': 'wall_top', '.': 'carpet' },   // ground chars -> tile ids
   ground: ['#####', '#...#', ...],              // one string per row
   objects: [...rows], objectLegend: {...},      // optional: props by char (char = bottom-left cell)
-  props: [{ t: 'desk', x, y, id? }],            // props by list (x,y = bottom-left cell)
+  props: [{ t: 'desk', x, y, id?, when?, examine?, foot? }],   // props by list (x,y = bottom-left cell)
   actors: [{ id, doll, x, y, dir, talk: async (api, self) => {}, when: (api) => bool,
              move: 'wander'|'turn', radius, turn: false, turnBack: true,
              route: { path: [[x, y], [x, y, { face, pose, gesture, emote, bark, pause }], ...], back, pause, once },
@@ -206,7 +206,7 @@ migrate is reported in the console and not offered, never loaded half-understood
   dark: { color, alpha },          // night: lit by props/actors with `light` and `lights`
   below: 'reef_floor', above: 'reef', breath: 12,   // diving (see "Getting about")
   lights: [{ x, y, r, color, flicker }],
-  weather: 'rain',                 // rain storm snow blizzard leaves petals ash dust fireflies
+  weather: 'rain',                 // rain storm snow blizzard leaves petals ash dust fireflies mist
   parallax: [{ speed: 0.2, draw(ctx, ox, oy, frame, api) {} }], // far layers where the ground is empty
   reverb: 0.3,                     // how the place rings (or { mix, size }): halls, caves
   sounds: [{ x, y, ambience, radius, volume }],   // ambiences at a spot, louder nearby
@@ -214,6 +214,8 @@ migrate is reported in the console and not offered, never loaded half-understood
   hint: false,                     // no "A" over what the player faces
   guide: false,                    // no arrow to the objective on this map
   party: false,                    // the companions (game.party) stay out of this map
+  refresh: true,                   // people and props follow the story mid-visit (see "Life on a map")
+  actionA: true,                   // A doesn't talk on this map (see "Action games")
   overlay(ctx, api, cam, engine),  // drawn over actors (rain, darkness)
   underlay(ctx, api, cam, engine), // drawn over the ground, under props/actors
   void: '#000', run: false, shadows: false,
@@ -270,12 +272,26 @@ puts them back there on return (while their starting cell in the map's data is t
 same). `remember: false` on an actor, or `memory: false` on the game, opts out. A reload
 starts everyone from the map's data.
 
+**The story moves on mid-visit.** A map chooses its people (`actors[].when`) and props
+(`props[].when`) on arrival; `await api.refresh()` brings it in line with the story as it
+stands: whoever the data now wants walks in from the nearest door (or is put at home out of
+sight), whoever it no longer wants walks out by one, someone whose entry changed (same id,
+another `when`) takes the new one where they stand and walks to its cell, and props come
+and go in place. Behind a black screen it is instant; with no door in view they wait until
+the player looks away. Someone already here under the same id (a `spawn`) counts as here:
+nobody is doubled. `refresh: true` on the game or a map does it by itself after every
+script and whenever the flags change.
+
+Background chatter (`chat`, `greet`, `bump`) is cut when a script starts and resumes from
+the first line a while after. A within 200 ms of a script ending doesn't interact.
+
 ## Light and weather
 
 `weather` is a preset name, `{ kind, density, wind }` or a function of `(api, engine)`
 returning one. `dark` (`{ color, alpha }` or a function returning it or null) darkens the
 map, and every light on screen cuts it in stepped rings: a prop or actor with
-`light: { r, color, flicker, dx, dy }`, and `lights` on the map (cells). The colour adds a
+`light: { r, color, flicker, dx, dy, steps }` (`steps` 2–8 rings, default 2: more is a
+softer edge), and `lights` on the map (cells). The colour adds a
 faint glow. `grade` still multiplies the whole map, before both.
 
 ## The objective and the guide
@@ -315,7 +331,8 @@ and a sound; its texts are `quests.<id>.title`, `quests.<id>.note` and optionall
 `collections` set (once) and shows "Conchas 3/12". When there are quests or collections,
 START shows "Diario": quests open first, then the rest, then each collection's count.
 `api.credits(...)` scrolls the end credits over `bg`, then what was found and the time
-played (`save.time`, counted by the engine), then "FIN" until A.
+played (`save.time`, counted by the engine), then "FIN" until A. They paint their own
+black above the fade: fade out before them freely, and fade in (or end) after them.
 
 ## Open worlds
 
@@ -486,7 +503,8 @@ desk: { size: [2, 2], foot: [2, 1], frames: 2, examine: 'key',
         draw(p, frame) { p.rect(0, 13, 32, 19, '#16201a'); ... } }
 ```
 
-`solid` (tiles), `foot` (props: solid cells from the bottom-left, default the bottom row),
+`solid` (tiles), `foot` (props: solid cells from the bottom-left, default the bottom row;
+`[w, h, dx, dy]` starts them dx cells in and dy up — the trunk of a wide tree),
 `over` (always above actors), `flat` (always below), `counter` (talk across it), `z`,
 `ledge: 'down'` (solid, but walking that way hops over it to the cell beyond),
 `ramp` and `side(p, frame, h)` (see "Heights"),
@@ -501,6 +519,9 @@ width, inner, round })` paints a rim along the sides and corners that border oth
 `light` (props: see "Light and weather"),
 `top(p, frame)` (a second 16×16 layer painted over whoever stands on the tile — y-sorted, so it never covers someone in the cell below: tall grass,
 the edge of a roof).
+A prop entry on a map may carry its own `examine` (this desk, not every desk) and `foot`.
+`examine` (on a kind, a tile or an entry) may be a function `(api, thing) => key`; `null`
+falls back to the kind's, then the tile's.
 `Painter` gives `fill rect px hline vline box dither noise line ellipse pix stamp` and a
 seeded `rand`. Art is code: there are no image files. The one exception is the home-screen icon:
 `engine/icon-{180,192,512}.png` are `engine/icon.svg` rendered full bleed (iOS takes no SVG
@@ -530,6 +551,10 @@ api.quest('lamps'); api.quest('lamps', 'done'); api.questState('lamps')   // the
 api.collect('shells', 'beach_1'); api.collected('shells')
 await api.credits({ lines: ['credits.thanks', { title: 'credits.music', names: ['…'] }], music, bg })
 api.spawn({ id, doll, x, y, dir, transient? }); api.despawn(id)   // transient: just passing by
+// a sprite actor: sprite: 'tileId' or { down, up, left, right }; shadow: true draws its drop shadow
+await api.refresh()                         // the map's people and props follow the story now (see "Life on a map")
+api.addProp({ t: 'wardrobe_open', x, y, id: 'wardrobe' }); api.removeProp('wardrobe')   // this visit; the same id replaces
+const won = await api.control(startFight(api))   // the player has the world until it settles
 await api.together(a.walk('2r'), b.walk('2l'))
 await api.emote('ana', '!'); await api.pan(x, y); await api.follow()
 await api.emote('ana', 'heart')            // heart anger sweat note idea sad shock dots zzz, or any glyph
@@ -538,6 +563,7 @@ await api.fadeOut(); await api.fadeIn(); await api.flash('#fff'); await api.shak
 await api.appear({ id, doll, x, y }, { fx: 'shadow' }); await api.vanish('rhys', { fx: 'poof' })   // see "Visual effects"
 api.fx('sparkle', 'ana'); await api.animate('ana', { lift: 6 }, 500); await api.zoom(2, { at: 'ana' })
 api.music('title', { fadeIn: 1 }); api.musicLayer('chase', true); api.sfx('door'); api.ambience('rain')
+await api.music('win'); api.music('j_item', { over: true, duck: 0.3 })   // see "Music"
 api.objective('obj.door', 'ana')            // what next, and where: a person, [x, y], { map, x, y } (see "The objective and the guide")
 api.bark('ana', 'market.shout')             // a line over a head that doesn't stop the game
 api.banner('place.market')
@@ -637,7 +663,7 @@ same rules about coming back on the next visit.
 its feet (`hitbox`, default `{ x: 3, y: 9, w: 10, h: 6 }` inside the 16×16 cell) and
 slides it around corners. Warps, triggers, spots, talking and edges work as before, on the
 cell under the hitbox's centre. B runs unless `run: false`; `actionA: true` frees A from
-talking for the cartridge's own use.
+talking for the cartridge's own use (also on one map).
 
 Entities are what moves on its own: enemies, projectiles, blocks.
 
@@ -667,11 +693,29 @@ title: {
 
 A channel with `layer: 'name'` plays only while `api.musicLayer('name', true)`: the same song
 gains drums when a chase starts. `api.music(name, { fadeIn: s })` rises while the old one
-fades.
+fades. `unless: 'name'` is the reverse: the channel plays only while that layer is **off**
+— a voice lost or swapped at a switch, or a channel of the playing song silenced. Both
+switch on the next note.
 
-One token per step: a note (`C#4`), `-` holds, `.` rests. Channels shorter than the pattern
-repeat. Instruments: `pulse12 pulse25 pulse50 tri bass saw sine bell pluck pad`, and
+`api.music(name)` returns a promise: a `once` song's resolves when it ends (or is
+replaced), any other's at once — `await api.music('win'); api.music('town')`. A `once`
+song that ended plays again when asked. `api.music(name, { over: true, duck: 0.3 })` plays
+a jingle over the place's song, which ducks to `duck` of its level and comes back when it
+ends (`jingle(name, opts)` from `engine/audio.js` in a scene).
+
+One token per step: a note (`C#4`), `-` holds, `.` rests; `!` after a note or drum accents
+it (+3.5 dB), `?` softens it (−5 dB): `C5! D5 E5? -`, `k! h h? h`. Channels shorter than the
+pattern repeat. A pattern may have its own `bpm` (`songClock()` counts in the song's).
+Instruments: `pulse12 pulse25 pulse50 tri bass saw sine bell pluck pad`, `noise` (a band of
+noise around the note — breath, wind — with `q`, `lp`, `attack`, `decay`; never real), and
 `drums` with `k s h o c t r`.
+
+Effects get `(opts, { tone, burst, ctx, now, dest })`: nodes an effect builds go to
+`dest`, the effects bus, so mute and the room apply. `burst` plays any length.
+
+`node tools/render-song.mjs <game> <song> <out.wav> [--chiptune] [--layers a] [--secs N]`
+renders a song (`--sfx`: an effect) offline to a WAV and prints its level per second; the
+same song renders the same samples every time. `--list` names the game's songs.
 
 ## Real instruments
 
@@ -721,8 +765,10 @@ a spot under the player's feet or one cell past what they bumped into, a person 
 `talk`, on leaving a map anyone who was there only by `api.spawn` and whom the map's
 `actors` won't bring back (spawn with `transient: true` for people just passing by), a
 text key with no text (the player would read the key), a scene pushed while the screen
-is faded to black, two people answering each other from across the place, and the
-objective checks of "The objective and the guide" (with `?dev=1`, the whole audit).
+is faded to black, control back with the screen still black (it fades in after half a
+second), `Painter.line` given a NaN (nothing drawn), two people answering each other from
+across the place, and the objective checks of "The objective and the guide" (with
+`?dev=1`, the whole audit).
 
 ## Dev mode
 
@@ -741,14 +787,20 @@ PORT=8765 DATA_DIR=/tmp/luma32-data node server/main.mjs   # or any static serve
 node tools/shot.mjs http://127.0.0.1:8765/?game=<id> /tmp/m script.json
 ```
 
-`node tools/audit.mjs "http://127.0.0.1:8765/?game=<id>" [first] [last]` starts a new
-game and runs every dev jump (pressing A through their scenes), and after each one lists
-the engine's audit, the `[luma]` warnings and the console errors: where a player would
-get stuck, at every point of the story, in one run.
+`node tools/audit.mjs "http://127.0.0.1:8765/?game=<id>" [first] [last] [--follow [secs]]`
+starts a new game and runs every dev jump (pressing A through their scenes), and after each
+one lists the engine's audit, the `[luma]` warnings and the console errors: where a player
+would get stuck, at every point of the story, in one run. A jump with a long set piece gets
+`timeout: <secs>` in `dev.jumps` (45 by default, `AUDIT_JUMP=` for all). `--follow` plays
+each jump on into its next beat with `tools/play.mjs` (60 s) and lists, as `follow:`,
+where it got stuck, someone it couldn't find or a place it couldn't reach. `play.mjs`
+crosses maps by warps (those whose `when` is open) and `connections`.
 
 `node tools/sheet.mjs http://127.0.0.1:8765 <id> /tmp/sheet.png` draws a cartridge's whole art on
 one contact sheet (ground tiles 3×3, props, dolls with their silhouettes) and reports colour
-counts and ground tiles whose edges stand out when repeated.
+counts and ground tiles whose edges stand out when repeated. `--only dolls` (or `tiles`,
+`props`) and `--match <text>` narrow it; over 4000 px it goes on pages (`sheet-2.png`…);
+dolls are drawn at their frame's own size, and a spec with `frames` as built.
 
 `script.json` is a list of `{ wait }`, `{ key, hold, times }`, `{ shot }`, `{ screen }`,
 `{ eval }`, `{ until: 'js', timeout }` (waits for a condition, e.g. the title's

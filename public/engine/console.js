@@ -2,7 +2,7 @@
 // screen every cartridge gets (art by the cartridge, "Press Start" by the console).
 import { SCREEN_W, SCREEN_H } from './gfx.js';
 import { drawText, drawBig, measure, measureBig } from './font.js';
-import { frame, getTheme, centerX, List, pointRows, clicked } from './ui.js';
+import { frame, getTheme, centerX, List, pointRows, clicked, pressKey } from './ui.js';
 import { tone, sfx, music, audioContext } from './audio.js';
 import { t, withCatalog } from './i18n.js';
 import { account, openAccount, isOpen, offlineLocked } from './host.js';
@@ -430,7 +430,9 @@ export class TitleScreen {
     const opts = this.options();
     const w = Math.max(...opts.map((o) => measure(o[1]))) + 30;
     const h = opts.length * 14 + 10;
-    return { x: Math.round((SCREEN_W - w) / 2), y: this.title.menuY ?? SCREEN_H - h - 8, w, h };
+    // a cartridge's menuY was set for the rows it saw; with «Continuar» the box is a row
+    // taller, and it moves up rather than lose its last row under the screen's edge
+    return { x: Math.round((SCREEN_W - w) / 2), y: Math.min(this.title.menuY ?? SCREEN_H - h - 8, SCREEN_H - h - 4), w, h };
   }
 
   confirmBox() {
@@ -466,7 +468,7 @@ export class TitleScreen {
     this.title.draw?.(ctx, this.f, e, this.phase);
     const th = getTheme();
     if (this.phase === 'press' && blink(this.f - this.pressAt, 32)) {
-      const s = t(hint(this.title.press || 'console.title.press'));
+      const s = t(pressKey(this.title.press || 'console.title.press', e.input));
       const y = this.title.pressY ?? 134;
       drawText(ctx, s, centerX(s), y, this.title.pressColor || '#ffffff', this.title.pressShadow || '#000000');
     }

@@ -15,6 +15,8 @@ const KINDS = {
   ash: { n: 40, vx: 0.15, vy: 0.25, size: 1, sway: 0.5, color: ['rgba(90,90,90,0.8)', 'rgba(200,90,40,0.8)'], par: 0.8 },
   dust: { n: 24, vx: 0.08, vy: -0.03, size: 1, sway: 0.35, color: 'rgba(255,240,200,0.45)', par: 0.9 },
   fireflies: { n: 12, vx: 0, vy: 0, size: 1, sway: 3, color: '#f8f070', blink: true, glow: true, par: 1 },
+  // banks of mist drifting low over the ground: wide, faint, stepped at the edge
+  mist: { n: 8, vx: 0.12, vy: 0, bank: [104, 16], sway: 0.5, color: 'rgba(225,232,240,0.14)', par: 0.85 },
 };
 
 const hash = (i, k) => {
@@ -34,6 +36,7 @@ export function resolveWeather(w, api, e) {
 
 export function drawWeather(ctx, w, cam, f, { glowOnly = false } = {}) {
   if (!w || !!w.glow !== glowOnly) return;
+  if (w.bank) { drawBanks(ctx, w, cam, f); return; }
   const W = SCREEN_W + 16;
   const H = SCREEN_H + 16;
   const vx = w.vx + (w.wind ?? 0);
@@ -57,6 +60,32 @@ export function drawWeather(ctx, w, cam, f, { glowOnly = false } = {}) {
   }
 }
 
+// Mist: each bank an ellipse of a few stacked translucent rows (denser in the middle),
+// wrapping round the screen with the same no-state rule as the particles.
+function drawBanks(ctx, w, cam, f) {
+  const [bw, bh] = w.bank;
+  const W = SCREEN_W + bw * 2;
+  const H = SCREEN_H + bh * 2;
+  const vx = w.vx + (w.wind ?? 0);
+  const c = Array.isArray(w.color) ? w.color : [w.color];
+  for (let i = 0; i < w.n; i++) {
+    const sp = 0.6 + hash(i, 3) * 0.8;
+    const rw = Math.round(bw * (0.7 + hash(i, 4) * 0.6) / 2);
+    let x = hash(i, 1) * W + vx * sp * f - cam.x * w.par;
+    let y = hash(i, 2) * H - cam.y * w.par + Math.sin(f / 90 + i) * w.sway * 4;
+    x = ((x % W) + W) % W - bw;
+    y = ((y % H) + H) % H - bh;
+    ctx.fillStyle = c[i % c.length];
+    for (const k of [1, 0.66, 0.33]) {
+      const ry = Math.max(1, Math.round((bh / 2) * k));
+      for (let j = -ry; j <= ry; j += 2) {
+        const hw = Math.round(rw * k * Math.sqrt(1 - (j / (ry + 1)) ** 2));
+        ctx.fillRect(Math.round(x - hw), Math.round(y + j), hw * 2, 2);
+      }
+    }
+  }
+}
+
 // The dark: map.dark = { color, alpha } (or a function of the api giving it, or null),
 // lit by circles from props with `light`, actors with `light` and map.lights. Rings are
 // stepped, not smooth, like the hardware did it: lit, half-lit, dark.
@@ -74,8 +103,11 @@ export function drawDark(ctx, dark, lights, f) {
   s.globalCompositeOperation = 'destination-out';
   for (const l of lights) {
     const r = Math.max(4, l.r + (l.flicker ? Math.round(Math.sin(f / 5 + l.x) * l.flicker) : 0));
-    ring(s, l.x, l.y, r, 0.5);
-    ring(s, l.x, l.y, Math.round(r * 0.7), 1);
+    // `steps`: more rings, a softer falloff (still stepped, like the hardware); default two
+    const n = Math.max(2, Math.min(8, l.steps | 0 || 2));
+    if (n === 2) { ring(s, l.x, l.y, r, 0.5); ring(s, l.x, l.y, Math.round(r * 0.7), 1); continue; }
+    // each ring takes away its share of what is left, so the dark falls off evenly
+    for (let k = 0; k < n; k++) ring(s, l.x, l.y, Math.round(r * (1 - (0.6 * k) / (n - 1))), 1 - (n - k - 1) / (n - k));
   }
   ctx.drawImage(shadow, 0, 0);
   // the warm colour of each light on what it touches

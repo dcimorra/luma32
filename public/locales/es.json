@@ -75,7 +75,8 @@
     },
     "title": {
       "press": "PULSA START",
-      "press_click": "HAZ CLIC PARA EMPEZAR",
+      "press_key": "PULSA INTRO",
+      "press_click": "HAZ CLIC O PULSA INTRO",
       "press_tap": "TOCA PARA EMPEZAR",
       "continue": "Continuar",
       "new": "Nueva partida",
@@ -140,7 +141,8 @@
       "minutes": "{m} min",
       "found": "Encontrado",
       "press": "Pulsa A",
-      "press_click": "Haz clic",
+      "press_key": "Pulsa Intro",
+      "press_click": "Haz clic o pulsa Intro",
       "press_tap": "Toca la pantalla"
     },
     "resume": {
