@@ -134,7 +134,9 @@ function drawArrow(ctx, dir, cx, cy) {
 }
 
 // The arrow, whenever the player has control, standing or walking. Off with `guide: false` on the game or a map, or in Options.
-export function drawGuide(world, ctx, e, cx, cy) {
+// `project(x, up, z)` (the modern look): where a point of the map (x, z in map pixels, `up`
+// pixels above the ground) is on the screen; without it the screen is the map, shifted.
+export function drawGuide(world, ctx, e, cx, cy, project = null) {
   if (world.game.guide === false || world.map.guide === false || !guideOn()) return;
   const p = world.player;
   if (!p || world.busy || world.engine.top() !== world) return;
@@ -145,15 +147,19 @@ export function drawGuide(world, ctx, e, cx, cy) {
   const dy = Math.max(g.y - p.y, 0, p.y - (g.y + g.h - 1));
   if (dx + dy <= 1 && !g.exit) return;
   // the top of what is there: a person's head, a prop's top, the cell
+  // (and the ground under it, for the modern look's camera)
   let top = g.y * TILE - 2 - world.elev(g.x, g.y);
-  if (g.actor) top = Math.round(g.actor.py) - g.actor.ez - 14;
+  let ground = g.y * TILE + 8;
+  if (g.actor) { top = Math.round(g.actor.py) - g.actor.ez - 14; ground = Math.round(g.actor.py) + 11; }
   else {
     const prop = world.props.find((pr) => g.x >= pr.x && g.x < pr.x + pr.w && pr.y >= g.y && pr.y - pr.h + 1 <= g.y + g.h - 1);
-    if (prop) top = (prop.y + 1 - prop.h) * TILE - 2 - world.elev(prop.x, prop.y);
+    if (prop) { top = (prop.y + 1 - prop.h) * TILE - 2 - world.elev(prop.x, prop.y); ground = (prop.y + 1) * TILE - 4; }
   }
   const bob = Math.floor(e.frame / 16) % 2;
-  const sx = (g.x + g.w / 2) * TILE - cx;
-  const sy = top - cy - 4;
+  const wx = (g.x + g.w / 2) * TILE;
+  const at = project ? project(wx, ground - top, ground) : { x: wx - cx, y: top - cy };
+  const sx = Math.round(at.x);
+  const sy = Math.round(at.y) - 4;
   const m = 6;
   if (sx >= m && sx <= SCREEN_W - m && sy >= m && sy <= SCREEN_H - m) { drawArrow(ctx, 'down', sx, sy - bob); return; }
   // off screen: at the edge it lies beyond, pointing at it

@@ -362,7 +362,12 @@ is cut down low, as a set is cut away. Tiles with `low`, `medium`, `reflect` or 
 are never walls. Heights (README "Heights") rise as they are. Props (but `flat` ones,
 which lie in the ground) stand up as cards; one whose whole picture is the ground it
 stands on (`foot` as tall as its `size`, two rows or more: a bed, a table drawn from
-above) lies down instead, a low block with its picture on top. People and animals get a
+above) lies down instead, a low block with its picture on top. Standing props (a
+carriage, a tree, a shelf) get a body as deep as the ground they take, up to a tile.
+Stairs going up rise as real steps, and whoever is on them climbs: a tile whose id says
+stairs (`stair`, `escal`) and not down (`down`, `_dn`, `baj`) climbs north, as 3/4 art
+draws a flight; a tile's own `stairs` says it outright — `'up'`, `'east'` or `'west'` (a
+flight seen from the side), or `false` to keep it flat. People and animals get a
 body: every pixel of their frame a little block, thickest in the middle of the figure
 and thin at its outline, so they have relief from the front and the back too. Every face samples one picture,
 the map drawn flat (`World.mapImage`).

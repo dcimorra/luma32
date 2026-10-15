@@ -12,7 +12,7 @@ import { changed } from './host.js';
 import { reportProblem } from './report.js';
 import { resolveWeather, drawWeather, drawDark, gatherLights } from './weather.js';
 import { hdSupported, hdOn, setHd } from './hd.js';
-import { regionOf } from './diorama.js';
+import { regionOf, stairLift } from './diorama.js';
 import { goalOf, drawGuide, audit, guideOn, setGuide, pressFrom, rectCells } from './guide.js';
 import { placeParty, tickParty, tickLife, hushLife, bark, drawBarks, bumped, routeStop } from './company.js';
 import { Effects, EASE } from './vfx.js';
@@ -1907,7 +1907,7 @@ export class World {
   // A small "A" over what the player faces, once they stand still a moment: nobody has to
   // guess what answers. `hint: false` on the game or a map turns it off; a spot or an
   // actor with `hint: false` keeps a secret secret.
-  drawHint(ctx, e, cx, cy) {
+  drawHint(ctx, e, cx, cy, camFor = null) {
     if ((this.map.hint ?? this.game.hint) === false) return;
     const p = this.player;
     if (!p || this.busy || this.engine.top() !== this || p.moving || p.strolling) { this.still = 0; return; }
@@ -1917,6 +1917,7 @@ export class World {
     const bob = Math.floor(e.frame / 20) % 2;
     // over the person; for a thing, over the player's head (a prop may be any height)
     const who = t.actor || p;
+    if (camFor) [cx, cy] = camFor(who);
     const x = Math.round(who.px) - cx + 4;
     const y = Math.round(who.py) - who.ez - 18 - cy - bob;
     const th = getTheme();
@@ -2069,23 +2070,26 @@ export class World {
     const at = { x: Math.round(this.cam.x), y: Math.round(this.cam.y) };
     drawWeather(ctx, weather, at, e.frame);
     drawWeather(ctx, weather, at, e.frame, { glowOnly: true });
-    const offset = (px, py, ez = 0) => {
-      const s = pass.project(px + 8, ez, py + 11);
+    // each thing drawn over a person or a cell is placed by its own point of the diorama
+    // (a height above the ground, `ez`, the classic drawing already takes off itself)
+    const offset = (px, py) => {
+      const s = pass.project(px + 8, stairLift(this, px + 8, py + 12), py + 11);
       return [Math.round(px + 8 - s.x), Math.round(py + 15 - s.y)];
     };
+    const camFor = (a) => offset(a.px + (a.ox || 0), a.py + (a.oy || 0));
     const p = this.player;
-    const [cx, cy] = p ? offset(p.px, p.py, this.raised ? p.ez : 0) : [at.x, at.y];
+    const [cx, cy] = p ? camFor(p) : [at.x, at.y];
     // the map's own drawing and the effects over people, anchored at the player
     const cam = { x: cx, y: cy };
     if (typeof this.map.above === 'function') this.map.above(ctx, this.api, cam, e);
     this.vfx.draw(ctx, cx, cy, 'front');
     this.vfx.draw(ctx, cx, cy, 'light');
     this.map.overlay?.(ctx, this.api, cam, e);
-    for (const a of this.actors) if (a.emote && a.visible) this.drawEmote(ctx, a, ...offset(a.px, a.py, this.raised ? a.ez : 0));
-    drawBarks(this, ctx, cx, cy);
+    for (const a of this.actors) if (a.emote && a.visible) this.drawEmote(ctx, a, ...camFor(a));
+    drawBarks(this, ctx, cx, cy, camFor);
     if (this.vfx.zoom <= 1.001) {
-      if (!this.driving) this.drawHint(ctx, e, cx, cy);
-      drawGuide(this, ctx, e, cx, cy);
+      if (!this.driving) this.drawHint(ctx, e, cx, cy, camFor);
+      drawGuide(this, ctx, e, cx, cy, (x, up, z) => pass.project(x, up + stairLift(this, x, z), z));
     }
     this.city.marker(ctx, cx, cy, e);
   }

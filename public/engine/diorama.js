@@ -19,6 +19,20 @@ const LOW = 4;        // a wall between the camera and the floor, cut down to th
 const LIE = 8;        // how tall a prop lying down stands (a bed)
 const MAX_FACE = 6;   // rows of face at most: past that it is a façade drawn flat
 
+const RISE = 8;       // how much a flight of stairs climbs per cell
+const TREADS = 4;     // steps per cell
+
+// Which way a flight of stairs climbs: 'north' (as 3/4 art draws one going up), 'east'
+// or 'west' (a flight seen from the side), or null. A tile's own `stairs` says it
+// ('up' or true for north, 'east', 'west', false for flat); else its id: stairs and not
+// down climb north (a flight's _l / _r tiles are its edges, not a flight to the side).
+export function stairsOf(id, d) {
+  if (!d || d.solid) return null;
+  if (d.stairs !== undefined) return d.stairs === true || d.stairs === 'up' ? 'north' : d.stairs === 'east' || d.stairs === 'west' ? d.stairs : null;
+  if (!/stair|escal/i.test(id) || /down|_dn|baj|foot|sign|door/i.test(id)) return null;
+  return 'north';
+}
+
 const isWall = (d) => !!d && !!d.solid && !d.low && !d.medium && !d.reflect && !d.flat && !d.top;
 
 // The cells the diorama covers, in tiles: the map and every neighbour across its edges.
@@ -177,10 +191,79 @@ export function buildStatic(world, R) {
     if (hs < H) quad([x0, H, z], [x1, H, z], [x1, hs, z], [x0, hs, z], [x0 + E, fv0], [x1 - E, fv0], [x1 - E, fv1], [x0 + E, fv1], [0, 0, 1]);
   }
 
+  // stairs: each run of stair cells along the way it climbs is a flight of steps, its
+  // treads and risers the tile's own pixels; whoever stands on it climbs it (stairLift)
+  const way = (x, y) => stairsOf(id(x, y), def(x, y));
+  const flights = new Map();
+  const depth = TILE / TREADS;
+  const side = (x, y) => !way(x, y) && !wall(x, y);
+  for (let x = R.x0; x < R.x1; x++) {
+    let y = R.y0;
+    while (y < R.y1) {
+      if (way(x, y) !== 'north') { y++; continue; }
+      const r0 = y;
+      while (y < R.y1 && way(x, y) === 'north') y++;
+      const r1 = y - 1;
+      const n = r1 - r0 + 1;
+      for (let k = r0; k <= r1; k++) flights.set(`${x},${k}`, { dir: 'north', lo: (r1 + 1) * TILE, top: n * RISE });
+      const x0 = x * TILE;
+      const x1 = x0 + TILE;
+      for (let i = 0; i < n * TREADS; i++) {
+        // step i from the bottom: its tread at height (i + 1) * rise, its riser in front
+        const zb = (r1 + 1) * TILE - i * depth;
+        const zt = zb - depth;
+        const yb = (i * RISE) / TREADS;
+        const yt = ((i + 1) * RISE) / TREADS;
+        const v0 = zt + E;
+        const v1 = zb - E;
+        quad([x0, yt, zt], [x1, yt, zt], [x1, yt, zb], [x0, yt, zb], [x0 + E, v0], [x1 - E, v0], [x1 - E, v1], [x0 + E, v1], [0, 1, 0]);
+        quad([x0, yt, zb], [x1, yt, zb], [x1, yb, zb], [x0, yb, zb], [x0 + E, v1 - 0.5], [x1 - E, v1 - 0.5], [x1 - E, v1 - 0.5], [x0 + E, v1 - 0.5], [0, 0, 1]);
+        const cy = Math.floor((zt + 0.1) / TILE);
+        for (const dx of [-1, 1]) {
+          if (!side(x + dx, cy)) continue;
+          const ex = dx < 0 ? x0 : x1;
+          const u = dx < 0 ? x0 + 0.5 : x1 - 0.5;
+          quad([ex, yt, zt], [ex, yt, zb], [ex, 0, zb], [ex, 0, zt], [u, v0], [u, v1], [u, v1], [u, v0], [dx, 0, 0]);
+        }
+      }
+    }
+  }
+  // flights seen from the side: each row's run climbs east or west
+  for (let y = R.y0; y < R.y1; y++) {
+    let x = R.x0;
+    while (x < R.x1) {
+      const d = way(x, y);
+      if (d !== 'east' && d !== 'west') { x++; continue; }
+      const c0 = x;
+      while (x < R.x1 && way(x, y) === d) x++;
+      const c1 = x - 1;
+      const n = c1 - c0 + 1;
+      const lo = d === 'east' ? c0 * TILE : (c1 + 1) * TILE;
+      for (let k = c0; k <= c1; k++) flights.set(`${k},${y}`, { dir: d, lo, top: n * RISE });
+      const z0 = y * TILE;
+      const z1 = z0 + TILE;
+      const s = d === 'east' ? 1 : -1;
+      for (let i = 0; i < n * TREADS; i++) {
+        // step i from the low end: xa its riser's edge, xb its far edge
+        const xa = lo + s * i * depth;
+        const xb = xa + s * depth;
+        const yb = (i * RISE) / TREADS;
+        const yt = ((i + 1) * RISE) / TREADS;
+        const [l, rr] = xa < xb ? [xa, xb] : [xb, xa];
+        quad([l, yt, z0], [rr, yt, z0], [rr, yt, z1], [l, yt, z1], [l + E, z0 + E], [rr - E, z0 + E], [rr - E, z1 - E], [l + E, z1 - E], [0, 1, 0]);
+        const u = xa + s * 0.5;
+        quad([xa, yt, z1], [xa, yt, z0], [xa, yb, z0], [xa, yb, z1], [u, z1 - E], [u, z0 + E], [u, z0 + E], [u, z1 - E], [-s, 0, 0]);
+        const cx = Math.floor((Math.min(xa, xb) + 0.1) / TILE);
+        if (side(cx, y + 1)) quad([l, yt, z1], [rr, yt, z1], [rr, 0, z1], [l, 0, z1], [l + E, z1 - 0.5], [rr - E, z1 - 0.5], [rr - E, z1 - 0.5], [l + E, z1 - 0.5], [0, 0, 1]);
+      }
+    }
+  }
+  world.dioramaStairs = flights;
+
   // the ground, and the faces of raised ground (README "Heights")
   for (let y = R.y0; y < R.y1; y++) {
     for (let x = R.x0; x < R.x1; x++) {
-      if (!id(x, y) || wall(x, y)) continue;
+      if (!id(x, y) || wall(x, y) || flights.has(`${x},${y}`)) continue;
       const e = elev(x, y);
       const x0 = x * TILE;
       const x1 = x0 + TILE;
@@ -223,7 +306,12 @@ export function gatherCards(world, frame, R) {
       // seen from the top): it lies down, a low block with its picture on top
       const [, fh = 1, , dy = 0] = p.foot || [];
       if (p.h >= 2 && fh >= p.h && !dy) out.push({ img, lie: LIE, x, z, y, w: img.width, h: img.height });
-      else out.push({ img, x, z: z - 1.5, y, w: img.width, h: img.height });
+      // standing (a carriage, a tree, a shelf): a body as deep as the ground it takes, to
+      // a point; the centre a little behind the cell's edge so its front stays in it
+      else {
+        const depth = Math.max(6, Math.min(16, fh * TILE * 0.75));
+        out.push({ img, x, z: z - depth / 2 - 0.5, y, w: img.width, h: img.height, body: true, depth });
+      }
     }
   };
   props(world.props, 0, 0);
@@ -236,14 +324,14 @@ export function gatherCards(world, frame, R) {
         const id = world.tileAt(x, y);
         if (!id || !world.game.tiles[id].top) continue;
         const img = world.tiles.top(id, animF);
-        out.push({ img, x: x * TILE, z: (y + 1) * TILE - 0.5, y: elev(x, y), w: img.width, h: img.height });
+        out.push({ img, x: x * TILE, z: (y + 1) * TILE - 4.5, y: elev(x, y), w: img.width, h: img.height, body: true, depth: 8 });
       }
     }
   }
   const body = (a, x, y, ez = 0) => {
     const img = a.image();
     if (!img) return;
-    out.push({ img, x: x + (TILE - img.width) / 2, z: y + 11, y: ez, w: img.width, h: img.height, body: true });
+    out.push({ img, x: x + (TILE - img.width) / 2, z: y + 11, y: ez + stairLift(world, x + 8, y + 12), w: img.width, h: img.height, body: true });
   };
   for (const a of world.actors) {
     if (!a.visible || (a.alpha ?? 1) <= 0) continue;
@@ -253,13 +341,20 @@ export function gatherCards(world, frame, R) {
   return out;
 }
 
+// How high the stairs under a point of the map (map pixels) lift whoever stands there.
+export function stairLift(world, px, pz) {
+  const f = world.dioramaStairs?.get(`${Math.floor(px / TILE)},${Math.floor(pz / TILE)}`);
+  if (!f) return 0;
+  const along = f.dir === 'north' ? f.lo - pz : f.dir === 'east' ? px - f.lo : f.lo - px;
+  return Math.max(0, Math.min(f.top, (along / TILE) * RISE));
+}
+
 // A person (or an animal) with a body, not a card: every pixel of the sprite a little
 // block, thickest in the middle of the figure and thin at its outline (its distance to
 // the edge), so the front and the back have relief, the sun shapes them, and the top of
 // a head or a shoulder shows from the camera. Local coordinates: x 0..width, y up from
 // the feet, z centred on the card's plane; u v at the centre of the pixel each face is.
-const DEPTH = 8;
-export function bodyMesh(img) {
+export function bodyMesh(img, DEPTH = 8) {
   const w = img.width;
   const h = img.height;
   const data = img.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, w, h).data;
@@ -283,7 +378,7 @@ export function bodyMesh(img) {
     queue = next;
   }
   // half the thickness of each pixel: a rounded profile, not a slab
-  const half = (x, y) => (solid(x, y) ? Math.min(DEPTH, 1.5 + Math.sqrt(dist[y * w + x] - 1) * 2.6) / 2 : 0);
+  const half = (x, y) => (solid(x, y) ? Math.min(DEPTH, 1.5 + Math.sqrt(dist[y * w + x] - 1) * 2.6 * (DEPTH / 8)) / 2 : 0);
   const out = [];
   const quad = (a, b, c, d, u, v, n) => {
     for (const p of [a, b, c, a, c, d]) out.push(p[0], p[1], p[2], u, v, n[0], n[1], n[2]);

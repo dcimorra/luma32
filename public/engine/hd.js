@@ -450,7 +450,7 @@ export class Hd {
     gl.drawArrays(gl.TRIANGLES, 0, this.cardCount);
     // the bodies, each its own mesh and picture, kept while its frame of animation lives
     for (const c of this.bodyList) {
-      const b = this.body(c.img);
+      const b = this.body(c.img, c.depth);
       gl.uniform3f(prog.u.uOffset, c.x, c.y, c.lie ? c.z + c.h : c.z);
       gl.uniform1i(prog.u.uLie, c.lie ? 1 : 0);
       gl.bindTexture(gl.TEXTURE_2D, b.tex);
@@ -461,12 +461,12 @@ export class Hd {
     gl.uniform1i(prog.u.uLie, 0);
   }
 
-  body(img) {
+  body(img, depth = 8) {
     let b = this.bodies.get(img);
     if (!b) {
       const gl = this.gl;
       b = { geo: geometry(gl), tex: texture(gl, gl.NEAREST, gl.NEAREST) };
-      b.count = upload(gl, b.geo, bodyMesh(img));
+      b.count = upload(gl, b.geo, bodyMesh(img, depth));
       gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
       this.bodies.set(img, b);

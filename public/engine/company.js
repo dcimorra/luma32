@@ -104,13 +104,16 @@ export function bark(world, a, text, time = 2600) {
   a.bark = { text, until: world.engine.frame + ms(time) };
 }
 
-export function drawBarks(world, ctx, cx, cy) {
+// `camFor(a)` (the modern look): the camera offset that puts this person where the
+// diorama shows them; without it, everyone shares cx, cy.
+export function drawBarks(world, ctx, cx, cy, camFor = null) {
   const th = getTheme();
   const f = world.engine.frame;
   const placed = [];
   for (const a of world.actors) {
     if (!a.bark || !a.visible) continue;
     if (f > a.bark.until) { a.bark = null; continue; }
+    if (camFor) [cx, cy] = camFor(a);
     const lines = wrap(a.bark.text, 100).slice(0, 3);
     const w = Math.max(...lines.map(measure)) + 8;
     const h = lines.length * 10 + 5;
