@@ -64,6 +64,12 @@ it. The audit proves the data; it doesn't play. Everything below still has to be
   `node tools/drive.mjs start rev-<id> <url>` … `node tools/drive.mjs stop rev-<id>`
   (testing.md). Close every browser you open before you finish; never write a browser
   server of your own.
+- **Judge it in the modern look: open it with `&hd=1`** (README "The modern look"). The
+  house plays and judges its games in 3D; the classic look is assumed to follow. A wall
+  that stands where it should lie, a bed standing on end, a prop shown as a card that
+  should lie down, a figure lost behind a wall, a map that reads worse than in 2D: each
+  is a defect, with its map and cell. Turn it off (`&hd=0`) only to tell whether a
+  defect is the art's or the diorama's.
 - **Open it with `&turbo=4`** and get through stretches with `node tools/play.mjs
   rev-<id> …` (testing.md): it walks to each objective with real keys and prints every
   line, choice, objective and warning. Don't write an autoplayer of your own — the house's

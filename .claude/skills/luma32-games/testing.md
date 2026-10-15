@@ -7,6 +7,10 @@ cd public && setsid nohup python3 -m http.server 8765 --bind 127.0.0.1 >/tmp/lum
 node tools/shot.mjs "http://127.0.0.1:8765/?game=<id>" /tmp/out script.json
 ```
 
+- **Test in the modern look: add `&hd=1` to every URL** (README "The modern look"). The
+  house's games are played and judged in 3D; classic is assumed to follow. To look over
+  every map of a cartridge at once: `node tools/sweep-hd.mjs http://127.0.0.1:8765 <id>`
+  (contact sheets and a census of what each map uses, in `/tmp/luma-sweep`).
 - **Many commands on one open page** (walking a stretch, advancing dialogue, checking
   state between moves): `tools/drive.mjs`, not a browser server of your own.
   ```bash

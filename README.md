@@ -339,11 +339,55 @@ warps that land in a wall, people who don't answer.
 
 ## The player's comfort
 
-START → "Opciones" holds the view, sound, text speed (slow, normal, fast) and, where the
+START → "Opciones" holds the view, the graphics ("The modern look"), sound, text speed (slow, normal, fast) and, where the
 browser can, vibration, kept per device. The engine autosaves when the player has
 control after arriving at a new map (a small "Guardado" shows) unless the game says
 `autosave: false`, and "Continuar" opens with one line, "Para seguir: <objective>",
 unless `recap: false`.
+
+## The modern look
+
+START → "Opciones" → "Gráficos" switches between CLÁSICOS (the 240×160 screen as it
+always was) and MODERNOS (since 1.10; kept per device, offered only where WebGL 2 is):
+the same game shown as a diorama in three dimensions. `?hd=1` / `?hd=0` force either
+look for testing. Still a prototype: judge it on a map before relying on it.
+
+`engine/diorama.js` builds the map from what it already says. The ground lies flat. A
+solid cell with walkable ground right below it is a wall's face (the 3/4 art draws it
+from the front), and the solid cells above it are the wall's top: a run of solid cells
+down a column becomes a block, its face stood up at its south edge (as tall as its face
+rows, three at most) and its top laid over it. A solid run with no face takes the height
+most walls have, and one with walkable ground to its north (the wall nearest the camera)
+is cut down low, as a set is cut away. Tiles with `low`, `medium`, `reflect` or `flat`
+are never walls. Heights (README "Heights") rise as they are. Props (but `flat` ones,
+which lie in the ground) stand up as cards; one whose whole picture is the ground it
+stands on (`foot` as tall as its `size`, two rows or more: a bed, a table drawn from
+above) lies down instead, a low block with its picture on top. People and animals get a
+body: every pixel of their frame a little block, thickest in the middle of the figure
+and thin at its outline, so they have relief from the front and the back too. Every face samples one picture,
+the map drawn flat (`World.mapImage`).
+
+`engine/hd.js` draws it under a perspective camera that looks where the classic camera
+would: a sun that casts shadows (cards included), the map's lights (`light` on props and
+people, `map.lights`), the hour's grade and dark, depth of field from the real depth, a
+bloom, and the console's own drawing (dialogue, menus, HUD, fades) flat and sharp on top.
+Weather, emotes, barks, the A hint and the guide are drawn flat over it, anchored where
+the diorama shows whoever they are about; the pointer picks the ground under it.
+
+Neighbouring maps (`connections`) are built with the map, their props and people too.
+What lies on the ground is drawn as in classic into a picture laid over the floor: a
+map's `underlay`, reflections, footstep dust, ground-level effects and a city's roads.
+Vehicles lie down with a body (their top-down picture raised into a rounded block); a
+city's passers-by stand as cards; shots and other entities lie on the floor. A map's
+`above` and `overlay`, effects over people and in the light, emotes, barks, the hint
+and the guide are drawn flat over the diorama, anchored at the player. `parallax` shows
+where no ground is. A tile's `top` (a tree's crown, tall grass) stands as a card, and a
+solid tile with a `top` is never a wall. A scene that covers the world (a minigame,
+Mode 7), a frame with a glitch, and a map bigger than the GPU's largest picture are
+shown classic.
+
+`node tools/sweep-hd.mjs <url> [game ...]` draws every map of every cartridge in the
+modern look on contact sheets, with a census of what each map uses (`/tmp/luma-sweep`).
 
 ## Journal and credits
 

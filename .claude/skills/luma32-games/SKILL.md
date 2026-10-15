@@ -184,6 +184,14 @@ markers) gets none of the engine's checks and comes back with the bugs they prev
 A cartridge's files are its own business; a common split is `art/`, `world/` (tiles,
 maps), `cast.js`, `music.js`, `sound.js`, `scenes/`, the story code, `locales/es/`.
 
+7. **It is made and judged in the modern look.** The house plays its games in 3D
+   (README "The modern look", `?hd=1`): every screenshot that judges art, a map or a
+   scene is taken with `&hd=1`, and the classic look is assumed to follow. Draw for it:
+   walls as a top row over face rows (they stand up), beds and tables seen from above
+   with a `foot` as tall as their `size` (they lie down), everything else a prop that
+   stands. `node tools/sweep-hd.mjs <url> <id>` draws every map of a cartridge on contact
+   sheets to look over at once.
+
 ## Done means
 
 A cartridge goes on the shelf, or a chapter is handed over, only when all of this holds:
@@ -217,6 +225,8 @@ A cartridge goes on the shelf, or a chapter is handed over, only when all of thi
       (90–120 with what's optional, for a whole story, unless the commission says
       otherwise), `tools/length.mjs` gives at most half of that as reading, and every
       chapter has its played stretch of 5+ minutes.
+- [ ] Every map reads well in the modern look (`tools/sweep-hd.mjs`, and the review is
+      played with `&hd=1`): walls stand, what is drawn from above lies down.
 - [ ] Art passes `art.md` § 8; every song follows `music.md`; every portrait talks and
       blinks (`story.md`).
 - [ ] The fresh-eyes review scores 4+ on every axis it can score, with no blocker and no

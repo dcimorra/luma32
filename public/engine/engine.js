@@ -1,6 +1,7 @@
 // The console itself: a 240x160 frame buffer, a fixed 60 Hz loop, a stack of scenes
 // and the full-screen effects (fades, flashes, shakes, glitches) every game shares.
 import { SCREEN_W, SCREEN_H, canvas } from './gfx.js';
+import { Hd, hdOn, hdSupported } from './hd.js';
 
 export class Engine {
   constructor(display, input) {
@@ -14,6 +15,7 @@ export class Engine {
     this.fx = { fade: 0, fadeColor: '#000000', fadeKind: 'fade', fadeAt: null, fadingIn: false, flash: 0, flashColor: '#ffffff', shake: 0, glitch: 0, bars: 0 };
     this.paused = false;
     this.post = [];                     // extra full-screen passes (game overlays)
+    this.hdFrame = null;                // the world's picture this frame, in the modern look
     this.resize();
     input.bindPointer?.(display, SCREEN_W, SCREEN_H);
     addEventListener('resize', () => this.resize());
@@ -141,6 +143,27 @@ export class Engine {
   // Tells the page what the scene on top takes: a scene that reads the pointer says
   // `pointer = true` (a getter may change its mind, as the world does in free movement);
   // the rest get the on-screen pad on a tablet. `menuButton`: the corner button is START.
+  // The modern look (engine/hd.js) is on and this browser can show it.
+  get hd() {
+    if (!hdOn()) return null;
+    if (this.hdPass === undefined) {
+      try { this.hdPass = hdSupported() ? new Hd() : null; } catch (err) { console.warn('[luma32] modern look unavailable:', err); this.hdPass = null; }
+      if (!this.hdPass?.ok) this.hdPass = null;
+    }
+    return this.hdPass;
+  }
+
+  // The screen as the player sees it, for a problem report.
+  snapshot() {
+    if (this.hdShown) {
+      const c = canvas(480, 320);
+      c.getContext('2d').imageSmoothingEnabled = true;
+      c.getContext('2d').drawImage(this.hdPass.canvas, 0, 0, 480, 320);
+      return c.toDataURL('image/png');
+    }
+    return this.buffer.toDataURL('image/png');
+  }
+
   tellPage(top) {
     const pad = !!top && !top.pointer;
     const menu = !!top?.menuButton;
@@ -156,11 +179,19 @@ export class Engine {
     // draw from the topmost opaque scene upwards
     let from = 0;
     for (let i = this.scenes.length - 1; i >= 0; i--) if (this.scenes[i].opaque !== false) { from = i; break; }
-    ctx.fillStyle = '#000';
-    ctx.fillRect(0, 0, SCREEN_W, SCREEN_H);
-    // world-like scenes, then the fade, then UI that must stay readable over black
     const list = this.scenes.slice(from);
-    for (const s of list) if (!s.aboveFade) s.draw(ctx, this);
+    // the modern look takes the world at the bottom of what is shown into a picture of its
+    // own, and everything drawn after it here goes over it, flat: the buffer is see-through
+    const hd = this.fx.glitch > 0 ? null : this.hd;
+    const base = hd && list[0]?.drawHd && !list[0].aboveFade ? list[0] : null;
+    this.hdFrame = base ? base.drawHd(this) : null;
+    if (this.hdFrame) ctx.clearRect(0, 0, SCREEN_W, SCREEN_H);
+    else { ctx.fillStyle = '#000'; ctx.fillRect(0, 0, SCREEN_W, SCREEN_H); }
+    // world-like scenes, then the fade, then UI that must stay readable over black
+    for (const s of list) if (!s.aboveFade) {
+      if (s === base && this.hdFrame) { s.drawHdOverlay?.(ctx, this); s.drawScreen(ctx, this); }
+      else s.draw(ctx, this);
+    }
     for (const p of this.post) p(ctx, this);
     this.drawBars();
     this.drawFade();
@@ -240,8 +271,16 @@ export class Engine {
       ox = Math.round((Math.random() - 0.5) * 2 * p) * (W / SCREEN_W);
       oy = Math.round((Math.random() - 0.5) * 2 * p) * (H / SCREEN_H);
     }
-    out.imageSmoothingEnabled = false;
     if (ox || oy) { out.fillStyle = '#000'; out.fillRect(0, 0, W, H); }
+    this.hdShown = !!this.hdFrame;
+    if (this.hdFrame) {
+      this.hdPass.size(W, H);
+      this.hdPass.render(this.hdFrame, this.buffer, this.frame);
+      out.imageSmoothingEnabled = true;
+      out.drawImage(this.hdPass.canvas, ox, oy, W, H);
+      return;
+    }
+    out.imageSmoothingEnabled = false;
     out.drawImage(this.buffer, 0, 0, SCREEN_W, SCREEN_H, ox, oy, W, H);
   }
 }

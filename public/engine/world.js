@@ -11,6 +11,8 @@ import { Stage } from './stage.js';
 import { changed } from './host.js';
 import { reportProblem } from './report.js';
 import { resolveWeather, drawWeather, drawDark, gatherLights } from './weather.js';
+import { hdSupported, hdOn, setHd } from './hd.js';
+import { regionOf } from './diorama.js';
 import { goalOf, drawGuide, audit, guideOn, setGuide, pressFrom, rectCells } from './guide.js';
 import { placeParty, tickParty, tickLife, hushLife, bark, drawBarks, bumped, routeStop } from './company.js';
 import { Effects, EASE } from './vfx.js';
@@ -1152,8 +1154,10 @@ export class World {
   }
 
   pointedCell(pt) {
-    const wx = pt.x + Math.round(this.cam.x);
-    const wy = pt.y + Math.round(this.cam.y);
+    // in the modern look the screen is a camera on a diorama: the ground under the pointer
+    const g = this.engine.hdShown && this.engine.hdPass.pick(pt.x, pt.y);
+    const wx = g ? Math.floor(g.x) : pt.x + Math.round(this.cam.x);
+    const wy = g ? Math.floor(g.y) : pt.y + Math.round(this.cam.y);
     const x = Math.floor(wx / TILE);
     // with heights, the cell whose raised top is under the pointer: the nearest row wins,
     // as it is drawn over the ones behind it
@@ -1965,22 +1969,152 @@ export class World {
   // shrunk onto the screen; the HUD is drawn after, at the screen's own size.
   draw(ctx, e) {
     if (!this.map) return;
-    const z = this.zoomOut;
-    if (z < 0.995) {
-      const bw = this.viewW;
-      const bh = this.viewH;
-      if (!this.zbuf || this.zbuf.width !== bw || this.zbuf.height !== bh) {
-        this.zbuf = canvas(bw, bh);
-        this.zbuf.getContext('2d').imageSmoothingEnabled = false;
-      }
-      setView(bw, bh);
-      try { this.drawWorld(this.zbuf.getContext('2d'), e); } finally { setView(); }
+    const bw = this.viewW;
+    const bh = this.viewH;
+    if (bw !== BASE_W || bh !== BASE_H) {
       const was = ctx.imageSmoothingEnabled;
       ctx.imageSmoothingEnabled = true;
-      ctx.drawImage(this.zbuf, 0, 0, BASE_W / z, BASE_H / z, 0, 0, BASE_W, BASE_H);
+      ctx.drawImage(this.drawView(e), 0, 0, bw, bh, 0, 0, BASE_W, BASE_H);
       ctx.imageSmoothingEnabled = was;
     } else this.drawWorld(ctx, e);
     this.drawScreen(ctx, e);
+  }
+
+  // The world alone, the camera's whole view, in a picture of its own.
+  drawView(e) {
+    const bw = this.viewW;
+    const bh = this.viewH;
+    if (!this.zbuf || this.zbuf.width !== bw || this.zbuf.height !== bh) {
+      this.zbuf = canvas(bw, bh);
+      this.zbuf.getContext('2d').imageSmoothingEnabled = false;
+    }
+    setView(bw, bh);
+    try { this.drawWorld(this.zbuf.getContext('2d'), e); } finally { setView(); }
+    return this.zbuf;
+  }
+
+  // For the modern look (engine.js, hd.js, diorama.js): the world is built in 3D from
+  // the map itself; the engine draws the HUD apart.
+  drawHd(e) {
+    if (!this.map) return null;
+    // a region bigger than the GPU takes in one picture is shown classic
+    const R = regionOf(this);
+    if (Math.max(R.w, R.h) * TILE > (this.engine.hdPass?.maxTex ?? 4096)) return null;
+    return { world: this, frame: e.frame, region: R };
+  }
+
+  // What lies on the ground, drawn as the classic look does into a picture of the view
+  // (map pixels from cx, cy) that the diorama lays over its floor: a map's underlay, the
+  // reflections in water, footstep dust, effects at ground level, a city's roads, and
+  // the entities seen from above (vehicles, shots).
+  drawHdDecal(ctx, e, cx, cy, w, h) {
+    setView(w, h);
+    try {
+      this.map.underlay?.(ctx, this.api, { x: cx, y: cy }, e);
+      this.drawReflections(ctx, cx, cy);
+      if (this.puffs.length) this.drawPuffs(ctx, cx, cy);
+      this.vfx.draw(ctx, cx, cy, 'back');
+      this.city.under(ctx, cx, cy, e);
+      for (const en of this.entities) {
+        if (en.removed || en.hidden || !en.draw || en.doll || (en.spec && en.image)) continue;
+        const b = this.box(en);
+        if (b.x - cx > w + 48 || b.y - cy > h + 64 || b.x + b.w - cx < -48 || b.y + b.h - cy < -16) continue;
+        en.draw(ctx, Math.round(b.x - cx), Math.round(b.y - cy), e, en);
+      }
+    } finally { setView(); }
+  }
+
+  // The entities that are people (a city's passers-by): each drawn into a picture of its
+  // own, to stand up as a card where its feet are. Vehicles (seen from above) lie down
+  // with a body, as a person stands with one.
+  hdEntityCards(e) {
+    const out = [];
+    for (const en of this.entities) {
+      if (en.removed || en.hidden || !en.spec || !en.image) continue;
+      const img = en.image(e.frame);
+      if (!img?.getContext) continue;
+      out.push({ img, x: Math.round(en.cx - img.width / 2), z: Math.round(en.cy - img.height / 2), y: Math.round(en.altitude || 0), w: img.width, h: img.height, body: true, lie: true });
+    }
+    const pics = (this.hdPics ||= new WeakMap());
+    for (const en of this.entities) {
+      if (en.removed || en.hidden || !en.draw || !en.doll) continue;
+      const b = this.box(en);
+      let c = pics.get(en);
+      if (!c) { c = canvas(64, 64); pics.set(en, c); }
+      const g = c.getContext('2d');
+      g.clearRect(0, 0, 64, 64);
+      en.draw(g, 32 - Math.round(b.w / 2), 56 - b.h, e, en);
+      out.push({ img: c, x: Math.round(b.x + b.w / 2) - 32, z: b.y + b.h - 1, y: -8, w: 64, h: 64 });
+    }
+    return out;
+  }
+
+  // Far layers behind the diorama (sky, mountains, sea): where no ground is, as in classic.
+  drawHdBackdrop(ctx, e) {
+    const cx = Math.round(this.cam.x);
+    const cy = Math.round(this.cam.y);
+    ctx.fillStyle = this.map.void || '#000';
+    ctx.fillRect(0, 0, BASE_W, BASE_H);
+    for (const l of this.map.parallax || []) l.draw(ctx, Math.round(-cx * (l.speed ?? 0.3)), Math.round(-cy * (l.speedY ?? l.speed ?? 0.3)), e.frame, this.api);
+  }
+
+  // What the modern look still draws flat over the diorama: what is in the air, and what
+  // points at people and cells (emotes, barks, the A hint, the guide, the pointer). Each
+  // is drawn with a camera offset that puts its anchor where the diorama shows it: the
+  // feet of whoever it is about, or the player's for what is about cells near them.
+  drawHdOverlay(ctx, e) {
+    const pass = this.engine.hdPass;
+    pass.aim(this);
+    const weather = resolveWeather(this.map.weather, this.api, e);
+    const at = { x: Math.round(this.cam.x), y: Math.round(this.cam.y) };
+    drawWeather(ctx, weather, at, e.frame);
+    drawWeather(ctx, weather, at, e.frame, { glowOnly: true });
+    const offset = (px, py, ez = 0) => {
+      const s = pass.project(px + 8, ez, py + 11);
+      return [Math.round(px + 8 - s.x), Math.round(py + 15 - s.y)];
+    };
+    const p = this.player;
+    const [cx, cy] = p ? offset(p.px, p.py, this.raised ? p.ez : 0) : [at.x, at.y];
+    // the map's own drawing and the effects over people, anchored at the player
+    const cam = { x: cx, y: cy };
+    if (typeof this.map.above === 'function') this.map.above(ctx, this.api, cam, e);
+    this.vfx.draw(ctx, cx, cy, 'front');
+    this.vfx.draw(ctx, cx, cy, 'light');
+    this.map.overlay?.(ctx, this.api, cam, e);
+    for (const a of this.actors) if (a.emote && a.visible) this.drawEmote(ctx, a, ...offset(a.px, a.py, this.raised ? a.ez : 0));
+    drawBarks(this, ctx, cx, cy);
+    if (this.vfx.zoom <= 1.001) {
+      if (!this.driving) this.drawHint(ctx, e, cx, cy);
+      drawGuide(this, ctx, e, cx, cy);
+    }
+    this.city.marker(ctx, cx, cy, e);
+  }
+
+  // The light of the diorama: the sun, the shade, the hour's grade and dark, and every
+  // light the map declares, in map pixels.
+  hdLight(frame) {
+    const e = this.engine;
+    const grade = this.map.grade === undefined ? clockGrade(this) : typeof this.map.grade === 'function' ? this.map.grade(this.api, e) : this.map.grade;
+    const dark = this.map.dark === undefined ? clockDark(this) : typeof this.map.dark === 'function' ? this.map.dark(this.api, e) : this.map.dark;
+    const cx = Math.round(this.cam.x) - 160;
+    const cy = Math.round(this.cam.y) - 160;
+    setView(this.viewW + 320, this.viewH + 320);
+    let lights;
+    try { lights = gatherLights(this, cx, cy); } finally { setView(); }
+    const rgb = (c) => {
+      const m = /^#([0-9a-f]{6})$/i.exec(c || '');
+      if (!m) return [1, 1, 1];
+      const n = parseInt(m[1], 16);
+      return [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255];
+    };
+    const dc = rgb(dark?.color || '#0a1030');
+    return {
+      sun: [0.5, 0.47, 0.4],
+      ambient: [0.64, 0.65, 0.7],
+      grade: grade ? rgb(grade) : [1, 1, 1],
+      dark: [dc[0], dc[1], dc[2], dark?.alpha > 0 ? dark.alpha : 0],
+      lights: lights.map((l) => ({ ...l, x: l.x + cx, y: l.y + cy })),
+    };
   }
 
   drawWorld(ctx, e) {
@@ -2110,7 +2244,8 @@ export class World {
     }
     // the map's own drawing over the people and the props, under the light and the weather
     // (art laid over raised roofs: a city's landmarks)
-    this.map.above?.(ctx, this.api, { x: cx, y: cy }, e);
+    // (`above` may also name the map over the water, for diving: then it draws nothing)
+    if (typeof this.map.above === 'function') this.map.above(ctx, this.api, { x: cx, y: cy }, e);
     this.vfx.draw(ctx, cx, cy, 'front');
     // grade may depend on the story or the clock: a colour, or a function returning one
     // the map's own light, or the hour's (engine/clock.js)
@@ -2382,11 +2517,11 @@ export class StoryApi {
     const c = w.cam;
     const sx = a.px - c.x;
     const sy = a.py - c.y;
-    if (sx < 0 || sx > SCREEN_W - TILE || sy < 8 || sy > SCREEN_H - 50 - TILE) {
+    if (sx < 0 || sx > w.viewW - TILE || sy < 8 || sy > w.viewH - 50 - TILE) {
       // at the edge of the map the camera may already be as close as it gets
       const bd = w.bounds();
-      const tx = w.clampCam(a.x * TILE + 8 - SCREEN_W / 2, bd.x1 - bd.x0, SCREEN_W, bd.x0);
-      const ty = w.clampCam(a.y * TILE + 8 - SCREEN_H / 2, bd.y1 - bd.y0, SCREEN_H, bd.y0);
+      const tx = w.clampCam(a.x * TILE + 8 - w.viewW / 2, bd.x1 - bd.x0, w.viewW, bd.x0);
+      const ty = w.clampCam(a.y * TILE + 8 - w.viewH / 2, bd.y1 - bd.y0, w.viewH, bd.y0);
       if (Math.abs(tx - c.x) < 1 && Math.abs(ty - c.y) < 1) return;
       w.directed = true;
       await this.pan(a.x, a.y, 450);
@@ -2855,8 +2990,8 @@ export class StoryApi {
     const fx = w.cam.x;
     const fy = w.cam.y;
     const b = w.bounds();
-    const tx = w.clampCam(x * TILE + 8 - SCREEN_W / 2, b.x1 - b.x0, SCREEN_W, b.x0);
-    const ty = w.clampCam(y * TILE + 8 - SCREEN_H / 2, b.y1 - b.y0, SCREEN_H, b.y0);
+    const tx = w.clampCam(x * TILE + 8 - w.viewW / 2, b.x1 - b.x0, w.viewW, b.x0);
+    const ty = w.clampCam(y * TILE + 8 - w.viewH / 2, b.y1 - b.y0, w.viewH, b.y0);
     const n = Math.max(1, Math.round(ms / 16.67));
     for (let i = 1; i <= n; i++) {
       const k = i / n;
@@ -2936,7 +3071,7 @@ export class StoryApi {
     sfx('cursor');
     // the screen as the player saw it, before the menu covers it: a report takes it along
     let shot = null;
-    try { shot = this.engine.buffer.toDataURL('image/png'); } catch { /* a tainted canvas: no picture */ }
+    try { shot = this.engine.snapshot(); } catch { /* a tainted canvas: no picture */ }
     const obj = this.save.objective ? this.text(this.save.objective) : '';
     const id = await this.engine.push(new Menu(items, { objective: obj, title: obj ? t('console.menu.objective') : '' }));
     if (id === 'map') {
@@ -2969,6 +3104,7 @@ export class StoryApi {
   optionsMenu() {
     const items = [
       ...(isWeb() ? [] : [{ id: 'view', label: t('console.menu.view'), value: () => t(isFull() ? 'console.menu.view_full' : 'console.menu.view_shell'), toggle: () => setFull(!isFull()) }]),
+      ...(hdSupported() ? [{ id: 'graphics', label: t('console.menu.graphics'), value: () => t(hdOn() ? 'console.menu.graphics_modern' : 'console.menu.graphics_classic'), toggle: () => setHd(!hdOn()) }] : []),
       { id: 'sound', label: t('console.menu.sound'), value: () => t(isMuted() ? 'console.menu.off' : 'console.menu.on'), toggle: () => setMuted(!isMuted()) },
       // real instruments or the console's own, in a game that has an orchestra
       ...(hasOrchestra() ? [{ id: 'real', label: t('console.menu.instruments'), value: () => t(realOn() ? 'console.menu.instruments_real' : 'console.menu.instruments_chip'), toggle: () => setReal(!realOn()) }] : []),
