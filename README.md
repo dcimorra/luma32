@@ -91,6 +91,19 @@ repository's issues.
 `shot.mjs` takes screenshots, `drive.mjs` plays with keys and keeps state between moves,
 `audit.mjs` checks a cartridge's data at every dev jump. The skill's `testing.md` says how.
 
+## Share your game
+
+Made a game for LUMA 32? Share it: we are building a library of games from this
+repository, so anyone can find them and add them with one line. Open an
+[issue](https://github.com/dcimorra/luma32/issues/new) or a pull request with:
+
+- the game's repository (public, with its `game.js` and `luma.json`),
+- a line about what it is, and a screenshot if you have one.
+
+Every game shared appears here, with the command that adds it
+(`node tools/add-game.mjs owner/repo`). The game stays yours, in your repository: the
+library only points to it.
+
 ## Layout
 
 - `public/index.html`, `engine/shell.css`, `engine/shell.js`: the console. On a phone the
