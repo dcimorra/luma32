@@ -104,6 +104,13 @@ Every game shared appears here, with the command that adds it
 (`node tools/add-game.mjs owner/repo`). The game stays yours, in your repository: the
 library only points to it.
 
+### The library
+
+| Game | Author | What it is | Add it |
+| --- | --- | --- | --- |
+
+*No games yet. Yours could be the first.*
+
 ## Layout
 
 - `public/index.html`, `engine/shell.css`, `engine/shell.js`: the console. On a phone the
