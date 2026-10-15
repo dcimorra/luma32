@@ -72,8 +72,10 @@ the attention is, silences are timed.
   when control returns; a special place change with an `iris` or a `wipe`
   (`transition` on the warp, or `game.transition` for the whole game's style).
 - **Feelings without words**: emotion bubbles over a head — `api.emote(id, 'heart')`,
-  `'anger'`, `'sweat'`, `'note'`, `'idea'`, `'sad'`, `'shock'`, `'dots'` (an awkward
-  silence), `'zzz'`, or `'!'` / `'?'`. A reaction in a bubble often says more than a line.
+  `'love'`, `'anger'`, `'sweat'`, `'note'`, `'idea'`, `'sad'`, `'cry'`, `'shock'`, `'fear'`,
+  `'blush'` (embarrassment), `'laugh'`, `'doubt'`, `'sparkle'` (admiration, delight),
+  `'sigh'`, `'disgust'`, `'scribble'` (frustration), `'dots'` (an awkward silence),
+  `'zzz'`, or `'!'` / `'?'`. Pick the one that names the feeling, not the nearest. A reaction in a bubble often says more than a line.
 - **Jumps are staged, not played**: `a.jump()` on the spot (joy, a scare), `a.jump(dir,
   { n })` over a fence, a gap, a stream — crouch, arc, landing dust. No button makes the
   player jump: a jump is something a scene shows, never a way through the map.

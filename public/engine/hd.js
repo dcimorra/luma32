@@ -13,7 +13,7 @@ const MAX_LIGHTS = 16;
 
 // The camera: how far it leans from straight down, its field of view, and how much of
 // the map it takes in across, at the player, in map pixels (the classic screen's width).
-const PITCH = (40 * Math.PI) / 180;   // from the horizon
+const PITCH_DEG = 40;                  // from the horizon
 const FOV_Y = (24 * Math.PI) / 180;
 const ACROSS = 236;
 // Light travels this way: down, towards the east and the north, so shadows fall behind
@@ -39,9 +39,9 @@ let on = (() => {
   try { return localStorage.getItem(KEY) === 'modern'; } catch { return false; }
 })();
 export const hdOn = () => on;
-export function setHd(v) {
+export function setHd(v, { keep = true } = {}) {
   on = !!v;
-  try { localStorage.setItem(KEY, on ? 'modern' : 'classic'); } catch { /* a comfort */ }
+  if (keep) try { localStorage.setItem(KEY, on ? 'modern' : 'classic'); } catch { /* a comfort */ }
 }
 
 // ---------- shaders ----------
@@ -161,13 +161,14 @@ vec4 sharp(sampler2D t, vec2 uv, vec2 size, vec2 px) {
 void main() {
   vec2 uv = gl_FragCoord.xy / uOut;
   vec3 col = textureLod(uColor, uv, 0.0).rgb;
-  // nothing drawn here: the far layers, as the classic screen shows them
-  if (uHasBack && texture(uDepth, uv).r >= 0.99999) col = sharp(uBack, vec2(uv.x, 1.0 - uv.y), vec2(240.0, 160.0), vec2(240.0, 160.0) / uOut).rgb;
+  bool empty = uHasBack && texture(uDepth, uv).r >= 0.99999;
   // depth of field: what is nearer or further than the player softens
   float d = dist(uv);
   float off = (d - uFocus) / uFocus;
   float blur = off > 0.0 ? smoothstep(0.06, 0.4, off) : smoothstep(0.1, 0.3, -off) * 0.6;
   if (blur > 0.01) col = mix(col, soft(uv, 1.0 + blur * 2.2), smoothstep(0.0, 0.5, blur));
+  // nothing drawn here: the far layers (or the map's sky), soft as distance is
+  if (empty) col = textureLod(uBack, vec2(uv.x, 1.0 - uv.y), 0.0).rgb;
   // bloom
   vec3 b = 0.5 * (soft(uv, 3.5) + soft(uv, 5.0));
   col += max(b - 0.78, 0.0) * 0.55;
@@ -252,18 +253,35 @@ export class Hd {
   }
 
   // The camera on the world's own camera: at the middle of what it would show.
+  // A script may turn it (world.cam3d, api.view3d: yaw, pitch, zoom), and a zoom of the
+  // visual effects (api.zoom) is a dolly towards its point.
   aim(world, aspect = this.cam?.aspect ?? 1.5) {
-    return this.camera(world.cam.x + world.viewW / 2, world.cam.y + world.viewH / 2, aspect);
+    let tx = world.cam.x + world.viewW / 2;
+    let tz = world.cam.y + world.viewH / 2;
+    const v = world.cam3d || {};
+    let zoom = v.zoom ?? 1;
+    const fx = world.vfx;
+    if (fx && fx.zoom > 1.001) {
+      const p = fx.point(fx.zoomAt);
+      const k = Math.min(1, (fx.zoom - 1) * 1.5);
+      if (p) { tx += (p.x - tx) * k; tz += (p.y + 8 - tz) * k; }
+      zoom *= fx.zoom;
+    }
+    return this.camera(tx, tz, aspect, { yaw: v.yaw ?? 0, pitch: v.pitch ?? PITCH_DEG, zoom });
   }
 
-  // The camera looking at a point of the map (map pixels, the ground under the player).
-  camera(tx, tz, aspect) {
+  // The camera looking at a point of the map (map pixels, the ground under the player),
+  // from `yaw` degrees round it (0: from the south), `pitch` degrees over the horizon.
+  camera(tx, tz, aspect, { yaw = 0, pitch = PITCH_DEG, zoom = 1 } = {}) {
     const fovX = 2 * Math.atan(Math.tan(FOV_Y / 2) * aspect);
-    const dist = ACROSS / 2 / Math.tan(fovX / 2);
+    const dist = ACROSS / 2 / Math.tan(fovX / 2) / Math.max(0.2, zoom);
     const target = [tx, 8, tz];
-    const eye = [tx, 8 + dist * Math.sin(PITCH), tz + dist * Math.cos(PITCH)];
-    const near = dist * 0.3;
-    const far = dist * 4;
+    const pr = (pitch * Math.PI) / 180;
+    const yr = (yaw * Math.PI) / 180;
+    const h = dist * Math.cos(pr);
+    const eye = [tx + h * Math.sin(yr), 8 + dist * Math.sin(pr), tz + h * Math.cos(yr)];
+    const near = Math.max(4, dist * 0.2);
+    const far = dist * 8;
     const view = lookAt(eye, target, [0, 1, 0]);
     const proj = perspective(FOV_Y, aspect, near, far);
     this.cam = { eye, target, dist, near, far, aspect, vp: mul(proj, view) };
@@ -343,7 +361,7 @@ export class Hd {
     ]));
 
     // the far layers, where there is no ground
-    this.hasBack = !!world.map.parallax?.length;
+    this.hasBack = !!world.map.parallax?.length || !!world.map.sky;
     if (this.hasBack) {
       const bctx = this.back.getContext('2d');
       world.drawHdBackdrop(bctx, e);

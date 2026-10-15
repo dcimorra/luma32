@@ -35,7 +35,9 @@ export function stairsOf(id, d) {
 
 const isWall = (d) => !!d && !!d.solid && !d.low && !d.medium && !d.reflect && !d.flat && !d.top;
 
-// The cells the diorama covers, in tiles: the map and every neighbour across its edges.
+// The cells the diorama covers, in tiles: the map and every neighbour across its edges,
+// and a map's `skirt` (cells) all round: past its edges the ground goes on, each cell
+// its nearest edge cell's tile, so a low camera sees land and sea, not the cut.
 export function regionOf(world) {
   const r = { x0: 0, y0: 0, x1: world.w, y1: world.h };
   for (const n of world.neighbours || []) {
@@ -44,10 +46,22 @@ export function regionOf(world) {
     r.x1 = Math.max(r.x1, n.ox + n.w);
     r.y1 = Math.max(r.y1, n.oy + n.h);
   }
+  const k = Math.max(0, Math.min(24, world.map.skirt | 0));
+  r.skirt = k;
+  r.x0 -= k; r.y0 -= k; r.x1 += k; r.y1 += k;
   r.w = r.x1 - r.x0;
   r.h = r.y1 - r.y0;
   return r;
 }
+
+// The cell whose tile a cell of the region shows: itself, or, in the skirt, the nearest
+// cell of the map.
+function source(world, R, x, y) {
+  if (!R.skirt || world.tileAt(x, y)) return [x, y];
+  if (world.neighbourAt(x, y)) return [x, y];
+  return [Math.max(0, Math.min(world.w - 1, x)), Math.max(0, Math.min(world.h - 1, y))];
+}
+export const tileOf = (world, R, x, y) => { const [sx, sy] = source(world, R, x, y); return world.tileAt(sx, sy); };
 
 // The ground's fingerprint: rebuild when a tile changes (a door opens) or the map does.
 export function groundKey(world, R) {
@@ -55,7 +69,7 @@ export function groundKey(world, R) {
   const ids = (world.dioramaIds ||= new Map());
   for (let y = R.y0; y < R.y1; y++) {
     for (let x = R.x0; x < R.x1; x++) {
-      const t = world.tileAt(x, y);
+      const t = tileOf(world, R, x, y);
       let k = ids.get(t);
       if (k === undefined) { k = ids.size + 1; ids.set(t, k); }
       h = (Math.imul(h, 31) + k) | 0;
@@ -71,10 +85,11 @@ export function picture(world, R, frame, make) {
   const ctx = c.getContext('2d');
   for (let y = R.y0; y < R.y1; y++) {
     for (let x = R.x0; x < R.x1; x++) {
-      const id = world.tileAt(x, y);
+      const [sx, sy] = source(world, R, x, y);
+      const id = world.tileAt(sx, sy);
       if (!id) continue;
       const d = world.game.tiles[id];
-      ctx.drawImage(world.tiles.image(id, frame, d.auto ? world.edgeMask(x, y, d.auto === true ? id : d.auto) : 0), (x - R.x0) * TILE, (y - R.y0) * TILE);
+      ctx.drawImage(world.tiles.image(id, frame, d.auto ? world.edgeMask(sx, sy, d.auto === true ? id : d.auto) : 0), (x - R.x0) * TILE, (y - R.y0) * TILE);
     }
   }
   for (const [list, ox, oy] of [[world.props, 0, 0], ...(world.neighbours || []).map((n) => [n.props, n.ox, n.oy])]) {
@@ -96,7 +111,7 @@ export function buildStatic(world, R) {
   const OY = R.y0 * TILE;
   const out = [];
   const inR = (x, y) => x >= R.x0 && y >= R.y0 && x < R.x1 && y < R.y1;
-  const id = (x, y) => (inR(x, y) ? world.tileAt(x, y) : null);
+  const id = (x, y) => (inR(x, y) ? tileOf(world, R, x, y) : null);
   const def = (x, y) => { const i = id(x, y); return i ? world.game.tiles[i] : null; };
   const wall = (x, y) => isWall(def(x, y));
   const elev = (x, y) => (world.raised ? world.elev(x, y) : 0);

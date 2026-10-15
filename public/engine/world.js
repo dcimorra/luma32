@@ -485,6 +485,7 @@ export class World {
     this.city = new City(this);     // vehicles, traffic, the pavement, the minimap (city.js)
     this.driving = null;            // the vehicle the player is in (vehicle.js)
     this.lead = { x: 0, y: 0 };     // how far ahead of the player the camera looks
+    this.cam3d = null;              // the modern look's camera turned by a script (api.view3d)
     this.zoomOut = 1;               // under 1: the camera pulled back (a vehicle at speed, api.zoom(0.8))
     this.zoomTo = 1;                // what a script asked for
     this.dev = typeof location !== 'undefined' && new URLSearchParams(location.search).has('dev');
@@ -2050,11 +2051,18 @@ export class World {
     return out;
   }
 
-  // Far layers behind the diorama (sky, mountains, sea): where no ground is, as in classic.
+  // Far layers behind the diorama (sky, mountains, sea): where no ground is, as in classic;
+  // a map's `sky` (colours from the top down) is the modern look's own, seen past the
+  // edges when the camera is low.
   drawHdBackdrop(ctx, e) {
     const cx = Math.round(this.cam.x);
     const cy = Math.round(this.cam.y);
-    ctx.fillStyle = this.map.void || '#000';
+    const sky = typeof this.map.sky === 'function' ? this.map.sky(this.api, e) : this.map.sky;
+    if (sky?.length) {
+      const g = ctx.createLinearGradient(0, 0, 0, BASE_H);
+      sky.forEach((c, i) => g.addColorStop(sky.length > 1 ? i / (sky.length - 1) : 0, c));
+      ctx.fillStyle = g;
+    } else ctx.fillStyle = this.map.void || '#000';
     ctx.fillRect(0, 0, BASE_W, BASE_H);
     for (const l of this.map.parallax || []) l.draw(ctx, Math.round(-cx * (l.speed ?? 0.3)), Math.round(-cy * (l.speedY ?? l.speed ?? 0.3)), e.frame, this.api);
   }
@@ -2411,7 +2419,7 @@ export class World {
 }
 
 // Emotion bubbles drawn as pixels (api.emote(id, 'heart')); any other glyph is text.
-const EMOTE_INK = { r: '#d83040', b: '#4080e0', w: '#ffffff', k: '#202020', y: '#f0c030', g: '#909090' };
+const EMOTE_INK = { r: '#d83040', b: '#4080e0', w: '#ffffff', k: '#202020', y: '#f0c030', g: '#909090', p: '#f07090', v: '#60a040' };
 const EMOTES = {
   heart: ['.rr.rr.', 'rrrrrrr', 'rrrrrrr', '.rrrrr.', '..rrr..', '...r...'],
   anger: ['rr...rr', 'r.....r', '.......', 'r.....r', 'rr...rr'],
@@ -2420,6 +2428,26 @@ const EMOTES = {
   idea: ['..yyy..', '.yywyy.', '.yyyyy.', '..yyy..', '..ggg..', '..ggg..'],
   sad: ['b.....b', '.b...b.', '.......', '..bbb..', '.b...b.'],
   shock: ['r..r..r', '.r.r.r.', '.......', '.r.r.r.', 'r..r..r'],
+  // embarrassment: cheeks hatched pink
+  blush: ['..p.p.p', '.p.p.p.', 'p.p.p..', '.......', 'ppp.ppp', '.p...p.'],
+  // laughter: eyes shut in arcs, the mouth wide open
+  laugh: ['.k...k.', 'k.k.k.k', '.......', 'kkkkkkk', '.krrrk.', '..kkk..'],
+  // fear: the blue lines of dread, teeth chattering
+  fear: ['b.b.b.b', 'b.b.b.b', 'b.b.b.b', '.......', '.k.k.k.', 'k.k.k.k'],
+  // doubt: a question drawn, not typed
+  doubt: ['.kkk...', 'k...k..', '....k..', '...k...', '..k....', '.......', '..k....'],
+  // love: a small heart and a bigger one
+  love: ['r.r....', 'rrr....', '.r.....', '..rr.rr', '..rrrrr', '...rrr.', '....r..'],
+  // crying: tears running down, the mouth turned down
+  cry: ['b.....b', 'b.....b', 'bb...bb', '.......', '..kkk..', '.k...k.'],
+  // admiration, delight: a star and a spark
+  sparkle: ['...y...', '..yyy..', 'yyywyyy', '..yyy..', '...y...', '.....y.', '....yyy'],
+  // a sigh: a puff of breath
+  sigh: ['.......', '..ggg..', '.ggggg.', 'gggwggg', '.ggggg.', '..g.g..'],
+  // disgust: green waves, the mouth a line
+  disgust: ['v.v.v.v', '.v.v.v.', '.......', 'v.v.v.v', '.v.v.v.', '.......', 'kkkkkkk'],
+  // frustration: a tangle
+  scribble: ['.kkkk..', 'k...kk.', '.kk.k.k', 'k..kk.k', '.kkk..k', '....kk.'],
 };
 
 // ---------- the story API ----------
@@ -2985,6 +3013,23 @@ export class StoryApi {
   async take(w) {
     if (w.run) { await w.run(this); return; }
     await this.warp(w.to, w.at[0], w.at[1], w.face || this.player.dir, { transition: w.transition });
+  }
+
+  // The modern look's camera (engine/hd.js): turned round what it looks at (`yaw`, degrees,
+  // 0 from the south, positive from the east), raised or lowered (`pitch`, degrees over
+  // the horizon, 40 by default) and brought closer (`zoom`), easing over `ms`. A scene
+  // shot for the diorama: in the classic look it only waits. view3d() puts it back.
+  async view3d({ yaw = 0, pitch = 40, zoom = 1 } = {}, ms = 800) {
+    const w = this.world;
+    const from = { yaw: 0, pitch: 40, zoom: 1, ...(w.cam3d || {}) };
+    const n = Math.max(1, Math.round(ms / 16.67));
+    for (let i = 1; i <= n; i++) {
+      const k = i / n;
+      const e = k * k * (3 - 2 * k);
+      w.cam3d = { yaw: from.yaw + (yaw - from.yaw) * e, pitch: from.pitch + (pitch - from.pitch) * e, zoom: from.zoom + (zoom - from.zoom) * e };
+      await this.frames(1);
+    }
+    if (!yaw && pitch === 40 && zoom === 1) w.cam3d = null;
   }
 
   // Camera: pan to a tile (centre) or back to the player.

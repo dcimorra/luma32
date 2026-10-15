@@ -386,7 +386,15 @@ Vehicles lie down with a body (their top-down picture raised into a rounded bloc
 city's passers-by stand as cards; shots and other entities lie on the floor. A map's
 `above` and `overlay`, effects over people and in the light, emotes, barks, the hint
 and the guide are drawn flat over the diorama, anchored at the player. `parallax` shows
-where no ground is. A tile's `top` (a tree's crown, tall grass) stands as a card, and a
+where no ground is, and a map's `sky` (colours from the top down, or a function of the
+api) is the modern look's own backdrop past the map's edges. A map's `skirt` (cells, up to
+24) carries its ground on past its edges in the diorama, each cell its nearest edge
+cell's tile: a coast, a field or a town square seen from a low camera goes on instead of
+ending in a cut. Only to look at; it is never walked. A script may shoot the
+diorama as a film: `await api.view3d({ yaw, pitch, zoom }, ms)` turns the camera round
+what it looks at (degrees; 0 from the south), raises or lowers it (degrees over the
+horizon, 40 by default) and brings it closer, easing; `api.view3d()` puts it back, and an
+`api.zoom` is a dolly towards its point. In the classic look these only wait. A tile's `top` (a tree's crown, tall grass) stands as a card, and a
 solid tile with a `top` is never a wall. A scene that covers the world (a minigame,
 Mode 7), a frame with a glitch, and a map bigger than the GPU's largest picture are
 shown classic.
@@ -638,7 +646,7 @@ api.addProp({ t: 'wardrobe_open', x, y, id: 'wardrobe' }); api.removeProp('wardr
 const won = await api.control(startFight(api))   // the player has the world until it settles
 await api.together(a.walk('2r'), b.walk('2l'))
 await api.emote('ana', '!'); await api.pan(x, y); await api.follow()
-await api.emote('ana', 'heart')            // heart anger sweat note idea sad shock dots zzz, or any glyph
+await api.emote('ana', 'heart')            // heart love anger sweat note idea sad cry shock fear blush laugh doubt sparkle sigh disgust scribble dots zzz, or any glyph
 api.rumble(80)                             // the phone vibrates (api.shake does too)
 await api.fadeOut(); await api.fadeIn(); await api.flash('#fff'); await api.shake(); await api.glitch()
 await api.appear({ id, doll, x, y }, { fx: 'shadow' }); await api.vanish('rhys', { fx: 'poof' })   // see "Visual effects"
