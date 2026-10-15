@@ -17,7 +17,9 @@
     "plaza": "La plaza",
     "shore": "La costa",
     "reef": "El arrecife",
-    "hill": "La colina"
+    "hill": "La colina",
+    "city": "La ciudad",
+    "zaragoza": "Zaragoza"
   },
   "obj": {
     "town": "Ve al pozo de la plaza: la puerta del este del pueblo lleva allí.",
@@ -103,5 +105,15 @@
     "bo": "Desde la torre se ve todo el valle.",
     "sage": "Por el borde se baja de un salto; para subir, la escalera.",
     "walker": "Detrás de la torre no me ves, ¿a que no?"
+  },
+  "mission": {
+    "courier": "Mensajero",
+    "courier_car": "Coge tu coche: el deportivo rojo del aparcamiento.",
+    "courier_drop": "Lleva el paquete al cruce marcado antes de que acabe el tiempo.",
+    "courier_wreck": "El coche ha quedado destrozado."
+  },
+  "experiments": {
+    "title": "Lab",
+    "tagline": "Experimentos del motor, solo para administradores"
   }
 }

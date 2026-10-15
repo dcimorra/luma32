@@ -97,6 +97,17 @@ export const PRESETS = {
   ring: (o) => [particle({ x: o.x, y: o.y + 6, life: 22, size: 2, grow: 1.4 * sc(o), colors: palette(o, ['#ffffff', '#c0d8ff']), shape: 'ring', flat: true })],
   // lines shooting out from a point: a hit, an impact, a realisation
   burst: (o) => radial(o, 10, 2.2, 3.2, () => ({ drag: 0.82, life: rand(9, 14), size: 3, colors: palette(o, ['#ffffff', '#fff2a8']), shape: 'streak' })),
+  // fire, a blast ring and smoke left hanging: a vehicle blowing up, a gas tank, a bomb
+  explosion: (o) => [
+    ...radial(o, 22, 1.2, 3, () => ({ drag: 0.86, life: rand(16, 28), size: 3 * sc(o), grow: 0.18, colors: palette(o, ['#ffffff', '#fff0a0', '#ffa030', '#e04010', '#602010']), shape: 'disc', add: true })),
+    ...radial(o, 12, 0.3, 0.9, () => ({ drag: 0.95, vy: rand(-0.5, -0.2), life: rand(50, 80), size: 4 * sc(o), grow: 0.1, alpha: 0.8, colors: ['#6a626a', '#4a424c', '#2e2830'], shape: 'disc' })),
+    ...radial(o, 10, 1.5, 3, () => ({ vy: rand(-3, -1.5), g: 0.16, floor: o.y + rand(6, 14), life: rand(40, 60), size: pick([1, 2]), colors: ['#3a3436', '#5a5254'], shape: 'dot' })),
+    particle({ x: o.x, y: o.y + 4, life: 18, size: 4, grow: 2 * sc(o), colors: ['#fff0c0', '#ffa030'], shape: 'ring', flat: true }),
+  ],
+  // a spray of hot sparks: metal on metal, a bullet on a wall
+  sparks: (o) => radial(o, 7, 0.8, 2.2, () => ({ drag: 0.85, life: rand(6, 12), size: 1, colors: palette(o, ['#ffffff', '#fff2a8', '#ffb040']), shape: 'dot', add: true })),
+  // the flash at a gun's mouth
+  muzzle: (o) => [particle({ x: o.x, y: o.y, life: 4, size: 3, colors: palette(o, ['#fff8c0', '#ffd060']), shape: 'disc', add: true })],
   // light swelling and fading: a blessing, a glow of power, something revealed
   glow: (o) => [particle({ x: o.x, y: o.y, life: 40, size: 4, grow: 0.5 * sc(o), alpha: 0.45, add: true, colors: palette(o, ['#fff8d0', '#ffd860']), shape: 'halo' })],
 };

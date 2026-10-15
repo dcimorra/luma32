@@ -73,8 +73,10 @@ people who live on the maps (wandering, routes, passers-by, positions remembered
 in and out as the story moves: `api.refresh`), props that come and go (`when`), light,
 weather, footsteps, places that ring and sound, autotiled edges, poses and gestures,
 emotion bubbles, visual effects (bursts, appearing and vanishing, zoom), living portraits, text effects, cinema bars, transitions, far layers,
-reflections, vibration, the journal, collections, the credits, autosave and the
-settings menu are the engine's too (README): use them before writing your own. A
+reflections, vibration, the journal, collections, the credits, autosave, the
+settings menu, vehicles (carriages, boats, cars) with companions riding along, the
+clock of day and night, the minimap and missions are the engine's too (README; vehicles
+and the clock in `world.md`, "Vehicles, the clock and the street"): use them before writing your own. A
 cartridge that writes its own version of one of these (its own followers, its own
 markers) gets none of the engine's checks and comes back with the bugs they prevent.
 

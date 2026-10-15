@@ -467,7 +467,7 @@ export function creatureRows(spec) {
     case 'bird': return bird(spec);
     case 'bee': return bee(spec);
     case 'horse': return horse(spec);
-    default: throw new Error(`unknown creature: ${spec.creature} (${CREATURES.join(', ')})`);
+    default: throw new Error(`unknown creature: ${spec.creature} (the engine draws ${CREATURES.join(', ')}; any other animal is a doll the cartridge builds itself: { frames, … } in game.dolls is used as it is)`);
   }
 }
 

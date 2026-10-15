@@ -30,8 +30,10 @@ export function resolveWeather(w, api, e) {
   if (typeof w === 'function') w = w(api, e);
   if (!w) return null;
   if (typeof w === 'string') w = { kind: w };
-  const base = KINDS[w.kind];
-  return base ? { ...base, ...w, n: Math.round(base.n * (w.density ?? 1)) } : null;
+  // the cartridge's own kinds (game.weathers), the engine's, or a whole one given inline
+  // ({ n, vx, vy, size, sway, color, len, blink, glow, bank, par })
+  const base = api?.game?.weathers?.[w.kind] || KINDS[w.kind] || (w.n ? {} : null);
+  return base ? { ...base, ...w, n: Math.round((w.n ?? base.n) * (w.density ?? 1)) } : null;
 }
 
 export function drawWeather(ctx, w, cam, f, { glowOnly = false } = {}) {
@@ -92,7 +94,7 @@ function drawBanks(ctx, w, cam, f) {
 let shadow = null;
 export function drawDark(ctx, dark, lights, f) {
   if (!dark || !(dark.alpha > 0)) return;
-  shadow ||= canvas(SCREEN_W, SCREEN_H);
+  if (!shadow || shadow.width !== SCREEN_W || shadow.height !== SCREEN_H) shadow = canvas(SCREEN_W, SCREEN_H);
   const s = shadow.getContext('2d');
   s.globalCompositeOperation = 'source-over';
   s.clearRect(0, 0, SCREEN_W, SCREEN_H);
@@ -156,5 +158,11 @@ export function gatherLights(world, cx, cy) {
   let extra = world.map.lights;
   if (typeof extra === 'function') extra = extra(world.api);
   for (const l of extra || []) add(l, l.x * TILE + (l.dx ?? 8), l.y * TILE + (l.dy ?? 8) - world.elev(l.x, l.y));
+  // entities that give light where they are (a vehicle's headlights: engine/vehicle.js)
+  for (const en of world.entities || []) {
+    if (en.removed) continue;
+    if (en.lights) for (const l of en.lights()) add(l, l.x, l.y);
+    else if (en.light) add(en.light, en.x + (en.w ?? 16) / 2, en.y + (en.h ?? 16) / 2);
+  }
   return out.filter((l) => l.x + l.r > 0 && l.y + l.r > 0 && l.x - l.r < SCREEN_W && l.y - l.r < SCREEN_H);
 }

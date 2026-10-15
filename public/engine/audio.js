@@ -623,7 +623,49 @@ const BUILTIN = {
   start: () => [523, 659, 784, 1047, 1319].forEach((f, i) => tone({ at: ctx.currentTime + i * 0.05, freq: f, len: 0.22, wave: 'pulse25', gain: 0.05, echo: 0.3 })),
   item: () => [659, 784, 988, 1319].forEach((f, i) => tone({ at: ctx.currentTime + i * 0.09, freq: f, len: 0.16, wave: 'pulse50', gain: 0.05 })),
   glitch: () => { burst({ len: 0.14, freq: 2500, gain: 0.12 }); tone({ freq: 60, len: 0.14, wave: 'pulse50', gain: 0.04 }); },
+  // the street (engine/vehicle.js, engine/traffic.js, engine/pursuit.js)
+  skid: () => burst({ len: 0.09, type: 'bandpass', freq: 2600, q: 3, gain: 0.03 }),
+  crash: (o = {}) => { const k = o.power ?? 0.6; burst({ len: 0.25 + k * 0.2, type: 'lowpass', freq: 900, gain: 0.12 + k * 0.12 }); burst({ len: 0.12, type: 'bandpass', freq: 3200, q: 0.6, gain: 0.05 * k }); tone({ freq: 120, to: 50, len: 0.18, wave: 'tri', gain: 0.08 }); },
+  horn: () => { tone({ freq: 392, len: 0.28, wave: 'pulse25', gain: 0.035 }); tone({ freq: 494, len: 0.28, wave: 'pulse25', gain: 0.03 }); },
+  shot: () => { burst({ len: 0.12, type: 'lowpass', freq: 1800, gain: 0.16 }); tone({ freq: 180, to: 60, len: 0.08, wave: 'pulse50', gain: 0.05 }); },
+  ricochet: () => tone({ freq: 2400, to: 900, len: 0.12, wave: 'pulse25', gain: 0.02 }),
+  boom: () => { burst({ len: 0.9, type: 'lowpass', freq: 500, gain: 0.32 }); tone({ freq: 90, to: 30, len: 0.6, wave: 'tri', gain: 0.14 }); burst({ len: 0.3, type: 'bandpass', freq: 1500, gain: 0.08 }); },
+  hoof: (o = {}) => { const hi = Math.floor(o.k || 0) % 2; burst({ len: 0.03, type: 'bandpass', freq: hi ? 1500 : 1100, q: 2, gain: 0.08 }); tone({ freq: hi ? 420 : 340, to: 200, len: 0.04, wave: 'tri', gain: 0.05 }); },
+  thud: () => { burst({ len: 0.08, type: 'lowpass', freq: 420, gain: 0.14 }); tone({ freq: 150, to: 80, len: 0.08, wave: 'tri', gain: 0.06 }); },
 };
+
+// The engine of the vehicle the player drives: a held hum whose pitch follows the speed
+// (level 0..1), off with motor(0). One at a time, under the effects.
+let hum = null;
+export function motor(level = 0, body = 'sedan') {
+  if (!ctx) return;
+  if (!level && !hum) return;
+  if (!hum) {
+    const o = ctx.createOscillator();
+    o.setPeriodicWave(waves.pulse25 || waves.tri);
+    const f = ctx.createBiquadFilter();
+    f.type = 'lowpass';
+    f.frequency.value = 600;
+    const g = ctx.createGain();
+    g.gain.value = 0;
+    o.connect(f).connect(g).connect(sfxBus);
+    o.start();
+    hum = { o, g, f, idle: 0 };
+  }
+  const t = ctx.currentTime;
+  if (level <= 0) {
+    hum.g.gain.setTargetAtTime(0, t, 0.08);
+    const old = hum;
+    hum = null;
+    setTimeout(() => { try { old.o.stop(); } catch { /* already stopped */ } }, 500);
+    return;
+  }
+  // a body's pitch: a number (a cartridge's `hum`, in Hz) or one of the engine's bodies
+  const low = typeof body === 'number' ? body : { truck: 34, van: 40, bike: 70, sports: 52 }[body] ?? 46;
+  hum.o.frequency.setTargetAtTime(low + level * low * 2.2, t, 0.06);
+  hum.f.frequency.setTargetAtTime(400 + level * 900, t, 0.06);
+  hum.g.gain.setTargetAtTime(0.018 + level * 0.02, t, 0.06);
+}
 
 // Whether an effect exists, so a game can stay silent instead of warning about it.
 export const hasSfx = (name) => effects.has(name) || name in BUILTIN;

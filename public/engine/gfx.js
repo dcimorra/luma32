@@ -1,8 +1,14 @@
 // Low-level drawing: offscreen canvases, a Painter for authoring pixel art in code,
 // and colour helpers. Everything here works in native GBA pixels (240x160 screen).
 
-export const SCREEN_W = 240;
-export const SCREEN_H = 160;
+// The screen's size. `let`, not `const`: while the world is drawn pulled back (the
+// camera zoomed out, engine/world.js) these are the bigger picture's size, and every
+// module that imports them sees it; setView puts them back at once after.
+export let SCREEN_W = 240;
+export let SCREEN_H = 160;
+export const BASE_W = 240;
+export const BASE_H = 160;
+export function setView(w = BASE_W, h = BASE_H) { SCREEN_W = w; SCREEN_H = h; }
 export const TILE = 16;
 
 export function canvas(w, h) {

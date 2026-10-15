@@ -71,11 +71,12 @@ export function tickParty(world) {
   }
   if (world.busy) return;
   for (const a of world.actors) {
-    if (!a.party || a.moving || a.catching) continue;
+    // in the player's vehicle, or left waiting for them to get out (engine/vehicle.js)
+    if (!a.party || a.moving || a.catching || a.riding || a.waiting) continue;
     const goal = t[t.length - 1 - a.party];
     if (!goal || (a.x === goal.x && a.y === goal.y)) continue;
     // the player turned back onto the trail: never into their cell, nor another companion's
-    const taken = (c) => (c.x === p.x && c.y === p.y) || world.actors.some((b) => b !== a && b.party && ((b.x === c.x && b.y === c.y) || (b.moving && b.moving.tx === c.x && b.moving.ty === c.y)));
+    const taken = (c) => (c.x === p.x && c.y === p.y) || world.actors.some((b) => b !== a && b.party && !b.riding && ((b.x === c.x && b.y === c.y) || (b.moving && b.moving.tx === c.x && b.moving.ty === c.y)));
     if (taken(goal)) {
       if (a.x === p.x && a.y === p.y && !p.moving) {
         const to = world.freeNear(a.x, a.y, a);

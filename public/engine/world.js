@@ -1,6 +1,6 @@
 // The overworld: tile maps seen from above at three quarters, actors that walk the
 // grid, and the story API scripts use to drive everything (see README, "Scripts").
-import { SCREEN_W, SCREEN_H, TILE, Painter, canvas } from './gfx.js';
+import { SCREEN_W, SCREEN_H, BASE_W, BASE_H, setView, TILE, Painter, canvas } from './gfx.js';
 import { doll as makeDoll } from './doll.js';
 import { Dialog, Choice, Card, Menu, List, Log, Credits, textSpeed, setTextSpeed, speakerName, banner as showBanner, frame, getTheme, stripMarkup } from './ui.js';
 import { drawText, measure } from './font.js';
@@ -15,7 +15,13 @@ import { goalOf, drawGuide, audit, guideOn, setGuide, pressFrom, rectCells } fro
 import { placeParty, tickParty, tickLife, hushLife, bark, drawBarks, bumped, routeStop } from './company.js';
 import { Effects, EASE } from './vfx.js';
 import { Mode7 } from './mode7.js';
-import { can, groundStops, propStops, modeOf, tickModes, stepSpeed, stepSound, afterStep, slideOn, diveHere, diveScript, drawBreath, modeImage, liftOf, drawInMode } from './move.js';
+import { City } from './city.js';
+import { board, unboard, boardable, driveTick } from './vehicle.js';
+import { seek, clearLine, centreOf, shoot } from './pursuit.js';
+import { MapScreen } from './minimap.js';
+import { startMission, failMission, passMission } from './mission.js';
+import { tickClock, clockInfo, setClock, clockLabel, clockGrade, clockDark, drawClock, isNight } from './clock.js';
+import { useMedia, can, groundStops, propStops, modeOf, tickModes, stepSpeed, stepSound, afterStep, slideOn, diveHere, diveScript, drawBreath, modeImage, liftOf, drawInMode } from './move.js';
 
 export const DIRS = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
 const OPPOSITE = { up: 'down', down: 'up', left: 'right', right: 'left' };
@@ -474,10 +480,16 @@ export class World {
     this.still = 0;            // frames the player has stood still (for the A hint)
     this.puffs = [];           // dust kicked up by runners
     this.vfx = new Effects(this);   // particles, emitters, zoom and wave (vfx.js)
+    this.city = new City(this);     // vehicles, traffic, the pavement, the minimap (city.js)
+    this.driving = null;            // the vehicle the player is in (vehicle.js)
+    this.lead = { x: 0, y: 0 };     // how far ahead of the player the camera looks
+    this.zoomOut = 1;               // under 1: the camera pulled back (a vehicle at speed, api.zoom(0.8))
+    this.zoomTo = 1;                // what a script asked for
     this.dev = typeof location !== 'undefined' && new URLSearchParams(location.search).has('dev');
     this.devShow = this.dev;
     if (this.dev) addEventListener('keydown', (ev) => { if (ev.code === 'F2' || ev.code === 'F3') { ev.preventDefault(); this.devKey(ev.code); } });
     this.api = new StoryApi(this);
+    useMedia(game.media);
   }
 
   // ---------- lint ----------
@@ -501,8 +513,13 @@ export class World {
 
   inView(x, y) {
     const c = this.cam;
-    return (x + 1) * TILE > c.x && x * TILE < c.x + SCREEN_W && (y + 1) * TILE > c.y && (y - 1) * TILE < c.y + SCREEN_H;
+    return (x + 1) * TILE > c.x && x * TILE < c.x + this.viewW && (y + 1) * TILE > c.y && (y - 1) * TILE < c.y + this.viewH;
   }
+
+  // How much of the map the camera takes in, in map pixels: the screen, or more of it
+  // while pulled back (zoomOut under 1).
+  get viewW() { return Math.ceil(BASE_W / this.zoomOut); }
+  get viewH() { return Math.ceil(BASE_H / this.zoomOut); }
 
   // At a door (a warp or the cell next to one): people come and go through doors.
   atDoor(x, y) { return !!this.doorAt(x, y); }
@@ -643,6 +660,7 @@ export class World {
   }
 
   load(mapId, x, y, dir) {
+    if (this.map) this.city.leave();
     this.lintLeaving();
     this.rememberPlaces();
     for (const a of this.actors) if (a !== this.player) a.drop();
@@ -660,7 +678,8 @@ export class World {
     this.heights = m.heights;
     this.loadNeighbours();
     this.measureHeights();
-    this.entities = [];
+    // the vehicle the player drives comes along (vehicle.js puts it where they arrive)
+    this.entities = this.driving ? [this.driving] : [];
     this.slide = null;
     this.pending = false;
     this.flagsSeen = JSON.stringify(this.save.flags);
@@ -682,7 +701,7 @@ export class World {
       keep.seenMode = false;
       keep.sliding = false;
       if (dir) keep.dir = dir;
-      keep.visible = true;
+      keep.visible = !this.driving;
       this.player = keep;
     } else {
       this.player = new Actor({ id: 'player', doll: this.save.playerDoll || this.game.player, x, y, dir: dir || 'down', speed: 1 }, this);
@@ -690,6 +709,13 @@ export class World {
     this.actors.push(this.player);
     for (const a of this.actors) if (a !== this.player) this.unstack(a);
     placeParty(this, (d) => new Actor(d, this));
+    // arriving at the wheel: who rode along is still inside, the rest wait here
+    if (this.driving) {
+      for (const a of this.actors) {
+        if (!a.party) continue;
+        if (this.riders?.has(a.id)) { a.riding = this.driving; a.visible = false; } else a.waiting = true;
+      }
+    }
     this.cam.follow = true;
     this.centerCamera();
     // music and ambience may be chosen by the story: a function of the api
@@ -709,6 +735,7 @@ export class World {
     // a new place is a safe point: saved as soon as the player has control again
     if (keep && this.game.autosave !== false) this.autosaveDue = true;
     this.save.map = mapId;
+    this.city.enter();
   }
 
   // ---------- the map follows the story (README "Life on a map") ----------
@@ -1340,6 +1367,13 @@ export class World {
     if (!this.map) return;
     // time played, in seconds, kept in the save (the credits show it)
     this.save.time = (this.save.time || 0) + 1 / 60;
+    tickClock(this);
+    // the camera pulls back with a vehicle's speed (camera.zoomOut: how far, at top speed;
+    // false keeps it still) and where a script asked
+    const zc = this.map.camera?.zoomOut ?? this.game.camera?.zoomOut ?? 0.8;
+    let zt = this.zoomTo;
+    if (this.driving && zc && zc < 1) zt = Math.min(zt, 1 - (1 - zc) * Math.min(1, this.driving.speed / this.driving.spec.max));
+    if (Math.abs(zt - this.zoomOut) > 0.002) this.zoomOut += (zt - this.zoomOut) * 0.03; else this.zoomOut = zt;
     this.tickActors(e);
     const control = !this.busy && this.engine.top() === this;
     if (!control) this.trip = null;
@@ -1359,8 +1393,19 @@ export class World {
     if (!this.busy && e.frame % 20 === 0 && (this.pending || (this.autoRefresh && JSON.stringify(this.save.flags) !== this.flagsSeen))) this.refresh();
     this.map.update?.(this.api, e, control);
     this.game.update?.(this.api, e, control);
-    if (this.busy || this.engine.top() !== this) return;
-    for (const en of [...this.entities]) if (!en.removed) en.update?.(this.api, e, en);
+    if (this.busy || this.engine.top() !== this) { this.city.tick(e, false); return; }
+    this.city.tick(e, true);
+    // a big map may ask to move only what is near the camera (`sim: { radius }`, pixels);
+    // an entity with `always` moves anyway (whatever chases the player, a kept vehicle)
+    const sim = this.map.sim ?? this.game.sim;
+    const r = sim?.radius;
+    const mx = this.cam.x + this.viewW / 2;
+    const my = this.cam.y + this.viewH / 2;
+    for (const en of [...this.entities]) {
+      if (en.removed) continue;
+      if (r && !en.always && (Math.abs(en.x - mx) > r || Math.abs(en.y - my) > r)) continue;
+      en.update?.(this.api, e, en);
+    }
     if (this.busy || this.engine.top() !== this) return;
     const inp = e.input;
     const p = this.player;
@@ -1376,6 +1421,9 @@ export class World {
     if (this.devJump) { this.devJump = false; this.run((api) => this.devMenu(api)); return; }
     if (inp.pressed('start') || inp.pointer?.back) { this.run((api) => api.pauseMenu()); return; }
     if (inp.pressed('select') && this.game.onSelect) { this.run((api) => this.game.onSelect(api)); return; }
+    // at the wheel the pad drives (vehicle.js); on foot, A beside a vehicle gets in
+    if (this.driving) { driveTick(this, e, inp); return; }
+    if (inp.pressed('a') && !cooling && !p.moving) { const v = boardable(this); if (v && board(this, v)) return; }
     // a key takes over from a walk the pointer asked for
     if (this.trip && inp.now.size) this.trip = null;
     if (!this.free) this.pointTo(inp);
@@ -1510,7 +1558,7 @@ export class World {
       if (a === who || !a.visible || !a.solid) continue;
       if (overlap(b, this.free ? this.box(a) : { x: a.px, y: a.py, w: TILE, h: TILE })) return true;
     }
-    for (const en of this.entities) if (en !== who && en.solid && !en.removed && overlap(b, this.box(en))) return true;
+    for (const en of this.city.near(b)) if (en !== who && en.solid && !en.removed && overlap(b, this.box(en))) return true;
     return false;
   }
 
@@ -1602,6 +1650,8 @@ export class World {
   }
 
   tick(e) { if (this.map) this.tickActors(e); }
+
+  unboard(opts) { return unboard(this, opts); }
 
   tickActors(e) {
     for (const a of this.actors) a.update(e);
@@ -1737,7 +1787,7 @@ export class World {
     const p = this.player;
     this.lastArrival = this.engine.frame;
     if (this.neighbourAt(p.x, p.y)) this.cross(this.neighbourAt(p.x, p.y));
-    if (this.map.footsteps !== false) {
+    if (this.map.footsteps !== false && !this.driving) {
       const own = stepSound(this, p);
       if (own === null) this.footstep(p.x, p.y);
       else if (own) sfx(own);
@@ -1752,7 +1802,7 @@ export class World {
       this.run(async (api) => { if (tr.once) api.set(tr.once); await tr.run(api); });
       return;
     }
-    if (!this.hook('onStep', { x: p.x, y: p.y, dir: p.dir, tile: this.tileAt(p.x, p.y), map: this.mapId }) && !this.free) afterStep(this);
+    if (!this.hook('onStep', { x: p.x, y: p.y, dir: p.dir, tile: this.tileAt(p.x, p.y), map: this.mapId }) && !this.free && !this.driving) afterStep(this);
   }
 
   // The ground decides the sound of a step: a tile's `step` names an effect, or one of
@@ -1887,8 +1937,10 @@ export class World {
     if (!p) return;
     // a connected side does not stop the camera: the neighbour is right there
     const b = this.bounds();
-    this.cam.x = this.clampCam(p.px + 8 - SCREEN_W / 2, b.x1 - b.x0, SCREEN_W, b.x0);
-    this.cam.y = this.clampCam(p.py - p.ez + 8 - SCREEN_H / 2, b.y1 - b.y0, SCREEN_H, b.y0);
+    const vw = this.viewW;
+    const vh = this.viewH;
+    this.cam.x = this.clampCam(p.px + 8 + this.lead.x - vw / 2, b.x1 - b.x0, vw, b.x0);
+    this.cam.y = this.clampCam(p.py - p.ez + 8 + this.lead.y - vh / 2, b.y1 - b.y0, vh, b.y0);
   }
 
   bounds() {
@@ -1908,8 +1960,30 @@ export class World {
     return Math.round(Math.max(from, Math.min(from + size - view, v)));
   }
 
+  // The world, then what sits over it on the screen. Pulled back (zoomOut under 1), the
+  // world is drawn bigger — SCREEN_W/H are its size meanwhile (gfx.js setView) — and
+  // shrunk onto the screen; the HUD is drawn after, at the screen's own size.
   draw(ctx, e) {
     if (!this.map) return;
+    const z = this.zoomOut;
+    if (z < 0.995) {
+      const bw = this.viewW;
+      const bh = this.viewH;
+      if (!this.zbuf || this.zbuf.width !== bw || this.zbuf.height !== bh) {
+        this.zbuf = canvas(bw, bh);
+        this.zbuf.getContext('2d').imageSmoothingEnabled = false;
+      }
+      setView(bw, bh);
+      try { this.drawWorld(this.zbuf.getContext('2d'), e); } finally { setView(); }
+      const was = ctx.imageSmoothingEnabled;
+      ctx.imageSmoothingEnabled = true;
+      ctx.drawImage(this.zbuf, 0, 0, BASE_W / z, BASE_H / z, 0, 0, BASE_W, BASE_H);
+      ctx.imageSmoothingEnabled = was;
+    } else this.drawWorld(ctx, e);
+    this.drawScreen(ctx, e);
+  }
+
+  drawWorld(ctx, e) {
     const cx = Math.round(this.cam.x);
     const cy = Math.round(this.cam.y);
     ctx.fillStyle = this.map.void || '#000';
@@ -1941,6 +2015,7 @@ export class World {
     this.drawReflections(ctx, cx, cy);
     if (this.puffs.length) this.drawPuffs(ctx, cx, cy);
     this.vfx.draw(ctx, cx, cy, 'back');
+    this.city.under(ctx, cx, cy, e);
     // y-sorted props and actors, anchored at the bottom of their cell
     const items = [];
     for (const c of lifted) items.push({ z: (c.ty + 1) * TILE - 0.5, fn: () => this.drawRaised(ctx, c.id, c.img, c.tx, c.ty, cx, cy, animF) });
@@ -1990,6 +2065,7 @@ export class World {
     for (const en of this.entities) {
       if (en.removed || en.hidden || !en.draw) continue;
       const b = this.box(en);
+      if (b.x - cx > SCREEN_W + 48 || b.y - cy > SCREEN_H + 64 || b.x + b.w - cx < -48 || b.y + b.h - cy < -16) continue;
       const lift = raised ? this.elev(Math.floor((b.x + b.w / 2) / TILE), Math.floor((b.y + b.h - 1) / TILE)) : 0;
       items.push({ z: en.z ?? b.y + b.h, fn: () => en.draw(ctx, Math.round(b.x - cx), Math.round(b.y - cy - lift), e, en) });
     }
@@ -2032,9 +2108,13 @@ export class World {
       if (a && (alpha < 1 || a.tint)) this.vfx.body(ctx, it.img, Math.round(it.x), Math.round(it.y), alpha, a.tint);
       else ctx.drawImage(it.img, Math.round(it.x), Math.round(it.y));
     }
+    // the map's own drawing over the people and the props, under the light and the weather
+    // (art laid over raised roofs: a city's landmarks)
+    this.map.above?.(ctx, this.api, { x: cx, y: cy }, e);
     this.vfx.draw(ctx, cx, cy, 'front');
     // grade may depend on the story or the clock: a colour, or a function returning one
-    const grade = typeof this.map.grade === 'function' ? this.map.grade(this.api, e) : this.map.grade;
+    // the map's own light, or the hour's (engine/clock.js)
+    const grade = this.map.grade === undefined ? clockGrade(this) : typeof this.map.grade === 'function' ? this.map.grade(this.api, e) : this.map.grade;
     if (grade) {
       ctx.globalCompositeOperation = 'multiply';
       ctx.fillStyle = grade;
@@ -2044,7 +2124,7 @@ export class World {
     // what is in the air, then the dark and its lights (README "Light and weather")
     const weather = resolveWeather(this.map.weather, this.api, e);
     drawWeather(ctx, weather, { x: cx, y: cy }, e.frame);
-    const dark = typeof this.map.dark === 'function' ? this.map.dark(this.api, e) : this.map.dark;
+    const dark = this.map.dark === undefined ? clockDark(this) : typeof this.map.dark === 'function' ? this.map.dark(this.api, e) : this.map.dark;
     if (dark) drawDark(ctx, dark, gatherLights(this, cx, cy), e.frame);
     drawWeather(ctx, weather, { x: cx, y: cy }, e.frame, { glowOnly: true });
     // what gives off light (sparks, magic, a glow) shines through the dark
@@ -2055,10 +2135,15 @@ export class World {
     this.vfx.post(ctx, cx, cy, e.frame);
     // the hint and the guide point at cells: not while the camera is zoomed
     if (this.vfx.zoom <= 1.001) {
-      this.drawHint(ctx, e, cx, cy);
+      if (!this.driving) this.drawHint(ctx, e, cx, cy);
       drawGuide(this, ctx, e, cx, cy);
-      if (this.engine.input.pointerOn) this.drawPointer(ctx, e, cx, cy);
+      if (this.engine.input.pointerOn && this.zoomOut > 0.995) this.drawPointer(ctx, e, cx, cy);
     }
+    this.city.marker(ctx, cx, cy, e);
+    if (this.devShow) this.drawDev(ctx, cx, cy);
+  }
+
+  drawScreen(ctx, e) {
     // a small sign in the corner after an autosave
     if (this.savedAt !== undefined && e.frame - this.savedAt < 90 && Math.floor(e.frame / 10) % 3) {
       const label = t('console.menu.autosaved');
@@ -2067,8 +2152,9 @@ export class World {
       ctx.fillRect(SCREEN_W - w - 3, SCREEN_H - 14, w, 11);
       drawText(ctx, label, SCREEN_W - w + 1, SCREEN_H - 12, '#ffffff');
     }
-    if (this.devShow) this.drawDev(ctx, cx, cy);
     drawBreath(this, ctx);
+    this.city.over(ctx, e);
+    drawClock(this, ctx);
     // the cartridge's heads-up display: hearts, rupees, a timer
     this.map.hud?.(ctx, this.api, e);
     this.game.hud?.(ctx, this.api, e);
@@ -2467,7 +2553,15 @@ export class StoryApi {
   ambience(name) { ambience(name, this.world.game.ambiences?.[name]); }
 
   actor(id) { return this.world.actor(id); }
-  setTile(x, y, id) { this.world.setTile(x, y, id); }
+  // `keep: true` writes it in the save: the map is that way on every visit after
+  // (README "A world that remembers"). The same for addProp and removeProp.
+  setTile(x, y, id, { keep = false } = {}) {
+    const w = this.world;
+    w.setTile(x, y, id);
+    w.mapEdits = (w.mapEdits || 0) + 1;
+    w.city.roadsDirty = true;
+    if (keep) w.city.edits().tiles[`${x},${y}`] = id;
+  }
 
   // Adds an actor to the current map (not saved: a map's own `actors` list, gated by
   // `when`, is how something stays put across a reload).
@@ -2495,11 +2589,80 @@ export class StoryApi {
 
   // A prop for the rest of this visit (the data, with `when`, is what survives a reload).
   // The same id again replaces it in place: the wardrobe opening.
-  addProp(p) {
+  addProp(p, { keep = false } = {}) {
     if (p.id != null) this.world.props = this.world.props.filter((q) => q.id !== p.id);
+    this.world.mapEdits = (this.world.mapEdits || 0) + 1;
+    if (keep) {
+      const ed = this.world.city.edits();
+      if (p.id != null) ed.add = ed.add.filter((q) => q.id !== p.id);
+      ed.add.push(p);
+    }
     return this.world.addProp(p);
   }
-  removeProp(id) { this.world.removeProp(id); }
+  removeProp(id, { keep = false } = {}) {
+    this.world.removeProp(id);
+    this.world.mapEdits = (this.world.mapEdits || 0) + 1;
+    if (keep) {
+      const ed = this.world.city.edits();
+      const before = ed.add.length;
+      ed.add = ed.add.filter((q) => q.id !== id);
+      // a prop the map's data brings is remembered as taken away; one added by keep is just forgotten
+      if (ed.add.length === before && !ed.remove.includes(id)) ed.remove.push(id);
+    }
+  }
+
+  // ---------- the street (vehicle.js, city.js, pursuit.js, minimap.js, mission.js) ----------
+
+  // A vehicle on this map: { id, body, color, x, y (cells), dir | angle, keep, locked,
+  // ai: { traffic | chase: target | to: [x, y] }, blip, hp }. With `keep` and an id it is
+  // remembered where it is left, and adding it again finds the one already there (or
+  // nothing, null, when it was left on another map).
+  addVehicle(def) { return this.world.city.addVehicle(def); }
+  get vehicles() { return this.world.entities.filter((en) => en.kind === 'vehicle' && !en.removed); }
+  vehicle(id) { return this.vehicles.find((v) => v.id === id) || null; }
+  // The vehicle the player is in, or null.
+  get driving() { return this.world.driving; }
+  // Puts the player at the wheel (false if refused: locked, canBoard, a wreck) or out of it.
+  board(v) { return board(this.world, typeof v === 'string' ? this.vehicle(v) : v); }
+  unboard({ force = true } = {}) { return unboard(this.world, { force }); }
+  // Who drives a vehicle that isn't the player's: { traffic: true } joins the traffic,
+  // { chase: 'player' | entity } hunts, { to: [x, y] } goes there (resolves on arrival),
+  // { park: true } stops. A chase with `max` keeps under that speed.
+  drive(v, ai) {
+    const veh = typeof v === 'string' ? this.vehicle(v) : v;
+    if (!veh) return Promise.resolve(false);
+    return new Promise((resolve) => {
+      this.world.city.setAi(veh, ai);
+      if (veh.ai && ai?.to) veh.ai.resolve = resolve; else resolve(true);
+    });
+  }
+  // People on the pavement (README "A living city").
+  get peds() { return this.world.entities.filter((en) => en.kind === 'ped' && !en.removed); }
+  // An entity moves toward someone round walls; → { dist, sees } (see pursuit.js).
+  seek(self, target, opts) { return seek(this.world, self, target, opts); }
+  // A clear line between two (actors, entities, vehicles, cells), no further than range px.
+  sees(a, b, range = Infinity) {
+    const p = centreOf(this.world, a);
+    const q = centreOf(this.world, b);
+    return !!p && !!q && clearLine(this.world, p, q, range);
+  }
+  // Where something is in map pixels (its centre): 'player' follows them into a vehicle.
+  where(target) { return centreOf(this.world, target); }
+  shoot(opts) {
+    const s = shoot(this.world, opts);
+    if (s) this.world.city.panic(s.x, s.y, 90);
+    return s;
+  }
+  damage(target, amount, from = null) { this.world.city.damage(typeof target === 'string' && target !== 'player' ? this.actor(target) || target : target, amount, from); }
+  panic(x, y, r) { this.world.city.panic(x, y, r); }
+  explode(v) { const veh = typeof v === 'string' ? this.vehicle(v) : v; if (veh && !veh.wreck) this.world.city.explode(veh, null); }
+  // A dot on the minimap and the map screen until blip(id, null).
+  blip(id, opts) { if (opts) this.world.city.blips.set(id, opts); else this.world.city.blips.delete(id); }
+  // Missions (mission.js): the one under way, and starting, failing or passing it by hand.
+  mission() { const s = this.save.mission; return s ? { id: s.id, step: s.step } : null; }
+  startMission(id) { startMission(this.world, id); }
+  failMission(why) { return failMission(this.world, why); }
+  passMission() { return passMission(this.world); }
 
   // The player has the world while a script waits for something they do (a fight, a
   // chase, reaching a place): `await api.control(promise)` gives back the script's turn
@@ -2621,11 +2784,21 @@ export class StoryApi {
 
   // The camera closes in on someone or a cell (2 = twice as close); zoom(1) back. A
   // scene must undo it before control returns (the engine does, with a warning).
+  // Under 1 it pulls back instead (0.75: a third more of the map), around the player,
+  // and stays until zoom(1).
   zoom(z = 1, { at = 'player', ms = 400, ease = 'inOut' } = {}) {
     const v = this.world.vfx;
     v.zoomAt = at;
+    if (z < 1) return Promise.all([this.animate(v, { zoom: 1 }, ms, { ease }), this.animate(this.world, { zoomTo: Math.max(0.5, z) }, ms, { ease })]);
+    if (this.world.zoomTo < 1) this.animate(this.world, { zoomTo: 1 }, ms, { ease });
     return this.animate(v, { zoom: Math.max(1, z) }, ms, { ease });
   }
+
+  // The time of day (engine/clock.js): { day, hour, minute, minutes } or null without game.clock.
+  get clock() { return clockInfo(this.world); }
+  setClock(hour, minute = 0) { setClock(this.world, hour, minute); }
+  clockLabel() { return clockLabel(this.world); }
+  get night() { return isNight(this.world); }
 
   // The picture waves, row by row (pixels at most): a dream, a memory, heat, the air bent.
   wave(power = 3, { ms = 400 } = {}) { return this.animate(this.world.vfx, { wave: power }, ms, { ease: 'linear' }); }
@@ -2635,7 +2808,7 @@ export class StoryApi {
   // Entities: { x, y, w, h, solid?, z?, update(api, engine, self), draw(ctx, sx, sy, engine, self) }.
   // x, y, w, h is the hitbox in map pixels. They live until the map changes: add them in
   // `enter` from flags. update runs every frame the player has control.
-  addEntity(en) { en.removed = false; this.world.entities.push(en); return en; }
+  addEntity(en) { en.removed = false; this.world.entities.push(en); this.world.city.addToGrid(en); return en; }
   removeEntity(en) { en.removed = true; this.world.entities = this.world.entities.filter((x) => x !== en); }
   get entities() { return this.world.entities; }
   // Moves an entity or actor ('player' or an id) by pixels against the map; see World.moveBox.
@@ -2737,6 +2910,9 @@ export class StoryApi {
   // Writes the save slot. Called by the menu and by chapters at safe points.
   persist() {
     const p = this.player;
+    this.world.city.snapshot();
+    const v = this.world.driving;
+    if (v?.keep && v.id) this.save.driving = v.id; else delete this.save.driving;
     Object.assign(this.save, { map: this.world.mapId, x: p.x, y: p.y, dir: p.dir, playerDoll: p.dollId, at: Date.now() });
     this.world.game.saveSlot.write(this.save, this.world.game);
   }
@@ -2754,6 +2930,7 @@ export class StoryApi {
       { id: 'title', label: t('console.menu.title') },
     ];
     if (this.world.game.log) items.splice(1, 0, { id: 'log', label: t('console.menu.log') });
+    if (this.world.map.minimap ?? this.world.game.minimap) items.splice(1, 0, { id: 'map', label: t('console.menu.map') });
     if (this.save.quests?.length || this.world.game.collections) items.splice(1, 0, { id: 'journal', label: t('console.menu.journal') });
     if (this.world.game.menuItems) items.splice(1, 0, ...this.world.game.menuItems(this));
     sfx('cursor');
@@ -2762,7 +2939,9 @@ export class StoryApi {
     try { shot = this.engine.buffer.toDataURL('image/png'); } catch { /* a tainted canvas: no picture */ }
     const obj = this.save.objective ? this.text(this.save.objective) : '';
     const id = await this.engine.push(new Menu(items, { objective: obj, title: obj ? t('console.menu.objective') : '' }));
-    if (id === 'options') {
+    if (id === 'map') {
+      await this.engine.push(new MapScreen(this.world));
+    } else if (id === 'options') {
       await this.optionsMenu();
     } else if (id === 'journal') {
       await this.journal();

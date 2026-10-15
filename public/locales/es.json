@@ -117,7 +117,8 @@
       "autosaved": "Guardado",
       "options": "Opciones",
       "back": "Volver",
-      "report": "Reportar un problema"
+      "report": "Reportar un problema",
+      "map": "Mapa"
     },
     "account": {
       "close": "Cerrar"
@@ -206,6 +207,11 @@
       "none": "Ninguno coincide todavía.",
       "go": "Buscar"
     },
-    "air": "Aire"
+    "air": "Aire",
+    "city": {
+      "passed": "¡MISIÓN SUPERADA! {name}",
+      "failed": "MISIÓN FALLIDA",
+      "time_up": "SE ACABÓ EL TIEMPO"
+    }
   }
 }

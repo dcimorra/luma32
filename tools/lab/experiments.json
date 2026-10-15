@@ -1,0 +1,7 @@
+{
+  "experiments": [
+    { "id": "lab", "dir": "." },
+    { "id": "lab-city", "dir": "experiments/city" },
+    { "id": "lab-zaragoza", "dir": "experiments/zaragoza" }
+  ]
+}

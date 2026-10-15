@@ -177,8 +177,12 @@ function reachable(world) {
   }
   const seen = new Set([`${p.x},${p.y}`]);
   const q = [[p.x, p.y]];
-  while (q.length) {
-    const [x, y] = q.shift();
+  // a whole city is millions of cells: past this many the answer is "don't know"
+  // (seen.capped) and nothing is reported as out of reach
+  const cap = 60000;
+  for (let i = 0; i < q.length; i++) {
+    if (seen.size > cap) { seen.capped = true; break; }
+    const [x, y] = q[i];
     for (const [dx, dy] of Object.values(DIRS)) {
       const nx = x + dx;
       const ny = y + dy;
@@ -239,7 +243,7 @@ export function audit(world, { goalOnly = false } = {}) {
       const answers = here.actor?.def.talk || spots.some(has) || warps.some(has) || triggers.some(has)
         || cells.some(([x, y]) => world.examineAt(x, y));
       if (!answers) out.push(`objective "${key}" points at (${here.x},${here.y}) and nothing there answers A or reacts when stepped on.`);
-      const ok = stepOn ? cells.some(([x, y]) => reach.has(`${x},${y}`)) : pressable(world, reach, cells);
+      const ok = reach.capped || (stepOn ? cells.some(([x, y]) => reach.has(`${x},${y}`)) : pressable(world, reach, cells));
       if (!ok) out.push(`objective "${key}" at (${here.x},${here.y}) can't be reached from where the player stands (${p.x},${p.y}).`);
       // a thing pointed at with someone standing behind it, out of the player's reach: the
       // player sees a person at a desk and gets the desk (pitfalls.md, "the person behind")
@@ -259,7 +263,7 @@ export function audit(world, { goalOnly = false } = {}) {
         if (!e) out.push(`objective "${key}" is on ${g.map} and no warp (with \`to\`) or connection leads there from here.`);
         else if (e.warp) {
           const cells = rectCells(e.warp);
-          const ok = cells.some(([x, y]) => reach.has(`${x},${y}`)) || pressable(world, reach, cells);
+          const ok = reach.capped || cells.some(([x, y]) => reach.has(`${x},${y}`)) || pressable(world, reach, cells);
           if (!ok) out.push(`the way to ${g.map} (the warp at ${e.warp.x},${e.warp.y}) can't be reached from where the player stands.`);
         }
       }
@@ -281,7 +285,7 @@ export function audit(world, { goalOnly = false } = {}) {
   // what the player presses
   for (const s of spots) {
     const cells = rectCells(s);
-    if (!pressable(world, reach, cells)) out.push(`the spot at (${s.x},${s.y}) can't be pressed: no cell next to it the player can reach.`);
+    if (!reach.capped && !pressable(world, reach, cells)) out.push(`the spot at (${s.x},${s.y}) can't be pressed: no cell next to it the player can reach.`);
     if (cells.every(([x, y]) => !world.blocked(x, y, p) && !world.propAt(x, y))) out.push(`the spot at (${s.x},${s.y}) lies on open floor: the player can stand on it and nothing marks it. Put it on the cells of the thing it is about.`);
   }
   // where doors lead

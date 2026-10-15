@@ -226,7 +226,8 @@ migrate is reported in the console and not offered, never loaded half-understood
   dark: { color, alpha },          // night: lit by props/actors with `light` and `lights`
   below: 'reef_floor', above: 'reef', breath: 12,   // diving (see "Getting about")
   lights: [{ x, y, r, color, flicker }],
-  weather: 'rain',                 // rain storm snow blizzard leaves petals ash dust fireflies mist
+  weather: 'rain',                 // rain storm snow blizzard leaves petals ash dust fireflies mist,
+                                   // a cartridge's own (game.weathers: { sparks: { n, vx, vy, size, sway, color, glow } }) or one inline
   parallax: [{ speed: 0.2, draw(ctx, ox, oy, frame, api) {} }], // far layers where the ground is empty
   reverb: 0.3,                     // how the place rings (or { mix, size }): halls, caves
   sounds: [{ x, y, ambience, radius, volume }],   // ambiences at a spot, louder nearby
@@ -238,6 +239,7 @@ migrate is reported in the console and not offered, never loaded half-understood
   actionA: true,                   // A doesn't talk on this map (see "Action games")
   overlay(ctx, api, cam, engine),  // drawn over actors (rain, darkness)
   underlay(ctx, api, cam, engine), // drawn over the ground, under props/actors
+  above(ctx, api, cam, engine),    // drawn over props/actors, under the light and the weather (since 1.6)
   void: '#000', run: false, shadows: false,
   heights: ['0011', '0122'], level: 8, drop: true,   // 2.5D (see "Heights")
 }
@@ -381,6 +383,12 @@ in that order.
 | `onBump(api, { x, y, dir, tile })` | when the player walks into something | a script, or nothing |
 | `update(api, engine, control)` (map, game) | every frame; `control` = the player has control | — |
 | `grade(api, engine)` (map) | every frame: the light over the map | a colour or `null` |
+| `canBoard(api, { vehicle })` (map, game) | the player is about to get into a vehicle | `false` refuses |
+| `onCrash(api, { vehicle, other, speed })` (map, game) | a vehicle hits the map or another one hard | — |
+| `onHit(api, { vehicle, target, speed, driver })` (map, game) | a vehicle runs into someone (`'player'`, an actor's id, a person on the pavement) | `false`: nothing more happens |
+| `onDamage(api, { target, amount, from })` (map, game) | anything is hurt (a shot, a crash, a blast) | `false` refuses it, a number changes it |
+| `onExplode(api, { vehicle, from })` (map, game) | a vehicle blows up | — |
+| `canDrive(api, { x, y, tile, def, vehicle })` (tile, map, game) | before a vehicle goes onto a cell | `false` stops, `true` lets through, `undefined` defers |
 
 Return a script only when something happens: a plain step must not start one, or walking
 stutters. `api.player.baseSpeed` sets the walking speed (B doubles it), for bikes or mud;
@@ -410,6 +418,10 @@ vine:  { medium: 'climb', draw },         // only climbers
 ice:   { medium: 'ice', draw },           // anyone on foot slides until something stops them
 belt:  { push: 'right', pushSpeed: 1, draw },   // a current, a walkway: carries the player one way
 fence: { low: true, size: [1, 1], draw }, // a prop (or a solid tile) a flyer goes over
+
+// a cartridge's own medium beside the engine's (since 1.9): any ability name, any speed
+game: { media: { lava: { needs: 'fireproof' } }, modes: { fireproof: { speed: 0.6 } } }
+lava:  { medium: 'lava', draw },          // only whoever has can.fireproof walks it
 
 // who can
 api.grant('swim'); api.revoke('swim'); api.can('fly')      // the player's: flags `can.<ability>`
@@ -659,7 +671,10 @@ for an emitter: a chimney, a ruin), `shadow` (dark wisps: darkness, teleporting 
 the night), `sparkle`, `magic` (motes spiralling up, a ring at the feet), `dust` (a low
 puff), `embers` (sparks rising), `shards` (pieces flying and falling: something breaks),
 `splash`, `bubbles` (rising and swaying: under water, a pot boiling), `hearts`, `leaves` (`color` for petals or snow), `ring` (a shockwave on the
-ground), `burst` (lines out of a point: a hit) and `glow` (light swelling). `color` takes
+ground), `burst` (lines out of a point: a hit), `glow` (light swelling), and since 1.4
+`explosion` (fire, a blast ring, smoke and debris), `sparks` (metal on metal, a bullet on a
+wall) and `muzzle` (a gun's flash). Since 1.5 `api.zoom(z)` under 1 pulls the camera back
+instead (0.75: a third more of the map) until `zoom(1)`. `color` takes
 one colour or a list from light to dark; `amount` and `scale` multiply how many and how
 big. Rings, dust and splashes lie on the ground under people; the rest goes over them,
 and what shines (`embers`, `magic`, `glow`) shows through the map's `dark`.
@@ -676,6 +691,301 @@ when: (api) => api.is('fire'), dy: -10 }]`.
 story says so (magic, a ghost, a teleport): they don't trigger the warning about people
 popping in view. An actor brought by `appear({ … })` is spawned like `api.spawn`, with the
 same rules about coming back on the next visit.
+
+## Day and night
+
+Since 1.5 (`engine/clock.js`). A game with `clock` has hours that pass while the player
+plays (paused in menus), kept in the save, and outdoor maps that light themselves by them:
+dawn from 5:00, day from 7:30, dusk from 18:00, night from 21:00 to 5:00 — the `dark` of
+"Light and weather" lit by lamps (`light` on props), people and the headlights of vehicles
+with someone at the wheel.
+
+```js
+clock: { start: 9, speed: 1, show: true,       // hour of a new game; game minutes a second; HH:MM on screen
+         hours: { dawn: 5, day: 7.5, dusk: 18, night: 21 },   // when each begins (a winter, the far north)
+         night: { color: '#0a1030', alpha: 0.6, grade: '#b0b8e0' }, dusk: '#ffb890', dawn: '#d8c8f0' }
+map: { clock: false }                          // indoors: the hour doesn't light it
+api.clock        // { day, hour, minute, minutes } or null
+api.setClock(21, 30); api.clockLabel(); api.night
+```
+
+A map with its own `grade` or `dark` (a value or a function, even one giving null) keeps
+it: the clock only lights the maps that say nothing. `show` puts the hour in the top
+right corner, under the minimap when there is one. An entity can give light too: `light:
+{ r, color }` at its centre, or a `lights()` method returning several in map pixels.
+
+## Vehicles
+
+Since 1.4 (`engine/vehicle.js`). Cars, vans, trucks and bikes seen from above, with
+momentum, grip, drift and crashes. A vehicle is an entity (it lives until the map changes,
+unless `keep`) with its own physics; the engine paints it — no art to ship — in 16
+headings, whole, dented and burnt out, with its shadow.
+
+```js
+const car = api.addVehicle({ id: 'mine', body: 'sedan', color: '#c03030', x: 10, y: 6, dir: 'right',
+  keep: true,        // remembered where it is left, across maps and reloads ("A world that remembers")
+  locked: false,     // the engine's own "no"; canBoard is the cartridge's
+  ai: { traffic: true },   // or { chase: 'player' }, { to: [x, y] }: someone else at the wheel
+  blip: '#40c0ff', hp: 100, spec: { max: 4 } })                  // a dot on the minimap; tuning
+api.board(car); api.unboard(); api.driving         // → the vehicle the player is in, or null
+await api.drive(car, { to: [20, 4] }); api.drive(car, { chase: 'player', max: 3 }); api.drive(car, { park: true })
+api.vehicles; api.vehicle('mine'); api.explode(car)
+```
+
+**A cartridge's own** (since 1.9): `game.vehicles` declares bodies the engine doesn't
+know — a biplane, a dragon to ride, a tram — with the same fields as the engine's, how it
+looks and where it goes:
+
+```js
+vehicles: {
+  biplane: { w: 22, l: 18, max: 4, turn: 0.04, seats: 2,
+    on: 'air', height: 22, takeoff: true,   // 'land' (default) | 'water' | 'air'; how high; up only once going
+    frames: 2, hum: 64,                     // painted frames (the propeller), the engine's pitch in Hz
+    paint(p, { frame, state, lit, color }) { … } },   // facing north on a Painter w × l; state 0 whole, 1 dented, 2 burnt
+  hearse: { base: 'van', color: '#202020', max: 2 },  // an engine body's look and tuning, changed
+}
+```
+
+`on: 'air'` flies over everything (a tile with `fly: false` stops it), never meets what
+is on the ground, and is drawn up `height` pixels with its shadow below; `on: 'water'`
+keeps to tiles whose medium is water (a cartridge's own too) or `boat: true`. `sound` is
+an effect played on a beat (`'hooves' 'oars' 'wings'` or any effect's name; `false`:
+silent), otherwise the engine hums. `siren: true` lights the bar of a body that chases;
+`livery: true` keeps its colours in traffic. Where any vehicle may go is the cartridge's
+first: `canDrive(api, { x, y, tile, def, vehicle })` on a tile, the map or the game
+returns false (stops), true (lets through) or nothing (the body's ground decides).
+
+The engine's bodies: `sedan compact sports taxi police van truck bike`, and since 1.8 those of other
+times and other ground: `carriage` (a pair of horses and a closed box), `cart` (one horse,
+an open load), `vintage` (a car of the 1920s) and `boat` (rowed; it only goes where the
+tile's `medium` is water or deep, or the tile says `boat: true`). Each has its size and
+how it drives (`BODIES` in the file: `accel max reverse brake grip turn mass hp seats`,
+`sound: 'hooves' | 'oars'` instead of an engine's hum, `water`; `spec` overrides any);
+horses trot and oars row as they move. `police` carries a light bar that flashes while it chases. After creation a vehicle
+has `cx, cy` (its centre, map pixels), `angle` (radians, 0 east), `vx, vy`, `speed`,
+`forward` (negative reversing), `hp`, `wreck`.
+
+On foot, **A** beside a vehicle gets in (an **A** blinks over the one in reach), even where
+`actionA` gives A to the cartridge. At the wheel, since 1.8, the pad is a **compass**: the
+way it points is where to go — the vehicle turns that way and goes while it is held, slows
+down when nothing is, and asked to go back the way it faces it brakes and turns round
+(backing up turning, a three-point turn when slow). **B** is the handbrake (it drifts and
+leaves marks), **A** gets out — at once when slow, otherwise it brakes to a stop first.
+`drive: { controls: 'tank' }` (a map or the game) gives the old scheme instead: up
+accelerates, down brakes and reverses, left and right turn the wheel. The player rides inside: warps, triggers, `onStep`, edges joined
+to the next map and the guide read the vehicle's cell, and it crosses a `connection` with
+them. The camera looks ahead of a moving vehicle and, since 1.5, pulls back with its
+speed (`camera: { lead: 14, zoomOut: 0.8 }` on a map or the game: frames of speed it looks
+ahead, and how far it pulls back at top speed; `lead: 0` or `zoomOut: false` turn them
+off). Pulled back, the world is drawn bigger and shrunk onto the screen; the HUD, the
+minimap and the boxes stay at the screen's size. Its engine hums with the speed.
+
+Companions (`party`) get in with the player, as many as the body has seats (`seats` in
+`BODIES`: a sports car takes one, a van seven), if they are within four cells; whoever is
+further or finds no seat waits where they stand and catches up once the player is on foot.
+Riders cross maps with the vehicle and step out round the player.
+
+What stops a vehicle is what stops a walker on the map (solid tiles, props, `canEnter`,
+water) plus tiles with `drive: false`; a tile's `drive: { max: 0.5, grip: 0.7 }` slows it
+(grass) or makes it slide (ice). Hitting hard costs `hp` (heavier bodies take less); under a
+third it smokes, at 0 it blows up — fire, a shake, damage to whatever is near, and the
+player thrown out if inside. Vehicles shove each other by their mass.
+
+## Roads and traffic
+
+Since 1.4 (`engine/traffic.js`). Roads are data on the tiles, and the engine reads them into
+a graph on arrival:
+
+```js
+tiles: { lane_n: { lane: 'up' }, lane_s: { lane: 'down' }, junction: { lane: 'cross' },
+         zebra_e: { lane: 'right', crosswalk: true }, pave: { sidewalk: true } }
+map:   { signals: { green: 6000, amber: 1200 }, roads: { speed: 1.6 } }
+```
+
+A `lane` cell is driven one way; touching `cross` cells make a junction, any shape. Each
+junction knows the lanes that enter and leave it: a car arriving picks a way out
+(straight, left or right, among those there are) and finds its own path across. With
+`signals` a junction lets one axis through at a time, and the stop line of each lane
+entering it shows its light. Cars in traffic keep their distance, stop for people and the
+player, wait at red, never enter a junction they can't leave, honk at whoever stands in
+the road, and edge through a jam that lasts. A bump from the player hands a car to the
+physics for a moment; it finds its lane again, or stays where it ended up, parked.
+
+Lanes should form loops (a ring road round the edge does it): a lane that ends leaves its
+cars waiting there, and they are cleared once out of sight. The lab's city drives on the
+right; the engine doesn't care which side, the lanes say it.
+
+## Streets as a graph
+
+Since 1.6 (`engine/roadgraph.js`). Tile lanes ("Roads and traffic") go north, south, east
+and west; a real city has diagonals and curves. A map can give its streets as lines
+instead, and the engine lays the lanes out along them:
+
+```js
+roads: { speed: 1.8, graph: {
+  nodes: [[x, y], [x, y, { signal: true }], …],                     // map pixels
+  edges: [{ a: 0, b: 1, fwd: 2, back: 2, via: [x, y, x, y], name: 'Paseo de la Independencia' }, …] } }
+```
+
+`fwd` lanes run from `a` to `b`, `back` the other way (0: one way); `via` are the bends.
+A lane is 14 pixels (`LANE`), driven on the right of the centre line; a node where three
+or more streets meet is a junction, and the lanes stop short of it by half its widest
+street. Cars follow the lanes and cross junctions on curves, pick a way out at random (not
+back the way they came), keep their distance, stop at the line on red where a node has
+`signal` (one axis at a time, as with tiles) and go round a parked car sooner than a queue.
+Only the biggest part of the network that can be driven round and round gets traffic;
+dead ends and lone car parks are left alone. The engine draws the markings on the asphalt
+from the graph (the centre line of two-way streets, dashes between lanes, the lights),
+so the street tiles are plain asphalt. The ground is still cells — what stops a car is
+what the tiles say — and the graph is only where traffic drives.
+
+Since 1.7, `roads.surface: { asphalt: '#4a4a54', line, dash }` has the engine paint the
+asphalt itself from the graph — each street a strip as wide as its lanes, round joins at
+the bends and junctions, exact to the pixel at any angle — with its markings and the
+zebras of `graph.crossings: [[x, y, angle, width], …]` (bars along the street, side by
+side across it). It is painted once per 256-pixel chunk and kept (the last 64), so it
+costs a picture a chunk. The street's cells are then kerb under it: their tile is drawn
+where the strip doesn't reach.
+
+The minimap's route while driving follows the graph (shortest way by the lanes, one-ways
+respected). Cars and people appear from a spatial index, round the camera only, so the
+size of the map costs nothing per frame. Measured with Zaragoza (1,110 × 1,198 cells,
+1.33 million; 10,290 streets): arriving takes a second, a frame 0.3 ms to update and
+under 2.5 ms to draw, and the whole city holds about 95 MB. A map several times that (a
+metropolitan area) would want loading in sectors, which the engine doesn't do.
+
+## A city from OpenStreetMap
+
+`tools/osm-fetch.mjs` downloads an area from OpenStreetMap and `tools/osm-city.mjs` turns
+it into a map module: the ground as cells, the streets as a graph with their lanes,
+one-ways and signals, and the named places.
+
+```
+node tools/osm-fetch.mjs 41.620,-0.935,41.685,-0.855 tools/osm-cache/zaragoza.json
+node tools/osm-city.mjs tools/osm-cache/zaragoza.json 41.620,-0.935,41.685,-0.855 out.js --scale 6
+```
+
+(Run through `middleware exec` here; any Node 20+ elsewhere. `--server` picks another
+Overpass instance when the main one is busy.) `--scale` is metres a cell: 6 makes a
+whole city drivable in a couple of minutes, as the open-world games compress theirs.
+Streets are drawn wider than they are — a lane must fit a car — and the buildings beside
+them give way. The module exports `{ w, h, legend, ground, roads, places, attribution }`;
+`legend` names tiles `osm_ground park trees sand water plaza parking bld1 bld2 bld3
+monument rail road pave crossing`, which the cartridge brings (the lab's `zaragoza.js`
+has a set: roofs outlined, the road's corners cut at 45° so diagonals read as such,
+pavement and squares with `sidewalk`, zebras with `crosswalk`). `places` are the named
+tourist and historic places, `{ name, kind, x, y }` in cells, for blips and landmarks.
+
+Since 1.7 the module also has `heights` (README "Heights"): each building's storeys —
+`building:levels`, or `height` at 3 m a storey, or a guess — in steps of `--storeys` (2.5)
+up to `--max-height` (4), so the city stands in 2.5D without a tall block hiding the
+whole street behind it. `landmarks` are the named churches, castles, monuments and
+museums with their outline (`{ name, kind, poly }`, cells): the lab's `zaragoza.js` paints
+art over each, in the building's own frame, from the map's `above` hook — the Pilar's
+glazed domes and towers, the Seo's mudéjar tower, the Aljafería's walls round its
+courtyard. `graph.crossings` are the zebras for `roads.surface`.
+
+The data is © OpenStreetMap contributors under the ODbL: a game made from it says so in
+its credits (`attribution`). Street names are facts; shops and brands are not the
+game's to use. What OpenStreetMap doesn't have is how buildings look from above: roofs
+come out in three plain colours, and landmarks want drawn art.
+
+## A living city
+
+Since 1.4 (`engine/city.js`). A map with `population` has cars in its lanes and people on
+its pavement round the camera, coming and going out of sight — never popping in where the
+player looks:
+
+```js
+population: { cars: 9, people: 14, dolls: ['p1', 'p2'], vehicles: ['sedan', 'van', { body: 'taxi' }], colors: ['#…'],
+              speed: 1.6, spawn: 120, despawn: 200 }   // pixels beyond the screen
+sim: { radius: 420 }    // (map or game) only entities this near the camera move; `always` on one exempts it
+```
+
+People on the pavement (`sidewalk` and `crosswalk` cells) walk it mostly straight on, wait
+at the kerb while a car is about to cross the zebra, and run from danger: a crash, a shot,
+a blast (`api.panic(x, y, r)` makes them run from anything). Run over, they fall (the
+cartridge's `onHit` hears of it first); the driver of a car the player takes gets out and
+runs. `api.peds` lists them. They are not the story's people: they don't talk and aren't
+saved; whoever the story needs is an actor.
+
+Entities are kept in a grid of 32-pixel cells rebuilt once a frame, so collisions ask only
+their neighbourhood, and entities well off screen aren't drawn. Measured in the lab's city
+(60×46 cells, a dozen cars, fourteen people): 0.3 ms to update a frame and 1.5 ms to draw it.
+
+## Pursuit and combat
+
+Since 1.4 (`engine/pursuit.js`). The means; who chases whom and what a hit costs are the
+cartridge's.
+
+```js
+api.seek(self, 'player', { speed: 1, stop: 6 })   // an entity on foot closes in round walls → { dist, sees }
+api.drive(cop, { chase: 'player' })               // a vehicle hunts: leads the target, rams, backs out when stuck
+api.sees('guard', 'player', 160)                  // a clear line between them, within range (pixels)
+api.where('player')                               // { x, y } in map pixels; 'player' follows them into a vehicle
+api.shoot({ from: 'player', angle, at: 'ana', speed: 5, damage: 10, range: 180, spread: 0.04,
+  sound: 'shot', flash: 'muzzle', spark: 'sparks', draw(ctx, sx, sy, shot) {} })   // an arrow, a fireball…
+api.damage(target, 25, from)                      // a vehicle, a person on the pavement, an entity with hp, 'player', an id
+```
+
+Paths round walls come from a flow field filled out from the target's cell, shared by
+everyone after it and redrawn twice a second; whoever has a clear line goes straight. A
+shot flies until a wall (sparks) or a body: vehicles, people on the pavement, entities
+with `hp`, and actors (the player too, if someone else fired). Damage goes through
+`onDamage`: vehicles and people on the pavement keep their own `hp`; an entity with `hp`
+runs its `onDeath(api, self, from)` at 0 (or goes in a puff); the player and the story's
+people only get the hook — their health is the cartridge's, as in the lab's city.
+
+## Minimap
+
+Since 1.4 (`engine/minimap.js`). `minimap: true` (or `{ r: 26, corner: 'tr', scale: 1 }`) on
+the game or a map draws a round map in a corner, one pixel a cell: each tile's `mapColor`
+(or the average of its picture), solid props darker. On it the player (an arrow), the
+objective (on the edge when far), the route there by road while driving, police with their
+lights, mission markers, entities with `blip: '#colour'` and the cartridge's own:
+`api.blip('shop', { at: [x, y] | 'ana' | entity, color })`, `api.blip('shop', null)`. With a
+minimap the pause menu gains **Mapa**: the whole map on screen, the d-pad moving round one
+bigger than it.
+
+## Missions
+
+Since 1.4 (`engine/mission.js`). Jobs taken at a marker on the map — a column of light,
+and a dot on the minimap — a chain of steps, a clock if they want one, failed and tried
+again. A shape to use or ignore:
+
+```js
+missions: {
+  courier: {
+    name: 'mission.courier',                          // shown on start, and on passing
+    marker: { map: 'city', x: 22, y: 14, color: '#f0c030' },
+    when: (api) => api.is('met_boss'),                // offered only then
+    start: async (api) => {},                         // a scene before the first step
+    steps: [
+      { objective: 'mission.courier_car', at: [19, 19], done: (api) => !!api.driving },
+      { objective: 'mission.courier_drop', at: [44, 30], time: 75, begin: async (api) => {},
+        done: (api) => api.player.x === 44 && api.player.y === 30 },
+    ],
+    fail: (api) => api.driving?.wreck && 'mission.courier_wreck',   // true or a locale key
+    reward: async (api) => { api.inc('cash', 500); },
+    onFail: async (api) => {},
+  },
+}
+```
+
+Stepping on the marker starts it (in a vehicle, slowly). Each step sets the objective (the
+guide and the minimap point there) and runs `begin`; `done` moves on, `fail` (the step's
+or the mission's) or the clock ends it. A passed mission is the flag `mission.<id>`. It is
+not resumed after a reload: the marker is there again. `api.mission()` (`{ id, step }` or
+null), `api.startMission(id)`, `api.failMission(key)`, `api.passMission()`.
+
+## A world that remembers
+
+Since 1.4. What changes on a map can outlive the visit: `api.setTile(x, y, id, { keep: true })`,
+`api.addProp(p, { keep: true })` and `api.removeProp(id, { keep: true })` are written in the
+save (`save.edits`) and applied on every arrival after. A vehicle with `keep` and an `id`
+is remembered where it was left (`save.vehicles`), on whatever map: adding it again in
+`enter` finds the one already there, or nothing (null) when it was left elsewhere. A save
+made at the wheel of a kept vehicle starts there again.
 
 ## Action games
 

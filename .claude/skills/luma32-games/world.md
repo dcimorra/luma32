@@ -122,3 +122,30 @@ water or a flying sprite of your own.
   grant no objective may lie across the water (the engine warns it can't be reached),
   after it the new places must be reachable. A dev jump just before and just after each
   grant, and each medium walked into with real keys, with and without the ability.
+
+## Vehicles, the clock and the street
+
+The engine has vehicles the player drives (README "Vehicles"): a carriage for a period
+drama, a cart, a boat across a lake, a car of the 1920s, a modern car, a police car that
+gives chase. Use them where the story travels — a ride to the ball, an escape by river, a
+chase through the streets — not as decoration.
+
+- `api.addVehicle({ id, body, color, x, y, dir, keep: true })` in the map's `enter`. With
+  `keep` and an id it is remembered where the player left it, on whatever map, and adding
+  it again finds that one (or nothing, when it was left elsewhere). Without `keep` it goes
+  with the map: rebuild it from flags in `enter`.
+- A on foot gets in; the pad steers by compass, B is the handbrake, A gets out. Companions
+  ride along by the body's seats and wait if they don't fit. `canBoard` (map or game)
+  refuses with a reason the cartridge then says (the coachman won't move without orders).
+- `await api.drive(car, { to: [x, y] })` sends someone else's vehicle somewhere;
+  `{ chase: 'player' }` hunts the player. Hooks: `onCrash`, `onHit`, `onDamage` — what a
+  crash means is the story's (README "Hooks for the cartridge's rules").
+- A boat only goes on water tiles (`medium: 'water'` or `'deep'`, or `boat: true` on a
+  tile): a dock is sand or wood next to it.
+- **The clock** (`clock: { start, speed, show }` on the game, README "Day and night") makes
+  hours pass and lights outdoor maps through dusk and night by itself; interiors say
+  `clock: false`. A story that turns on the time of day reads `api.clock` and sets it with
+  `api.setClock(21)`. A map with its own `grade` or `dark` keeps them.
+- Streets with traffic and people on the pavement (`population`, lanes on tiles or a
+  street graph), the minimap and missions exist too (README "Roads and traffic" to
+  "Missions"): they are for a city the player roams, rarely what a story needs.

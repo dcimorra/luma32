@@ -37,7 +37,11 @@ const MODES = {
 };
 const DIRS = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
 
-export const mediumOf = (d) => (d?.medium ? MEDIA[d.medium] || null : null);
+// a cartridge's own media (game.media: { lava: { needs: 'fireproof' } }) beside the engine's;
+// any ability name works (api.grant('fireproof')), and game.modes tunes its speed
+let own = {};
+export function useMedia(defs) { own = defs || {}; }
+export const mediumOf = (d) => (d?.medium ? own[d.medium] || MEDIA[d.medium] || null : null);
 
 export function modeConf(world, mode) {
   return { ...MODES[mode] || MODES.walk, ...world.game.modes?.[mode] };

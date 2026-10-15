@@ -16,11 +16,18 @@
 // flyover (dev menu): the plaza from the air in Mode 7, gliding north and turning.
 // concert (dev menu): a song on real instruments — piano, strings, flute, a harp, the kit —
 // and Options' "Instrumentos" to hear it as chiptune.
+// city (dev menu, ./city.js): streets with traffic and signals, people on the pavement,
+// the player's own car, a police chase, shooting, the minimap and a mission; the clock
+// (a day in six minutes) lights every outdoor map, and Pip rides along in a vehicle.
+// zaragoza (dev menu, ./zaragoza.js): the whole city from OpenStreetMap on one map, its
+// streets a graph with diagonals, signals and traffic.
 // ?dev=1 adds the overlay (F2) and the jump menu (F3).
 import { SCREEN_W } from '../../engine/gfx.js';
 import { drawText, drawBig, measure, measureBig } from '../../engine/font.js';
 import { t } from '../../engine/i18n.js';
 import { bar, panel, textBox } from '../../engine/ui.js';
+import { cityTiles, cityDolls, cityMap, cityMissions, cityJumps, cityVehicles } from './city.js';
+import { zaragozaTiles, zaragozaMap, zaragozaJumps } from './zaragoza.js';
 
 const C = {
   ink: '#22201c', grass: '#5a9a4a', grassHi: '#74b65e', grassLo: '#3e7a34', tall: '#2e6e2a', tallHi: '#58a048',
@@ -194,9 +201,12 @@ const maps = {
       { id: 'gull', doll: 'walker', mode: 'fly', x: 9, y: 1, move: 'wander', radius: 4, talk: async (api) => api.say('walker', 'shore.gull') },
       { id: 'swimmer', doll: 'ana', mode: 'swim', x: 15, y: 11, move: 'wander', radius: 2, talk: async (api) => api.say('ana', 'shore.swimmer') },
     ],
+    // a boat at the water's edge: A from the sand gets in, and it only goes on water
+    async enter(api) { api.addVehicle({ id: 'rowboat', body: 'boat', x: 5, y: 11, dir: 'right' }); },
   },
   reef: {
     name: 'place.reef',
+    clock: false,
     above: 'shore',
     breath: 12,
     grade: '#a8c8f0',
@@ -299,6 +309,7 @@ const maps = {
   },
   cave: {
     name: 'place.cave',
+    clock: false,
     reverb: { mix: 0.4, size: 1.6 },
     movement: 'free',
     run: false,
@@ -394,7 +405,11 @@ export default {
   meta: { title: 'meta.title', tagline: 'meta.tagline' },
   strings: ['locales/es/common.json'],
   theme: { ui: { speakers: { ana: { color: '#b04a3a', voice: 700 }, bo: { color: '#408040', voice: 500 }, guard: { color: '#5a5a7a', voice: 450 }, sage: { color: '#6a4a8a', voice: 650 }, walker: { color: '#a06a30', voice: 600 } } } },
-  tiles, dolls, maps, portraits, figures,
+  tiles: { ...tiles, ...cityTiles, ...zaragozaTiles }, dolls: { ...dolls, ...cityDolls }, maps: { ...maps, city: cityMap, zaragoza: zaragozaMap }, portraits, figures,
+  missions: cityMissions,
+  vehicles: cityVehicles,
+  // the hour passes (engine/clock.js): a day in six minutes; the cave and the reef are indoors
+  clock: { start: 12, speed: 4, show: true },
   songs: {
     // real instruments by name, and one chiptune voice heard as a harp
     concert: {
@@ -433,7 +448,7 @@ export default {
   async newGame(api) { await api.warp('town', 7, 6, 'up'); api.persist(); },
   collections: { coins: { name: 'col.coins', total: 3 } },
   // a companion who walks behind the player everywhere but the cave
-  party: (api) => [{ id: 'pip', doll: 'walker', when: () => api.map !== 'cave', talk: async (a) => a.say('walker', 'party.pip') }],
+  party: (api) => [{ id: 'pip', doll: 'walker', when: () => api.map !== 'cave' && api.map !== 'city' && api.map !== 'zaragoza', talk: async (a) => a.say('walker', 'party.pip') }],
   ambiences: {
     // running water: filtered noise that swells and ebbs
     water({ ctx, dest, noise }) {
@@ -447,6 +462,8 @@ export default {
     },
   },
   dev: { jumps: [
+    ...cityJumps,
+    ...zaragozaJumps,
     { label: 'credits', run: async (api) => api.credits({ lines: [{ title: 'credits.made', names: ['credits.engine'] }, 'credits.thanks'] }) },{ label: 'plaza, night', run: async (api) => { api.set('night'); await api.warp('plaza', 12, 2, 'down'); } },
     // getting about: on foot (the sea, the chasm and the cliff are walls), then with every ability
     { label: 'shore, on foot', run: async (api) => { for (const k of ['swim', 'dive', 'fly', 'climb']) api.revoke(k); await api.warp('shore', 6, 9, 'down'); } },
