@@ -2120,11 +2120,16 @@ export class World {
       return [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255];
     };
     const dc = rgb(dark?.color || '#0a1030');
+    const da = dark?.alpha > 0 ? dark.alpha : 0;
+    // the colour of the distance: the sky's foot (or the void), and the dark's share of it
+    const sky = typeof this.map.sky === 'function' ? this.map.sky(this.api, e) : this.map.sky;
+    const hz = rgb(sky?.length ? sky[sky.length - 1] : this.map.void || '#000000');
     return {
       sun: [0.5, 0.47, 0.4],
       ambient: [0.64, 0.65, 0.7],
       grade: grade ? rgb(grade) : [1, 1, 1],
-      dark: [dc[0], dc[1], dc[2], dark?.alpha > 0 ? dark.alpha : 0],
+      dark: [dc[0], dc[1], dc[2], da],
+      haze: [0, 1, 2].map((i) => hz[i] + (dc[i] - hz[i]) * da),
       lights: lights.map((l) => ({ ...l, x: l.x + cx, y: l.y + cy })),
     };
   }

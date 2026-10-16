@@ -391,6 +391,14 @@ bloom, and the console's own drawing (dialogue, menus, HUD, fades) flat and shar
 Weather, emotes, barks, the A hint and the guide are drawn flat over it, anchored where
 the diorama shows whoever they are about; the pointer picks the ground under it.
 
+Since 1.14 the picture is read as pixel art under the camera: every texel a crisp square,
+its edges blended over one screen pixel, so slanted lines no longer stair-step or crawl as
+the camera moves. The map's lights pool on the ground with a smooth falloff and bloom at
+night (`r` is in map pixels, as in the classic look: a lamp is 40 or so). What is far
+takes on the colour of the distance (the sky's foot, or the dark at night), where things
+meet a little less light reaches (the foot of a wall, under someone's feet), and the
+`mosaic` transition breaks the diorama itself into blocks.
+
 Neighbouring maps (`connections`) are built with the map, their props and people too.
 What lies on the ground is drawn as in classic into a picture laid over the floor: a
 map's `underlay`, reflections, footstep dust, ground-level effects and a city's roads.

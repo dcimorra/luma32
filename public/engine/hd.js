@@ -87,6 +87,21 @@ in vec3 vP;
 in vec4 vL;
 out vec4 outColor;
 
+// Pixel art under a perspective camera: each texel a crisp square, its edges blended
+// over one screen pixel (the texture is filtered, the sample snaps to texel centres and
+// only crosses between two of them within a pixel's width). Nearest sampling gave
+// stair-stepped edges along every slanted line, and they crawled as the camera moved.
+vec4 pix(sampler2D t, vec2 uv) {
+  vec2 size = vec2(textureSize(t, 0));
+  vec2 tx = uv * size;
+  vec2 fw = max(fwidth(tx), vec2(1e-4));
+  vec2 f = clamp((fract(tx - 0.5) - 0.5) / fw + 0.5, 0.0, 1.0);
+  vec4 c = texture(t, (floor(tx - 0.5) + 0.5 + f) / size);
+  // the pictures are premultiplied, so a see-through edge blends to nothing, not to black
+  c.rgb /= max(c.a, 0.001);
+  return c;
+}
+
 float lit() {
   vec3 p = vL.xyz / vL.w * 0.5 + 0.5;
   if (p.x <= 0.0 || p.x >= 1.0 || p.y <= 0.0 || p.y >= 1.0 || p.z >= 1.0) return 1.0;
@@ -98,20 +113,23 @@ float lit() {
 }
 
 void main() {
-  vec4 t = texture(uTex, vUv);
+  vec4 t = pix(uTex, vUv);
   if (t.a < (uDecal ? 0.01 : 0.5)) discard;
   vec3 n = normalize(vN);
   float sun = max(dot(n, uToSun), 0.0) * lit();
   vec3 col = t.rgb * (uAmbient + uSun * sun) * uGrade;
+  // the map's lights: a smooth falloff to the radius, brighter at the heart, so a lamp
+  // reads as a lamp at night and its colour spills on what it touches (and blooms)
   vec3 glow = vec3(0.0);
   for (int i = 0; i < ${MAX_LIGHTS}; i++) {
     if (i >= uN) break;
     float k = clamp(1.0 - distance(vP, uLight[i].xyz) / uLight[i].w, 0.0, 1.0);
-    glow += uLightColor[i].rgb * k * k * uLightColor[i].a;
+    k = k * k * (3.0 - 2.0 * k);
+    glow += uLightColor[i].rgb * k * uLightColor[i].a;
   }
-  float reach = clamp(max(glow.r, max(glow.g, glow.b)) * 1.6, 0.0, 1.0);
+  float reach = clamp(max(glow.r, max(glow.g, glow.b)) * 1.8, 0.0, 1.0);
   col = mix(col, uDark.rgb, uDark.a * (1.0 - reach));
-  col += t.rgb * glow * 0.9 + glow * 0.12;
+  col += t.rgb * glow * 1.1 + glow * 0.2;
   outColor = vec4(col, uDecal ? t.a : 1.0);
 }`;
 
@@ -139,6 +157,8 @@ uniform bool uHasBack;
 uniform vec2 uOut;
 uniform vec2 uClip;     // near, far
 uniform float uFocus;   // the distance in focus: the camera's target
+uniform vec3 uHaze;     // the colour of the distance: the sky's foot, or the dark
+uniform float uMosaic;  // a fade in blocks (engine.js): their size in screen pixels, or 0
 out vec4 outColor;
 
 float dist(vec2 uv) {
@@ -158,8 +178,26 @@ vec4 sharp(sampler2D t, vec2 uv, vec2 size, vec2 px) {
   return textureLod(t, (floor(tx - 0.5) + 0.5 + f) / size, 0.0);
 }
 
+// Where things meet, a little less light reaches: the foot of a wall, under someone's
+// feet, the inside of a corner. Read off the depth: a pixel with nearer neighbours all
+// round sits in a hollow. Twelve taps in a ring, kept small so it is a contact shade,
+// not a halo.
+float hollow(vec2 uv, float d) {
+  float r = 0.011 * uOut.y / uOut.x;
+  float occ = 0.0;
+  for (int i = 0; i < 12; i++) {
+    float a = float(i) * 0.5236;
+    vec2 o = vec2(cos(a) * r, sin(a) * 0.011);
+    float s = dist(uv + o);
+    float dz = d - s;
+    occ += smoothstep(0.004, 0.02, dz / uFocus) * smoothstep(0.12, 0.03, dz / uFocus);
+  }
+  return occ / 12.0;
+}
+
 void main() {
   vec2 uv = gl_FragCoord.xy / uOut;
+  if (uMosaic > 1.0) uv = (floor(gl_FragCoord.xy / uMosaic) + 0.5) * uMosaic / uOut;
   vec3 col = textureLod(uColor, uv, 0.0).rgb;
   bool empty = uHasBack && texture(uDepth, uv).r >= 0.99999;
   // depth of field: what is nearer or further than the player softens
@@ -167,6 +205,9 @@ void main() {
   float off = (d - uFocus) / uFocus;
   float blur = off > 0.0 ? smoothstep(0.06, 0.4, off) : smoothstep(0.1, 0.3, -off) * 0.6;
   if (blur > 0.01) col = mix(col, soft(uv, 1.0 + blur * 2.2), smoothstep(0.0, 0.5, blur));
+  if (!empty && uMosaic <= 1.0) col *= 1.0 - 0.45 * hollow(uv, d);
+  // the distance: what is far takes the colour of the air between
+  if (!empty) col = mix(col, uHaze, 0.3 * smoothstep(1.6, 4.5, d / uFocus));
   // nothing drawn here: the far layers (or the map's sky), soft as distance is
   if (empty) col = textureLod(uBack, vec2(uv.x, 1.0 - uv.y), 0.0).rgb;
   // bloom
@@ -204,8 +245,10 @@ export class Hd {
 
     this.staticGeo = geometry(gl);
     this.cardGeo = geometry(gl);
-    this.mapTex = texture(gl, gl.NEAREST, gl.NEAREST_MIPMAP_LINEAR);
-    this.cardTex = texture(gl, gl.NEAREST, gl.NEAREST);
+    // filtered: the scene shader snaps to texel centres itself (pix), so pixels stay
+    // crisp and only their edges blend
+    this.mapTex = texture(gl, gl.LINEAR, gl.LINEAR_MIPMAP_LINEAR);
+    this.cardTex = texture(gl, gl.LINEAR, gl.LINEAR);
     this.uiTex = texture(gl, gl.LINEAR, gl.LINEAR);
 
     // the sun's view of the depth
@@ -218,7 +261,7 @@ export class Hd {
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 
     this.decal = document.createElement('canvas');
-    this.decalTex = texture(gl, gl.NEAREST, gl.NEAREST);
+    this.decalTex = texture(gl, gl.LINEAR, gl.LINEAR);
     this.decalGeo = geometry(gl);
     this.back = canvas(240, 160);
     this.backTex = texture(gl, gl.LINEAR, gl.LINEAR);
@@ -333,7 +376,7 @@ export class Hd {
       this.propsSeen = world.props;
       gl.activeTexture(gl.TEXTURE0);
       gl.bindTexture(gl.TEXTURE_2D, this.mapTex);
-      gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+      gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, picture(world, R, animF, canvas));
       gl.generateMipmap(gl.TEXTURE_2D);
     }
@@ -354,7 +397,7 @@ export class Hd {
     world.drawHdDecal(dctx, e, dx, dy, dw, dh);
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, this.decalTex);
-    gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+    gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, this.decal);
     const ly = 0.3;
     upload(gl, this.decalGeo, new Float32Array([
@@ -453,6 +496,11 @@ export class Hd {
     gl.uniform2f(p.u.uOut, W, H);
     gl.uniform2f(p.u.uClip, c.near, c.far);
     gl.uniform1f(p.u.uFocus, c.dist);
+    gl.uniform3fv(p.u.uHaze, look.haze || [0, 0, 0]);
+    // a fade in blocks: the picture itself breaks up here, the colour comes from the buffer
+    const fx = e.fx;
+    const mosaic = fx.fadeKind === 'mosaic' && fx.fade > 0 && fx.fade < 1 ? Math.round(Math.min(1, fx.fade / 0.75) * 16) * (W / 240) : 0;
+    gl.uniform1f(p.u.uMosaic, mosaic);
     gl.viewport(0, 0, W, H);
     gl.bindVertexArray(this.tri);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
@@ -485,9 +533,9 @@ export class Hd {
     let b = this.bodies.get(img);
     if (!b) {
       const gl = this.gl;
-      b = { geo: geometry(gl), tex: texture(gl, gl.NEAREST, gl.NEAREST) };
+      b = { geo: geometry(gl), tex: texture(gl, gl.LINEAR, gl.LINEAR) };
       b.count = upload(gl, b.geo, bodyMesh(img, depth));
-      gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+      gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
       this.bodies.set(img, b);
     }
@@ -574,7 +622,7 @@ export class Hd {
     const gl = this.gl;
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, this.cardTex);
-    gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+    gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, this.atlas);
     return new Float32Array(out);
   }

@@ -244,13 +244,13 @@ export class Engine {
       for (let y = 0; y < SCREEN_H; y += band) ctx.fillRect(0, Math.round(y), SCREEN_W, h);
       return;
     }
-    // the mosaic needs the picture in the buffer: in the modern look (the world is drawn
-    // apart, under a see-through buffer) it is the plain fade
-    if (this.fx.fadeKind === 'mosaic' && f < 1 && !this.hdFrame) {
+    // in the modern look the world is drawn apart, under a see-through buffer: there
+    // hd.js breaks its own picture into the blocks, and only the colour is drawn here
+    if (this.fx.fadeKind === 'mosaic' && f < 1) {
       // blocks grow from 1 to 16 pixels over most of the way; the colour comes last
       const k = Math.min(1, f / 0.75);
       const b = Math.max(1, Math.round(k * 16));
-      if (b > 1) {
+      if (b > 1 && !this.hdFrame) {
         const cw = Math.ceil(SCREEN_W / b);
         const ch = Math.ceil(SCREEN_H / b);
         if (!this.mosaicBuf || this.mosaicBuf.width < cw || this.mosaicBuf.height < ch) this.mosaicBuf = canvas(Math.max(cw, 64), Math.max(ch, 64));
