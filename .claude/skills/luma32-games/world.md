@@ -149,3 +149,13 @@ chase through the streets — not as decoration.
 - Streets with traffic and people on the pavement (`population`, lanes on tiles or a
   street graph), the minimap and missions exist too (README "Roads and traffic" to
   "Missions"): they are for a city the player roams, rarely what a story needs.
+
+## First person
+
+`view: 'first'` on the game or a map shows it from the player's eyes (README "First
+person"): walls are the solid tiles, repeated down to `wallHeight`; people and props are
+sprites; `dark` is fog and every light cuts it; a light with `cone` on the player is a
+torch. The data is the same map, so build and audit it as any other, then look at it in
+first person: a wall tile needs a picture that reads standing up (bricks, planks, stone),
+and water or a chasm says `wall: false`. Horror lives here: a short `fog`, one torch,
+sounds at spots with `reverb`, and `api.look` to turn the player's eyes to what matters.

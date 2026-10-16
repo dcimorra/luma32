@@ -132,6 +132,7 @@ library only points to it.
   poses) generated from a spec.
 - `engine/audio.js`: synthesised chiptune sequencer + effects + ambiences.
 - `engine/weather.js`, `engine/vfx.js`, `engine/gfx.js` (`Painter`, the pixel-art API).
+- `engine/firstperson.js`: the map from the player's eyes, a raycaster (`view: 'first'`).
 - `engine/groups.js`: sagas and collections on the shelf (`groups` in `games/index.json`,
   each a folder `public/groups/<id>/` with `group.js` and `locales/es.json`).
 - `engine/report.js`: "Report a problem", from the pause menu: to the game's author (an
@@ -421,6 +422,36 @@ shown classic.
 
 `node tools/sweep-hd.mjs <url> [game ...]` draws every map of every cartridge in the
 modern look on contact sheets, with a census of what each map uses (`/tmp/luma-sweep`).
+
+## First person
+
+`view: 'first'` on the game or on a map (since 1.15) shows that map from the player's eyes,
+as the GBA's first-person games did, with everything the map already says: the ground is
+the floor, solid tiles stand up as walls with their own picture repeated down them, props
+and people are sprites standing where they stand, `dark` is the fog of the place and
+every light cuts it, `grade` is its light. Left and right turn, up and down walk the way
+the eyes look, B runs; A talks to, examines or triggers whatever the eyes point at within
+a cell and a half; walking into a door takes it. Cells, warps, triggers, spots, scripts
+and saves are exactly the same, so a house in first person sits in an ordinary game and
+the audit and the guide still know their way (the guide's arrow floats over the goal).
+The modern look shows such a map classic.
+
+```js
+view: 'first',                       // the game, or one map
+wallHeight: 32, ceiling: 'planks',   // walls two cells tall (map pixels); a tile overhead, else the map's `sky` or `void`
+fog: 7,                              // cells to the full `dark` (7 with a dark, 24 without)
+turnSpeed: 0.05,                     // radians a frame
+// tiles
+sea:   { solid: true, wall: false },          // blocks the feet, lies flat (water, a chasm); `medium`, `reflect` and `step: 'water'` lie flat by themselves
+cliff: { solid: true, wall: 'cliff_face' },   // the picture its wall shows, when not its own
+// a torch: a light on the player with the beam's width in radians
+actors: [{ id: 'player', light: { r: 100, cone: 1.1, color: '#ffe0a0' } }]   // or api.player.light = {...}
+await api.look('left'); await api.look('ana', 600); await api.look(Math.PI / 4)   // turn the eyes; a quarter in the other views
+```
+
+`api.player.heading` is where the eyes point (radians, 0 north, π/2 east), kept in the
+save. Heights are not shown yet (raised cells lie flat); a prop bigger than a cell is a
+card, not a block.
 
 ## Journal and credits
 

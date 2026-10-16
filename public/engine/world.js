@@ -17,6 +17,7 @@ import { goalOf, drawGuide, audit, guideOn, setGuide, pressFrom, rectCells } fro
 import { placeParty, tickParty, tickLife, hushLife, bark, drawBarks, bumped, routeStop } from './company.js';
 import { Effects, EASE } from './vfx.js';
 import { Mode7 } from './mode7.js';
+import { FirstPerson, headingOf, dirOf, forward } from './firstperson.js';
 import { City } from './city.js';
 import { board, unboard, boardable, driveTick } from './vehicle.js';
 import { seek, clearLine, centreOf, shoot } from './pursuit.js';
@@ -129,6 +130,7 @@ export class Actor {
     this.px = def.x * TILE;
     this.py = def.y * TILE;
     this.dir = def.dir || 'down';
+    this.heading = headingOf(this.dir);   // radians, for the first-person view: up is 0, right π/2
     this.visible = def.visible !== false;
     this.solid = def.solid !== false;
     this.speed = def.speed ?? 1;
@@ -179,12 +181,15 @@ export class Actor {
   // under it (README "Heights"), eased from one cell to the next while it walks.
   get ez() { return this.world.ezOf(this); }
 
-  face(dir) { this.dir = SHORT[dir] || dir; }
+  face(dir) { this.dir = SHORT[dir] || dir; this.heading = headingOf(this.dir); }
 
   faceActor(other) {
     const dx = other.x - this.x;
     const dy = other.y - this.y;
     this.dir = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up');
+    // in first person the player turns their eyes to them, not just a quarter
+    if (this === this.world.player && this.world.firstPerson) this.heading = Math.atan2(other.px - this.px, -(other.py - this.py));
+    else this.heading = headingOf(this.dir);
   }
 
   // One tile in a direction. Resolves true when arrived, false when blocked.
@@ -703,7 +708,7 @@ export class World {
       keep.moving = null;
       keep.seenMode = false;
       keep.sliding = false;
-      if (dir) keep.dir = dir;
+      if (dir) keep.face(dir);
       keep.visible = !this.driving;
       this.player = keep;
     } else {
@@ -858,6 +863,7 @@ export class World {
   setTile(x, y, id) {
     if (!this.ground[y]) return;
     this.ground[y][x] = id;
+    this.groundVersion = (this.groundVersion || 0) + 1;   // the first-person floor is drawn again
   }
 
   // A prop entry ready to draw and query. `src` is the map's own entry, kept so a `when`
@@ -1436,6 +1442,11 @@ export class World {
     if (this.checkSight()) return;
     // ice keeps the player going, a current carries them (engine/move.js)
     if (this.slide && !this.free && slideOn(this)) return;
+    if (this.firstPerson) {
+      if (inp.pressed('a') && !(this.map.actionA ?? this.game.actionA) && !cooling) { this.interact(); return; }
+      this.walkFirst(e, inp, p);
+      return;
+    }
     if (this.free) {
       if (inp.pressed('a') && !(this.map.actionA ?? this.game.actionA) && !cooling) { this.interact(); return; }
       this.walkFree(e, inp, p);
@@ -1521,9 +1532,11 @@ export class World {
   // instead of cell by cell. Warps, triggers, spots, talk and edges work the same, on the
   // cell under the hitbox's centre.
   get free() { return (this.map.movement ?? this.game.movement) === 'free'; }
+  // the map seen from the player's eyes (engine/firstperson.js, README "First person")
+  get firstPerson() { return !!this.map && (this.map.view ?? this.game.view) === 'first'; }
   // what the engine tells the page (engine.js): the grid is walked with the pointer, free
   // movement only with buttons (a tablet gets its pad); the corner button is START
-  get pointer() { return !this.map || !this.free; }
+  get pointer() { return !this.map || (!this.free && !this.firstPerson); }
   get menuButton() { return !this.busy; }
 
   // A rectangle in map pixels: an actor's feet, or an entity's own box.
@@ -1561,7 +1574,7 @@ export class World {
     const actorsBlock = who instanceof Actor || who?.bumpsActors;
     for (const a of actorsBlock ? this.actors : []) {
       if (a === who || !a.visible || !a.solid) continue;
-      if (overlap(b, this.free ? this.box(a) : { x: a.px, y: a.py, w: TILE, h: TILE })) return true;
+      if (overlap(b, this.free || this.firstPerson ? this.box(a) : { x: a.px, y: a.py, w: TILE, h: TILE })) return true;
     }
     for (const en of this.city.near(b)) if (en !== who && en.solid && !en.removed && overlap(b, this.box(en))) return true;
     return false;
@@ -1650,6 +1663,42 @@ export class World {
       if (e.frame - (this.lastBump || 0) > 20) {
         this.lastBump = e.frame;
         if (!this.hook('onBump', { x: nx, y: ny, dir: p.dir, tile: this.tileAt(nx, ny) })) sfx('bump');
+      }
+    }
+  }
+
+  // First person: left and right turn, up and down walk the way the eyes look (B runs).
+  // The feet are the same box as free movement, so walls, props and people stop them the
+  // same, and the cell under them is the player's cell for warps, triggers and edges.
+  walkFirst(e, inp, p) {
+    const turn = (inp.held('right') ? 1 : 0) - (inp.held('left') ? 1 : 0);
+    const go = (inp.held('up') ? 1 : 0) - (inp.held('down') ? 1 : 0);
+    if (turn) {
+      p.heading += turn * (this.map.turnSpeed ?? this.game.turnSpeed ?? 0.05);
+      p.heading = ((p.heading + Math.PI) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2) - Math.PI;
+    }
+    p.dir = dirOf(p.heading);
+    if (!go) { p.strolling = false; return; }
+    const sp = stepSpeed(this, p, inp.held('b') && this.map.run !== false && this.game.run !== false);
+    const [fx, fy] = forward(p.heading);
+    const before = Math.floor(p.anim / TILE);
+    const res = this.moveBox(p, fx * sp * go, fy * sp * go);
+    p.strolling = !!(res.x || res.y);
+    p.speed = sp;
+    p.anim += p.strolling ? sp : 0;
+    if (Math.floor(p.anim / TILE) !== before) p.stepCount++;
+    const b = this.box(p);
+    const cx = Math.floor((b.x + b.w / 2) / TILE);
+    const cy = Math.floor((b.y + b.h / 2) / TILE);
+    if (cx !== p.x || cy !== p.y) { p.x = cx; p.y = cy; this.arrived(); return; }
+    if (res.hitX || res.hitY) {
+      // a door in a wall opens to whoever walks into it
+      const t = this.targetFirst();
+      const warp = this.warpAt(t.x, t.y, p.dir, true);
+      if (warp) { p.strolling = false; this.run((api) => api.take(warp)); return; }
+      if (e.frame - (this.lastBump || 0) > 20) {
+        this.lastBump = e.frame;
+        if (!this.hook('onBump', { x: t.x, y: t.y, dir: p.dir, tile: this.tileAt(t.x, t.y) })) sfx('bump');
       }
     }
   }
@@ -1839,8 +1888,41 @@ export class World {
   }
 
   // What A would act on now: a person, a spot or something to examine, with its cell.
+  // First person: what the eyes point at, along the way they look, up to a cell and a
+  // half away: the first person who answers, the first live spot, the first thing to
+  // examine, else the wall or the floor there.
+  targetFirst() {
+    const p = this.player;
+    const [fx, fy] = forward(p.heading);
+    const b = this.box(p);
+    const ex = b.x + b.w / 2;
+    const ey = b.y + b.h / 2;
+    const [dx, dy] = DIRS[p.dir];
+    let last = null;
+    let mute = null;
+    for (let t = 4; t <= 26; t += 2) {
+      const x = Math.floor((ex + fx * t) / TILE);
+      const y = Math.floor((ey + fy * t) / TILE);
+      if (x === p.x && y === p.y) continue;
+      if (last && last[0] === x && last[1] === y) continue;
+      last = [x, y];
+      const a = this.actorAt(x, y, p, true);
+      if (a?.def.talk) return { actor: a, x, y };
+      mute ||= a;
+      const s = this.spotAt(x, y, p.dir);
+      if (s) return { spot: s, x, y };
+      const prop = this.propAt(x, y);
+      const examine = this.examineAt(x, y, prop);
+      if (examine) return { examine, x, y };
+      if (this.solidAt(x, y, p, p.dir)) break;
+    }
+    const [x, y] = last || [p.x + dx, p.y + dy];
+    return { none: true, x, y, dx, dy, mute };
+  }
+
   target() {
     const p = this.player;
+    if (this.firstPerson) return this.targetFirst();
     const [dx, dy] = DIRS[p.dir];
     const fx = p.x + dx;
     const fy = p.y + dy;
@@ -1916,12 +1998,20 @@ export class World {
     const t = this.target();
     if ((t.none && !diveHere(this)) || t.actor?.def.hint === false || t.spot?.hint === false || t.actor?.emote) return;
     const bob = Math.floor(e.frame / 20) % 2;
+    const th = getTheme();
+    if (this.firstPerson) {
+      const box = t.actor?.fpBox;
+      const x = box ? Math.round(Math.max(2, Math.min(SCREEN_W - 11, box.x + box.w / 2 - 4))) : SCREEN_W / 2 - 4;
+      const y = box ? Math.round(Math.max(2, box.y - 12)) - bob : SCREEN_H / 2 + 8 - bob;
+      frame(ctx, x, y, 9, 10, { border: th.border, light: th.fill, fill: th.fill });
+      drawText(ctx, 'A', x + 2, y + 1, th.accent);
+      return;
+    }
     // over the person; for a thing, over the player's head (a prop may be any height)
     const who = t.actor || p;
     if (camFor) [cx, cy] = camFor(who);
     const x = Math.round(who.px) - cx + 4;
     const y = Math.round(who.py) - who.ez - 18 - cy - bob;
-    const th = getTheme();
     frame(ctx, x, y, 9, 10, { border: th.border, light: th.fill, fill: th.fill });
     drawText(ctx, 'A', x + 2, y + 1, th.accent);
   }
@@ -1971,6 +2061,7 @@ export class World {
   // shrunk onto the screen; the HUD is drawn after, at the screen's own size.
   draw(ctx, e) {
     if (!this.map) return;
+    if (this.firstPerson) { this.drawFirst(ctx, e); this.drawScreen(ctx, e); return; }
     const bw = this.viewW;
     const bh = this.viewH;
     if (bw !== BASE_W || bh !== BASE_H) {
@@ -1998,7 +2089,7 @@ export class World {
   // For the modern look (engine.js, hd.js, diorama.js): the world is built in 3D from
   // the map itself; the engine draws the HUD apart.
   drawHd(e) {
-    if (!this.map) return null;
+    if (!this.map || this.firstPerson) return null;
     // a region bigger than the GPU takes in one picture is shown classic
     const R = regionOf(this);
     if (Math.max(R.w, R.h) * TILE > (this.engine.hdPass?.maxTex ?? 4096)) return null;
@@ -2100,6 +2191,34 @@ export class World {
       drawGuide(this, ctx, e, cx, cy, (x, up, z) => pass.project(x, up + stairLift(this, x, z), z));
     }
     this.city.marker(ctx, cx, cy, e);
+  }
+
+  // The hour's light, for the views that ask (engine/firstperson.js).
+  clockGradeNow() { return clockGrade(this); }
+  clockDarkNow() { return clockDark(this); }
+
+  // The map from the player's eyes (engine/firstperson.js), and what the console draws
+  // flat over it: the weather, the bubbles over heads (anchored where the view shows
+  // them), the A hint and the guide's arrow.
+  drawFirst(ctx, e) {
+    const fp = (this.fp ||= new FirstPerson(this));
+    fp.draw(ctx, e);
+    const p = this.player;
+    const weather = resolveWeather(this.map.weather, this.api, e);
+    const at = { x: Math.round(p.heading * 140), y: Math.round(p.py * 0.5) };
+    drawWeather(ctx, weather, at, e.frame);
+    drawWeather(ctx, weather, at, e.frame, { glowOnly: true });
+    // a bubble is drawn as if at its person's feet on the classic screen: the camera
+    // offset that puts that point at the head the view shows (or far away, unseen)
+    const camFor = (a) => {
+      const s = fp.project(a.px + 8 + (a.ox || 0), 26, a.py + 12 + (a.oy || 0));
+      if (!s || s.depth > 12 * TILE) return [1e5, 1e5];
+      return [Math.round(a.px + 8 - s.x), Math.round(a.py - 9 - s.y)];
+    };
+    for (const a of this.actors) if (a !== p && a.emote && a.visible) this.drawEmote(ctx, a, ...camFor(a));
+    drawBarks(this, ctx, 0, 0, (a) => (a === p ? [Math.round(p.px) - SCREEN_W / 2 + 8, Math.round(p.py) - SCREEN_H + 30] : camFor(a)));
+    this.drawHint(ctx, e, 0, 0);
+    drawGuide(this, ctx, e, 0, 0, (x, up, z) => fp.project(x, up, z) || { x: -1e4, y: -1e4 });
   }
 
   // The light of the diorama: the sun, the shade, the hour's grade and dark, and every
@@ -2998,6 +3117,25 @@ export class StoryApi {
     return st;
   }
 
+  // First person: turns the player's eyes to a direction ('left'), a person ('ana') or a
+  // heading in radians, easing over `ms`. In the other views it only faces the quarter.
+  async look(to, ms = 400) {
+    const p = this.player;
+    const target = typeof to === 'number' ? to : typeof to === 'string' && this.world.actor(to) && !(to in DIRS)
+      ? (() => { const a = this.world.actor(to); return Math.atan2(a.px - p.px, -(a.py - p.py)); })() : headingOf(to);
+    if (!this.world.firstPerson) { p.face(dirOf(target)); return; }
+    const from = p.heading;
+    let d = target - from;
+    d = ((d + Math.PI) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2) - Math.PI;
+    const n = Math.max(1, Math.round(ms / 16.67));
+    for (let i = 1; i <= n; i++) {
+      const k = i / n;
+      p.heading = from + d * (k < 0.5 ? 2 * k * k : 1 - 2 * (1 - k) * (1 - k));
+      p.dir = dirOf(p.heading);
+      await this.engine.wait(1);
+    }
+  }
+
   // Moves several actors at once: await api.together(a.walk('3l'), b.walk('2u')).
   together(...promises) { return Promise.all(promises); }
 
@@ -3102,7 +3240,7 @@ export class StoryApi {
     this.world.city.snapshot();
     const v = this.world.driving;
     if (v?.keep && v.id) this.save.driving = v.id; else delete this.save.driving;
-    Object.assign(this.save, { map: this.world.mapId, x: p.x, y: p.y, dir: p.dir, playerDoll: p.dollId, at: Date.now() });
+    Object.assign(this.save, { map: this.world.mapId, x: p.x, y: p.y, dir: p.dir, heading: p.heading, playerDoll: p.dollId, at: Date.now() });
     this.world.game.saveSlot.write(this.save, this.world.game);
   }
 

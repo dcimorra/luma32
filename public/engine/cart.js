@@ -37,6 +37,7 @@ function play(engine, game, save, resume) {
     engine.replaceAll(world);
     if (resume) {
       world.load(save.map, save.x, save.y, save.dir);
+      if (typeof save.heading === 'number') world.player.heading = save.heading;
       world.run(async (api) => {
         engine.fx.fade = 1;
         if (world.map.name) api.banner(world.map.name);
