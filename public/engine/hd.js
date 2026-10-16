@@ -226,7 +226,9 @@ export class Hd {
     this.bodies = new WeakMap();
     this.bodyList = [];
     this.atlas = document.createElement('canvas');
-    this.atlas.width = this.atlas.height = 1024;
+    // big enough for a street of buildings; past it, a card is left out (a warning says so)
+    this.atlasSize = 2048;
+    this.atlas.width = this.atlas.height = this.atlasSize;
     this.lights = new Float32Array(MAX_LIGHTS * 4);
     this.colors = new Float32Array(MAX_LIGHTS * 4);
     this.ok = true;
@@ -501,7 +503,8 @@ export class Hd {
   // The cards of this frame packed into one picture, and their quads.
   cards(list) {
     const ctx = this.atlas.getContext('2d');
-    ctx.clearRect(0, 0, 1024, 1024);
+    const S = this.atlasSize;
+    ctx.clearRect(0, 0, S, S);
     const placed = new Map();
     let x = 1;
     let y = 1;
@@ -513,29 +516,49 @@ export class Hd {
       // a prop lying down keeps the block of its own (beds); vehicles are bodies
       let at = placed.get(c.img);
       if (!at) {
-        if (x + c.w + 1 > 1024) { x = 1; y += row + 2; row = 0; }
-        if (y + c.h + 1 > 1024) continue;
+        if (x + c.w + 1 > S) { x = 1; y += row + 2; row = 0; }
+        if (y + c.h + 1 > S) { if (!this.warnedFull) { this.warnedFull = true; console.warn('[luma] modern look: too many props on screen for one picture; some are left out'); } continue; }
         at = { x, y };
         ctx.drawImage(c.img, x, y);
         placed.set(c.img, at);
         x += c.w + 2;
         row = Math.max(row, c.h);
       }
-      const u0 = at.x / 1024;
-      const u1 = (at.x + c.w) / 1024;
-      const v0 = at.y / 1024;
-      const v1 = (at.y + c.h) / 1024;
+      const u0 = at.x / S;
+      const u1 = (at.x + c.w) / S;
+      const v0 = at.y / S;
+      const v1 = (at.y + c.h) / S;
       const x0 = c.x;
       const x1 = c.x + c.w;
       const y0 = c.y;
       const y1 = c.y + c.h;
+      if (c.box) {
+        // a box: the façade (the picture under its roof rows) standing at the front, the
+        // roof laid on top back to `depth`, the sides the façade's edge columns carried
+        const q = (pts, n) => { for (const [px, py, pz, u, v] of pts) out.push(px, py, pz, u, v, ...n); };
+        const hf = c.h - c.roof;
+        const zf = c.z;
+        const zb = c.z - c.depth;
+        const yt = c.y + hf;
+        const vr = (at.y + c.roof) / S;
+        const ul = (at.x + 0.5) / S;
+        const ur = (at.x + c.w - 0.5) / S;
+        q([[x0, yt, zf, u0, vr], [x1, yt, zf, u1, vr], [x1, c.y, zf, u1, v1], [x0, yt, zf, u0, vr], [x1, c.y, zf, u1, v1], [x0, c.y, zf, u0, v1]], [0, 0, 1]);
+        if (c.roof > 0) q([[x0, yt, zb, u0, v0], [x1, yt, zb, u1, v0], [x1, yt, zf, u1, vr], [x0, yt, zb, u0, v0], [x1, yt, zf, u1, vr], [x0, yt, zf, u0, vr]], [0, 1, 0]);
+        for (const [ex, u, nx] of [[x0, ul, -1], [x1, ur, 1]]) {
+          q([[ex, yt, zb, u, vr], [ex, yt, zf, u, vr], [ex, c.y, zf, u, v1], [ex, yt, zb, u, vr], [ex, c.y, zf, u, v1], [ex, c.y, zb, u, v1]], [nx, 0, 0]);
+        }
+        // the back, so a turned camera never looks into it
+        q([[x1, yt, zb, u0, vr], [x0, yt, zb, u1, vr], [x0, c.y, zb, u1, v1], [x1, yt, zb, u0, vr], [x0, c.y, zb, u1, v1], [x1, c.y, zb, u0, v1]], [0, 0, -1]);
+        continue;
+      }
       if (c.lie) {
         // a low block: the picture on top, its bottom row and edge columns carried down
         const zt = c.z - c.h;
         const yt = c.y + c.lie;
-        const vb = (at.y + c.h - 0.5) / 1024;
-        const ul = (at.x + 0.5) / 1024;
-        const ur = (at.x + c.w - 0.5) / 1024;
+        const vb = (at.y + c.h - 0.5) / S;
+        const ul = (at.x + 0.5) / S;
+        const ur = (at.x + c.w - 0.5) / S;
         const q = (pts, n) => { for (const [px, py, pz, u, v] of pts) out.push(px, py, pz, u, v, ...n); };
         q([[x0, yt, zt, u0, v0], [x1, yt, zt, u1, v0], [x1, yt, c.z, u1, v1], [x0, yt, zt, u0, v0], [x1, yt, c.z, u1, v1], [x0, yt, c.z, u0, v1]], [0, 1, 0]);
         q([[x0, yt, c.z, u0, vb], [x1, yt, c.z, u1, vb], [x1, c.y, c.z, u1, vb], [x0, yt, c.z, u0, vb], [x1, c.y, c.z, u1, vb], [x0, c.y, c.z, u0, vb]], [0, 0, 1]);

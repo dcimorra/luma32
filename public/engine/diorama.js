@@ -360,11 +360,20 @@ export function gatherCards(world, frame, R) {
       // drawn from above (its whole picture is the ground it stands on: a bed, a table
       // seen from the top): it lies down, a low block with its picture on top
       const [, fh = 1, , dy = 0] = p.foot || [];
-      if (p.h >= 2 && fh >= p.h && !dy) out.push({ img, lie: LIE, x, z, y, w: img.width, h: img.height });
+      const d = p.def;
+      // a building (or what a tile says is one: `roof`, the rows of its picture that are
+      // its roof, seen from above): a box, its roof on top and its façade standing in front
+      const big = fh >= p.h && !dy && (p.w >= 4 || p.h >= 4);
+      if (d.roof !== undefined || big) {
+        const roof = Math.max(0, Math.min(img.height - 4, d.roof ?? Math.round(Math.max(12, Math.min(48, img.height * 0.24)))));
+        const depth = d.depth ?? Math.max(TILE, Math.min(fh * TILE, Math.round(roof * 1.6)));
+        out.push({ img, box: true, roof, depth, x, z, y, w: img.width, h: img.height });
+      } else if (p.h >= 2 && fh >= p.h && !dy) out.push({ img, lie: LIE, x, z, y, w: img.width, h: img.height });
       // standing (a carriage, a tree, a shelf): a body as deep as the ground it takes, to
       // a point; the centre a little behind the cell's edge so its front stays in it
       else {
-        const depth = Math.max(6, Math.min(16, fh * TILE * 0.75));
+        // wide and low (a parked car, a bench): deeper than a thin thing of its height
+        const depth = p.def.depth ?? Math.max(6, Math.min(16, Math.max(fh * TILE * 0.75, p.w >= 2 && p.h === 1 ? 16 : 0)));
         out.push({ img, x, z: z - depth / 2 - 0.5, y, w: img.width, h: img.height, body: true, depth });
       }
     }

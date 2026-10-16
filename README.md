@@ -362,7 +362,12 @@ is cut down low, as a set is cut away. Tiles with `low`, `medium`, `reflect` or 
 are never walls. Heights (README "Heights") rise as they are, a solid cell with a height included (it is raised ground, not a wall), and every face shows the tile's own `side`. Props (but `flat` ones,
 which lie in the ground) stand up as cards; one whose whole picture is the ground it
 stands on (`foot` as tall as its `size`, two rows or more: a bed, a table drawn from
-above) lies down instead, a low block with its picture on top. Standing props (a
+above) lies down instead, a low block with its picture on top — unless it is big (four
+cells or more across or down): then it is a building, a box whose top rows (about a
+quarter of the picture) are its roof, seen from above, and the rest its façade,
+standing. A tile may say it outright: `roof` (pixels of its picture that are roof; it
+makes any prop a box) and `depth` (how deep the box or body is, in pixels). Wide, low
+props (a parked car, a bench) get a thicker body. Standing props (a
 carriage, a tree, a shelf) get a body as deep as the ground they take, up to a tile.
 Stairs going up rise as real steps, and whoever is on them climbs: a tile whose id says
 stairs (`stair`, `escal`) and not down (`down`, `_dn`, `baj`) climbs north, as 3/4 art
