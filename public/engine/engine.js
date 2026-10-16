@@ -1,6 +1,6 @@
 // The console itself: a 240x160 frame buffer, a fixed 60 Hz loop, a stack of scenes
 // and the full-screen effects (fades, flashes, shakes, glitches) every game shares.
-import { SCREEN_W, SCREEN_H, canvas } from './gfx.js';
+import { SCREEN_W, SCREEN_H, BASE_W, BASE_H, canvas } from './gfx.js';
 import { Hd, hdOn, hdSupported } from './hd.js';
 
 export class Engine {
@@ -105,8 +105,10 @@ export class Engine {
   }
 
   // kind: 'fade' (stepped, like brightness registers), 'iris' (a circle closing on `at`,
-  // screen pixels, default the centre) or 'wipe' (a curtain from the left). The way in
-  // uses the kind of the way out unless told otherwise.
+  // screen pixels, default the centre), 'wipe' (a curtain from the left), 'mosaic' (the
+  // picture breaks into blocks that grow until the colour takes over, as the GBA's mosaic
+  // register did) or 'blinds' (bands closing from the top). The way in uses the kind of
+  // the way out unless told otherwise.
   fadeOut(frames = 20, color = '#000000', kind = 'fade', at = null) {
     Object.assign(this.fx, { fadeColor: color, fadeKind: kind || 'fade', fadeAt: at, fadingIn: false });
     return this.tween('fade', 1, frames);
@@ -235,6 +237,36 @@ export class Engine {
       else ctx.fillRect(0, 0, w, SCREEN_H);
       return;
     }
+    if (this.fx.fadeKind === 'blinds' && f < 1) {
+      // eight bands, each shut from its top edge, in whole pixels
+      const band = SCREEN_H / 8;
+      const h = Math.round(f * band);
+      for (let y = 0; y < SCREEN_H; y += band) ctx.fillRect(0, Math.round(y), SCREEN_W, h);
+      return;
+    }
+    // the mosaic needs the picture in the buffer: in the modern look (the world is drawn
+    // apart, under a see-through buffer) it is the plain fade
+    if (this.fx.fadeKind === 'mosaic' && f < 1 && !this.hdFrame) {
+      // blocks grow from 1 to 16 pixels over most of the way; the colour comes last
+      const k = Math.min(1, f / 0.75);
+      const b = Math.max(1, Math.round(k * 16));
+      if (b > 1) {
+        const cw = Math.ceil(SCREEN_W / b);
+        const ch = Math.ceil(SCREEN_H / b);
+        if (!this.mosaicBuf || this.mosaicBuf.width < cw || this.mosaicBuf.height < ch) this.mosaicBuf = canvas(Math.max(cw, 64), Math.max(ch, 64));
+        const m = this.mosaicBuf.getContext('2d');
+        m.imageSmoothingEnabled = false;
+        m.drawImage(ctx.canvas, 0, 0, SCREEN_W, SCREEN_H, 0, 0, cw, ch);
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(this.mosaicBuf, 0, 0, cw, ch, 0, 0, cw * b, ch * b);
+      }
+      if (f > 0.75) {
+        ctx.globalAlpha = Math.round(((f - 0.75) / 0.25) * 4) / 4;
+        ctx.fillRect(0, 0, SCREEN_W, SCREEN_H);
+        ctx.globalAlpha = 1;
+      }
+      return;
+    }
     // fades in steps, like hardware brightness registers
     ctx.globalAlpha = Math.round(f * 8) / 8;
     ctx.fillRect(0, 0, SCREEN_W, SCREEN_H);
@@ -280,7 +312,28 @@ export class Engine {
       out.drawImage(this.hdPass.canvas, ox, oy, W, H);
       return;
     }
-    out.imageSmoothingEnabled = false;
-    out.drawImage(this.buffer, 0, 0, SCREEN_W, SCREEN_H, ox, oy, W, H);
+    // at a whole multiple every pixel is the same size: straight nearest-neighbour. At any
+    // other size (a 1366×768 window is 4.8×, a phone 3.25×) nearest would make some pixels a
+    // step wider than their neighbours, and the picture shimmers as it scrolls: so the
+    // buffer is first blown up to the next whole multiple, sharp, and that is shrunk to
+    // the window smoothly. Pixels stay even and crisp; only their edges blend, under a pixel.
+    const kx = W / BASE_W;
+    const ky = H / BASE_H;
+    const whole = Math.abs(kx - Math.round(kx)) < 1e-6 && Math.abs(ky - Math.round(ky)) < 1e-6;
+    if (whole || kx <= 1 || ky <= 1) {
+      out.imageSmoothingEnabled = false;
+      out.drawImage(this.buffer, 0, 0, BASE_W, BASE_H, ox, oy, W, H);
+      return;
+    }
+    const n = Math.ceil(Math.max(kx, ky));
+    const sw = BASE_W * n;
+    const sh = BASE_H * n;
+    if (!this.sharp || this.sharp.width !== sw || this.sharp.height !== sh) this.sharp = canvas(sw, sh);
+    const s = this.sharp.getContext('2d');
+    s.imageSmoothingEnabled = false;
+    s.drawImage(this.buffer, 0, 0, BASE_W, BASE_H, 0, 0, sw, sh);
+    out.imageSmoothingEnabled = true;
+    out.imageSmoothingQuality = 'high';
+    out.drawImage(this.sharp, 0, 0, sw, sh, ox, oy, W, H);
   }
 }

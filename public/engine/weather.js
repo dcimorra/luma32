@@ -6,8 +6,8 @@ import { SCREEN_W, SCREEN_H, TILE, canvas } from './gfx.js';
 // Presets: count per screen, speed (px/frame), drift, size, colour, how far it follows
 // the camera (1 = stuck to the ground, 0 = stuck to the screen).
 const KINDS = {
-  rain: { n: 70, vx: -1.2, vy: 5, len: 5, color: 'rgba(190,210,240,0.55)', par: 0.4 },
-  storm: { n: 140, vx: -2.6, vy: 7, len: 7, color: 'rgba(200,215,245,0.6)', par: 0.4 },
+  rain: { n: 70, vx: -1.2, vy: 5, len: 5, color: 'rgba(190,210,240,0.55)', par: 0.4, splash: true },
+  storm: { n: 140, vx: -2.6, vy: 7, len: 7, color: 'rgba(200,215,245,0.6)', par: 0.4, splash: true },
   snow: { n: 60, vx: -0.25, vy: 0.45, size: 1, sway: 0.6, color: 'rgba(255,255,255,0.9)', par: 0.7 },
   blizzard: { n: 150, vx: -2.2, vy: 1.1, size: 1, sway: 0.4, color: 'rgba(240,245,255,0.85)', par: 0.5 },
   leaves: { n: 14, vx: 0.45, vy: 0.35, size: 2, sway: 1.2, color: ['#c86a2a', '#d8a040', '#8a9a3a'], par: 0.8 },
@@ -42,6 +42,7 @@ export function drawWeather(ctx, w, cam, f, { glowOnly = false } = {}) {
   const W = SCREEN_W + 16;
   const H = SCREEN_H + 16;
   const vx = w.vx + (w.wind ?? 0);
+  if (w.splash) drawSplashes(ctx, w, cam, f);
   for (let i = 0; i < w.n; i++) {
     const sp = 0.6 + hash(i, 3) * 0.8;
     let x = hash(i, 1) * W + vx * sp * f - cam.x * w.par;
@@ -59,6 +60,28 @@ export function drawWeather(ctx, w, cam, f, { glowOnly = false } = {}) {
       ctx.fillRect(Math.round(x), Math.round(y), w.size, w.size);
       if (w.glow) { ctx.globalAlpha = 0.3; ctx.fillRect(Math.round(x) - 1, Math.round(y) - 1, 3, 3); ctx.globalAlpha = 1; }
     }
+  }
+}
+
+// Where the rain lands: small rings opening on the ground, stuck to it (they follow the
+// camera whole), each at a fresh spot every cycle. Stateless like the drops: a spot is a
+// hash of the ring's index and its cycle. `splash: false` on a weather turns them off.
+function drawSplashes(ctx, w, cam, f) {
+  const P = 22;
+  const n = Math.max(1, Math.round(w.n / 5));
+  ctx.fillStyle = Array.isArray(w.color) ? w.color[0] : w.color;
+  for (let i = 0; i < n; i++) {
+    const off = Math.floor(hash(i, 6) * P);
+    const c = Math.floor((f + off) / P);
+    const t = (f + off) % P;
+    // a map pixel within a screen's span, wrapped round the view as the camera moves
+    const wrap = (v, size) => ((v % size) + size) % size;
+    const x = Math.round(wrap(hash(i, 100 + (c % 1000)) * SCREEN_W - cam.x, SCREEN_W));
+    const y = Math.round(wrap(hash(i, 2000 + (c % 1000)) * SCREEN_H - cam.y, SCREEN_H));
+    if (t < 4) ctx.fillRect(x, y, 1, 1);
+    else if (t < 10) { ctx.fillRect(x - 1, y, 1, 1); ctx.fillRect(x + 1, y, 1, 1); ctx.fillRect(x, y - 1, 1, 1); }
+    else if (t < 16) { ctx.fillRect(x - 2, y, 1, 1); ctx.fillRect(x + 2, y, 1, 1); ctx.fillRect(x - 1, y - 1, 3, 1); ctx.fillRect(x - 1, y + 1, 3, 1); }
+    else { ctx.fillRect(x - 3, y, 1, 1); ctx.fillRect(x + 3, y, 1, 1); ctx.fillRect(x - 2, y - 1, 1, 1); ctx.fillRect(x + 2, y - 1, 1, 1); }
   }
 }
 

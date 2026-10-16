@@ -122,6 +122,9 @@ library only points to it.
 - `engine/boot.js`: power on → logo → shelf → cartridge. `engine/cart.js`: a cartridge's
   title screen, then new game / continue.
 - `engine/engine.js`: frame buffer, fixed 60 Hz loop, scene stack, fades/flash/shake/glitch.
+  The 240×160 picture reaches the window at a whole multiple when it can; at any other
+  size (since 1.14) it is blown up sharp to the next whole multiple and shrunk smoothly to
+  fit, so every pixel is the same size and nothing shimmers as the map scrolls.
 - `engine/world.js`: maps, actors, collisions, camera, and `StoryApi` (what scripts call).
 - `engine/ui.js`: dialogue boxes, choices, menus, chapter cards, location banners.
 - `engine/font.js`, `engine/glyphs.js`: the bitmap font (accents composed, `¿¡ñ` included).
@@ -187,7 +190,7 @@ account's saves from the device). Without an answer to `hello` the console runs 
   modes: { swim: { speed: 0.75 }, fly: { height: 12 } },         // see "Getting about"
   direct: true, hint: false, memory: false,                     // see "Scripts", "Life on a map"
   autosave: false, recap: false,         // on by default: save on arriving somewhere; recall the objective on "Continuar"
-  transition: 'iris',                    // how warps change place: fade (default), iris, wipe
+  transition: 'iris',                    // how warps change place: fade (default), iris, wipe, mosaic, blinds
   collections: { shells: { name: 'col.shells', total: 12 } },  // see "Journal and credits"
   dev: { jumps: [{ label, run: async (api) => {} }] },          // see "Dev mode"
 }
@@ -315,6 +318,10 @@ map, and every light on screen cuts it in stepped rings: a prop or actor with
 `light: { r, color, flicker, dx, dy, steps }` (`steps` 2–8 rings, default 2: more is a
 softer edge), and `lights` on the map (cells). The colour adds a
 faint glow. `grade` still multiplies the whole map, before both.
+
+Rain and storm land: small rings open on the ground where the drops fall, stuck to it as
+the camera moves (since 1.14). A weather of a cartridge's own gets them with `splash: true`;
+`splash: false` on an inline one takes them off.
 
 ## The objective and the guide
 
@@ -639,7 +646,7 @@ await a.gesture('nod')                     // nod shake hop shiver bow
 await a.jump(); await a.jump('right', { n: 2 })   // scenes only: on the spot, or over cells (api.jump(id, dir, opts))
 a.nudge(4, 0)                              // a few pixels off the cell until the next step (a hug)
 await api.letterbox(true); await api.letterbox(false)     // cinema bars
-await api.fadeOut(400, '#000', { kind: 'iris', at: 'player' }); await api.fadeIn(400)  // fade iris wipe
+await api.fadeOut(400, '#000', { kind: 'iris', at: 'player' }); await api.fadeIn(400)  // fade iris wipe mosaic blinds
 await api.warp('inn', 3, 4, 'up', { transition: 'wipe' })
 api.quest('lamps'); api.quest('lamps', 'done'); api.questState('lamps')   // the journal
 api.collect('shells', 'beach_1'); api.collected('shells')

@@ -2654,7 +2654,7 @@ export class StoryApi {
 
   wait(ms) { return this.engine.waitMs(ms); }
   frames(n) { return this.engine.wait(n); }
-  // opts: { kind: 'fade' | 'iris' | 'wipe', at: 'player' | an actor id | { x, y } (screen) }
+  // opts: { kind: 'fade' | 'iris' | 'wipe' | 'mosaic' | 'blinds', at: 'player' | an actor id | { x, y } (screen) }
   fadeOut(ms = 350, color, opts = {}) { return this.engine.fadeOut(ms / 16.67, color, opts.kind, this.screenAt(opts.at)); }
   fadeIn(ms = 350, opts = {}) { return this.engine.fadeIn(ms / 16.67, opts.kind, this.screenAt(opts.at)); }
   letterbox(on = true, ms = 350) { return this.engine.letterbox(on, ms / 16.67); }
@@ -2996,7 +2996,7 @@ export class StoryApi {
   // Moves several actors at once: await api.together(a.walk('3l'), b.walk('2u')).
   together(...promises) { return Promise.all(promises); }
 
-  // transition: 'fade' | 'iris' | 'wipe' (default the game's `transition`, or 'fade');
+  // transition: 'fade' | 'iris' | 'wipe' | 'mosaic' | 'blinds' (default the game's `transition`, or 'fade');
   // an iris closes on the player and opens on them at the arrival.
   async warp(mapId, x, y, dir, { fade = true, silent = false, transition } = {}) {
     const kind = transition || this.game.transition || 'fade';
