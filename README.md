@@ -456,6 +456,13 @@ await api.look('left'); await api.look('ana', 600); await api.look(Math.PI / 4) 
 save. Heights are not shown yet (raised cells lie flat); a prop bigger than a cell is a
 card, not a block.
 
+The player may choose it too (since 1.16): "Cámara" in the options, or SELECT held for a
+moment, switches any map the cartridge leaves to them between the view from above and the
+eyes, kept per device (`?fp=1` / `?fp=0` for testing). A map or a game that says a `view`
+keeps it; `firstPerson: false` on either takes the choice away (a minigame, a chase), and
+at a wheel it is always the view from above. A tap on SELECT still reaches the game when
+it is let go, as START does.
+
 ## Journal and credits
 
 `api.quest(id, state)` writes a quest in the save (`open`, `done`, `failed`) with a banner

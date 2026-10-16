@@ -17,8 +17,10 @@ const KEYS = {
 
 const PAD = { 12: 'up', 13: 'down', 14: 'left', 15: 'right', 0: 'a', 1: 'b', 9: 'start', 8: 'select' };
 
-// START held this long is the console's own shortcut (`onHoldStart`), not a press.
-const HOLD_START_MS = 700;
+// START or SELECT held this long is the console's own shortcut (`onHoldStart`,
+// `onHoldSelect`), not a press.
+const HOLD_MS = 700;
+const HOLDS = { start: 'onHoldStart', select: 'onHoldSelect' };
 
 export class Input {
   constructor() {
@@ -27,6 +29,9 @@ export class Input {
     this.before = new Set();
     this.listeners = new Set();
     this.lastSource = 'touch';
+    // per holdable button: when it went down and up, since which frame it is held, and
+    // whether the hold already fired
+    this.holds = Object.fromEntries(Object.keys(HOLDS).map((b) => [b, { down: null, up: null, since: null, held: false }]));
 
     addEventListener('keydown', (e) => {
       const b = KEYS[e.code];
@@ -35,7 +40,7 @@ export class Input {
       if (e.target.closest?.('input, textarea, select, dialog')) return;
       e.preventDefault();
       this.lastSource = 'key';
-      if (b === 'start' && !this.sources.key.has(b)) this.startDown ??= performance.now();
+      if (this.holds[b] && !this.sources.key.has(b)) this.holds[b].down ??= performance.now();
       this.sources.key.add(b);
       // a key let go before the next frame still counts once
       (this.taps ||= new Set()).add(b);
@@ -44,7 +49,7 @@ export class Input {
     addEventListener('keyup', (e) => {
       const b = KEYS[e.code];
       if (!b) return;
-      if (b === 'start') this.startUp = performance.now();
+      if (this.holds[b]) this.holds[b].up = performance.now();
       this.sources.key.delete(b);
     });
     addEventListener('blur', () => { this.sources.key.clear(); this.sources.touch.clear(); });
@@ -106,7 +111,7 @@ export class Input {
   emit(b) { for (const fn of this.listeners) fn(b); }
 
   touchDown(b) {
-    if (b === 'start' && !this.sources.touch.has(b)) this.startDown ??= performance.now();
+    if (this.holds[b] && !this.sources.touch.has(b)) this.holds[b].down ??= performance.now();
     if (!this.sources.touch.has(b)) this.emit(b);
     this.sources.touch.add(b);
     // a click shorter than a frame (a mouse on the corner button) still counts once
@@ -114,7 +119,7 @@ export class Input {
     this.lastSource = 'touch';
   }
   touchUp(b) {
-    if (b === 'start') this.startUp = performance.now();
+    if (this.holds[b]) this.holds[b].up = performance.now();
     this.sources.touch.delete(b);
   }
 
@@ -135,31 +140,34 @@ export class Input {
   }
 
   // Called once per frame by the engine, before the game updates.
-  // START reaches the game when it is let go, so that holding it can mean something else:
-  // held past HOLD_START_MS it calls `onHoldStart` and the game never sees it.
+  // START and SELECT reach the game when they are let go, so that holding one can mean
+  // something else: held past HOLD_MS it calls its `onHold…` and the game never sees it.
   update() {
     this.pollPads();
     this.before = this.now;
     const raw = new Set([...this.sources.key, ...this.sources.touch, ...this.sources.pad]);
-    let start = false;
-    if (raw.has('start')) {
-      // timed from the moment it went down: the first frames of a game can be slow
-      this.startSince ??= this.startDown ?? performance.now();
-      if (!this.startHeld && performance.now() - this.startSince >= HOLD_START_MS) { this.startHeld = true; this.onHoldStart?.(); }
-    } else {
-      // held and let go with no frame in between (a game still loading) is still a hold
-      const long = this.startDown != null && (this.startUp ?? performance.now()) - this.startDown >= HOLD_START_MS;
-      if (long && !this.startHeld) this.onHoldStart?.();
-      // let go (or a tap shorter than a frame) before the hold: an ordinary press
-      else if ((this.startSince != null || this.taps?.has('start')) && !this.startHeld) start = true;
-      this.startSince = this.startDown = this.startUp = null;
-      this.startHeld = false;
+    const pressed = new Set();
+    for (const [b, hook] of Object.entries(HOLDS)) {
+      const h = this.holds[b];
+      if (raw.has(b)) {
+        // timed from the moment it went down: the first frames of a game can be slow
+        h.since ??= h.down ?? performance.now();
+        if (!h.held && performance.now() - h.since >= HOLD_MS) { h.held = true; this[hook]?.(); }
+      } else {
+        // held and let go with no frame in between (a game still loading) is still a hold
+        const long = h.down != null && (h.up ?? performance.now()) - h.down >= HOLD_MS;
+        if (long && !h.held) this[hook]?.();
+        // let go (or a tap shorter than a frame) before the hold: an ordinary press
+        else if ((h.since != null || this.taps?.has(b)) && !h.held) pressed.add(b);
+        h.since = h.down = h.up = null;
+        h.held = false;
+      }
+      raw.delete(b);
     }
-    raw.delete('start');
-    for (const b of this.taps || []) if (b !== 'start') raw.add(b);
-    if (start) {
-      raw.add('start');
-      this.before.delete('start');
+    for (const b of this.taps || []) if (!HOLDS[b]) raw.add(b);
+    for (const b of pressed) {
+      raw.add(b);
+      this.before.delete(b);
     }
     this.now = raw;
     this.taps?.clear();

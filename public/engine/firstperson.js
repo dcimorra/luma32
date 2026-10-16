@@ -11,6 +11,20 @@
 // cut by the walls in front of them. All of it on the 240×160 buffer, in pixels.
 import { SCREEN_W, SCREEN_H, TILE, canvas, hex } from './gfx.js';
 
+// The player's own choice (a setting, like the modern look): any map the cartridge leaves
+// to them is seen from the eyes. ?fp=1 / ?fp=0 (testing) wins over the stored setting.
+const KEY = 'luma32.view';
+let eyes = (() => {
+  const q = new URLSearchParams(location.search).get('fp');
+  if (q !== null) return q === '1';
+  try { return localStorage.getItem(KEY) === 'first'; } catch { return false; }
+})();
+export const eyesOn = () => eyes;
+export function setEyes(v) {
+  eyes = !!v;
+  try { localStorage.setItem(KEY, eyes ? 'first' : 'top'); } catch { /* a comfort */ }
+}
+
 export const HEADING = { up: 0, right: Math.PI / 2, down: Math.PI, left: -Math.PI / 2 };
 export const headingOf = (dir) => HEADING[dir] ?? 0;
 // The four-way direction a heading faces: what everything that reads `dir` keeps seeing.

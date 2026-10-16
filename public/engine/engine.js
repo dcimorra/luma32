@@ -2,6 +2,7 @@
 // and the full-screen effects (fades, flashes, shakes, glitches) every game shares.
 import { SCREEN_W, SCREEN_H, BASE_W, BASE_H, canvas } from './gfx.js';
 import { Hd, hdOn, hdSupported, setHd } from './hd.js';
+import { eyesOn, setEyes } from './firstperson.js';
 
 export class Engine {
   constructor(display, input) {
@@ -9,6 +10,9 @@ export class Engine {
     this.input = input;
     // holding START switches between the classic and the modern look, anywhere
     input.onHoldStart = () => { if (hdSupported()) setHd(!hdOn()); };
+    // holding SELECT switches between the view from above and the player's eyes, where the
+    // map leaves it to them
+    input.onHoldSelect = () => { if (this.scenes.some((s) => s.eyesChoice)) setEyes(!eyesOn()); };
     this.buffer = canvas(SCREEN_W, SCREEN_H);
     this.ctx = this.buffer.getContext('2d');
     this.scenes = [];
