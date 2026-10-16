@@ -2000,7 +2000,13 @@ export class World {
     const bob = Math.floor(e.frame / 20) % 2;
     const th = getTheme();
     if (this.firstPerson) {
-      const box = t.actor?.fpBox;
+      // over the person's head where the view shows it (the raycaster's box, or the
+      // modern look's projection), else at the middle of the view
+      let box = t.actor?.fpBox;
+      if (t.actor && this.engine.hdShown) {
+        const s = this.engine.hdPass.project(t.actor.px + 8 + t.actor.ox, 28, t.actor.py + 12 + t.actor.oy);
+        box = s ? { x: s.x - 4, y: s.y, w: 8 } : null;
+      }
       const x = box ? Math.round(Math.max(2, Math.min(SCREEN_W - 11, box.x + box.w / 2 - 4))) : SCREEN_W / 2 - 4;
       const y = box ? Math.round(Math.max(2, box.y - 12)) - bob : SCREEN_H / 2 + 8 - bob;
       frame(ctx, x, y, 9, 10, { border: th.border, light: th.fill, fill: th.fill });
@@ -2089,11 +2095,13 @@ export class World {
   // For the modern look (engine.js, hd.js, diorama.js): the world is built in 3D from
   // the map itself; the engine draws the HUD apart.
   drawHd(e) {
-    if (!this.map || this.firstPerson) return null;
+    if (!this.map) return null;
     // a region bigger than the GPU takes in one picture is shown classic
     const R = regionOf(this);
     if (Math.max(R.w, R.h) * TILE > (this.engine.hdPass?.maxTex ?? 4096)) return null;
-    return { world: this, frame: e.frame, region: R };
+    // first person in the modern look: the same walls stood up with every face, seen
+    // from the player's eyes (engine/hd.js, buildStatic's `first`)
+    return { world: this, frame: e.frame, region: R, first: this.firstPerson };
   }
 
   // What lies on the ground, drawn as the classic look does into a picture of the view

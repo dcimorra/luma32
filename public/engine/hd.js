@@ -6,7 +6,8 @@
 // console's own drawing (dialogue, menus, HUD, fades) flat on top, at the screen's
 // resolution. Nothing a cartridge writes changes: a game cannot tell which look it is in.
 import { buildStatic, gatherCards, groundKey, bodyMesh, picture } from './diorama.js';
-import { canvas } from './gfx.js';
+import { forward } from './firstperson.js';
+import { canvas, TILE } from './gfx.js';
 
 const KEY = 'luma32.gfx';
 const MAX_LIGHTS = 16;
@@ -23,6 +24,10 @@ const SHADOW_SIZE = 2048;
 const SHADOW_SPAN = 300;               // map pixels around the camera's target
 const DECAL_SIDE = 64;                 // the floor's picture reaches this far past the view
 const DECAL_TOP = 200;                 // and this far above it
+// first person: the eyes, in map pixels over the floor, and how wide they see
+const FP_EYE = 16;
+const FP_FOV = (66 * Math.PI) / 180;
+const FP_FOCUS = 100;                  // the sun's shadows and the sharp distance sit this far ahead
 
 let supported;
 export function hdSupported() {
@@ -54,6 +59,8 @@ uniform mat4 uVP;
 uniform mat4 uLightVP;
 uniform vec3 uOffset;   // where a body stands (zero for the map and the cards)
 uniform bool uLie;      // a body seen from above (a vehicle): its picture lies on the ground
+uniform vec2 uTurn;     // first person: cos and sin of the turn a body makes to face the eyes
+uniform float uPivot;   // and the middle of its width, which it turns about
 out vec2 vUv;
 out vec3 vN;
 out vec3 vP;
@@ -62,6 +69,11 @@ void main() {
   vec3 a = aPos;
   vec3 n = aN;
   if (uLie) { a = vec3(aPos.x, aPos.z * 1.4 + 5.0, -aPos.y); n = vec3(aN.x, aN.z, -aN.y); }
+  if (uTurn.y != 0.0 || uTurn.x != 1.0) {
+    float lx = a.x - uPivot;
+    a = vec3(uPivot + lx * uTurn.x - a.z * uTurn.y, a.y, lx * uTurn.y + a.z * uTurn.x);
+    n = vec3(n.x * uTurn.x - n.z * uTurn.y, n.y, n.x * uTurn.y + n.z * uTurn.x);
+  }
   vec3 p = a + uOffset;
   vUv = aUv; vN = n; vP = p;
   vL = uLightVP * vec4(p, 1.0);
@@ -81,6 +93,9 @@ uniform int uN;
 uniform bool uDecal;    // the floor's picture: blended, not cut out
 uniform vec4 uLight[${MAX_LIGHTS}];      // x y z (map pixels), radius
 uniform vec4 uLightColor[${MAX_LIGHTS}]; // rgb, strength
+uniform vec4 uLightDir[${MAX_LIGHTS}];   // a torch: the way it points (x z) and the cosine of its half angle; w 0 for a lamp
+uniform vec3 uEye;      // first person: where the eyes are
+uniform float uFogFar;  // and how far the dark reaches its full (0: the dark is everywhere, as in the classic look)
 in vec2 vUv;
 in vec3 vN;
 in vec3 vP;
@@ -125,10 +140,17 @@ void main() {
     if (i >= uN) break;
     float k = clamp(1.0 - distance(vP, uLight[i].xyz) / uLight[i].w, 0.0, 1.0);
     k = k * k * (3.0 - 2.0 * k);
+    if (uLightDir[i].w > 0.0) {
+      // a beam: full along its way, soft at its edge, nothing behind
+      vec2 to = normalize(vP.xz - uLight[i].xz);
+      float c = dot(to, uLightDir[i].xy);
+      k *= smoothstep(uLightDir[i].w, uLightDir[i].w + (1.0 - uLightDir[i].w) * 0.5, c);
+    }
     glow += uLightColor[i].rgb * k * uLightColor[i].a;
   }
   float reach = clamp(max(glow.r, max(glow.g, glow.b)) * 1.8, 0.0, 1.0);
-  col = mix(col, uDark.rgb, uDark.a * (1.0 - reach));
+  float da = uDark.a * (uFogFar > 0.0 ? smoothstep(0.0, uFogFar, distance(vP, uEye)) : 1.0);
+  col = mix(col, uDark.rgb, da * (1.0 - reach));
   col += t.rgb * glow * 1.1 + glow * 0.2;
   outColor = vec4(col, uDecal ? t.a : 1.0);
 }`;
@@ -157,6 +179,7 @@ uniform bool uHasBack;
 uniform vec2 uOut;
 uniform vec2 uClip;     // near, far
 uniform float uFocus;   // the distance in focus: the camera's target
+uniform float uDof;     // how much what is off the focus softens (0 in first person)
 uniform vec3 uHaze;     // the colour of the distance: the sky's foot, or the dark
 uniform float uMosaic;  // a fade in blocks (engine.js): their size in screen pixels, or 0
 out vec4 outColor;
@@ -203,7 +226,7 @@ void main() {
   // depth of field: what is nearer or further than the player softens
   float d = dist(uv);
   float off = (d - uFocus) / uFocus;
-  float blur = off > 0.0 ? smoothstep(0.06, 0.4, off) : smoothstep(0.1, 0.3, -off) * 0.6;
+  float blur = (off > 0.0 ? smoothstep(0.06, 0.4, off) : smoothstep(0.1, 0.3, -off) * 0.6) * uDof;
   if (blur > 0.01) col = mix(col, soft(uv, 1.0 + blur * 2.2), smoothstep(0.0, 0.5, blur));
   if (!empty && uMosaic <= 1.0) col *= 1.0 - 0.45 * hollow(uv, d);
   // the distance: what is far takes the colour of the air between
@@ -274,6 +297,7 @@ export class Hd {
     this.atlas.width = this.atlas.height = this.atlasSize;
     this.lights = new Float32Array(MAX_LIGHTS * 4);
     this.colors = new Float32Array(MAX_LIGHTS * 4);
+    this.dirs = new Float32Array(MAX_LIGHTS * 4);
     this.ok = true;
   }
 
@@ -301,6 +325,7 @@ export class Hd {
   // A script may turn it (world.cam3d, api.view3d: yaw, pitch, zoom), and a zoom of the
   // visual effects (api.zoom) is a dolly towards its point.
   aim(world, aspect = this.cam?.aspect ?? 1.5) {
+    if (world.firstPerson) return this.eyes(world, aspect);
     let tx = world.cam.x + world.viewW / 2;
     let tz = world.cam.y + world.viewH / 2;
     const v = world.cam3d || {};
@@ -333,6 +358,25 @@ export class Hd {
     return this.cam;
   }
 
+  // First person: the camera at the player's eyes, looking the way they face, with the
+  // raycaster's width of view (engine/firstperson.js); what the sun's shadows and the
+  // sharp distance are about sits a little way ahead.
+  eyes(world, aspect) {
+    const p = world.player;
+    const b = world.box(p);
+    const h = p.heading ?? 0;
+    const [fx, fz] = forward(h);
+    const eye = [b.x + b.w / 2, FP_EYE, b.y + b.h / 2];
+    const target = [eye[0] + fx * FP_FOCUS, FP_EYE, eye[2] + fz * FP_FOCUS];
+    const fovY = 2 * Math.atan(Math.tan(FP_FOV / 2) / aspect);
+    const near = 2;
+    const far = 4000;
+    const view = lookAt(eye, target, [0, 1, 0]);
+    const proj = perspective(fovY, aspect, near, far);
+    this.cam = { eye, target, dist: FP_FOCUS, near, far, aspect, vp: mul(proj, view), first: true, heading: h };
+    return this.cam;
+  }
+
   // Where a point of the map (map pixels, y up) is on the 240x160 screen.
   project(x, y, z) {
     const m = this.cam.vp;
@@ -357,19 +401,20 @@ export class Hd {
   }
 
   // frame: { world, frame, light }; ui: the 240x160 buffer with the console's drawing.
-  render({ world, frame, region: R }, ui) {
+  render({ world, frame, region: R, first = false }, ui) {
     const gl = this.gl;
     const W = this.canvas.width;
     const H = this.canvas.height;
     const e = world.engine;
 
     // the region's picture and its geometry, again when a tile or the animation changes
-    const key = groundKey(world, R);
+    const key = `${groundKey(world, R)}${first ? ':first' : ''}`;
     if (key !== this.key) {
       this.key = key;
-      this.staticCount = upload(gl, this.staticGeo, buildStatic(world, R));
+      this.staticCount = upload(gl, this.staticGeo, buildStatic(world, R, { first }));
       this.animF = null;
     }
+    this.first = first;
     const animF = Math.floor(frame / (world.map.animRate || 20));
     if (animF !== this.animF || world.props !== this.propsSeen) {
       this.animF = animF;
@@ -380,16 +425,18 @@ export class Hd {
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, picture(world, R, animF, canvas));
       gl.generateMipmap(gl.TEXTURE_2D);
     }
-    this.cardCount = upload(gl, this.cardGeo, this.cards([...gatherCards(world, frame, R), ...world.hdEntityCards(e)]));
-
     const c = this.aim(world, W / H);
+    // the player's own body is not before their eyes
+    const cardList = [...gatherCards(world, frame, R), ...world.hdEntityCards(e)].filter((k) => !first || k.actor !== world.player);
+    this.cardCount = upload(gl, this.cardGeo, this.cards(cardList));
 
     // what lies on the floor this frame, over the view and well past its top edge (the
-    // camera sees further up than the classic screen)
-    const dx = Math.round(world.cam.x) - DECAL_SIDE;
-    const dy = Math.round(world.cam.y) - DECAL_TOP;
-    const dw = world.viewW + DECAL_SIDE * 2;
-    const dh = world.viewH + DECAL_TOP + DECAL_SIDE;
+    // camera sees further up than the classic screen; the eyes see further all round)
+    const side = first ? 256 : DECAL_SIDE;
+    const dx = Math.round(world.cam.x) - side;
+    const dy = Math.round(world.cam.y) - (first ? side : DECAL_TOP);
+    const dw = world.viewW + side * 2;
+    const dh = world.viewH + (first ? side : DECAL_TOP) + side;
     if (this.decal.width !== dw || this.decal.height !== dh) { this.decal.width = dw; this.decal.height = dh; }
     const dctx = this.decal.getContext('2d');
     dctx.clearRect(0, 0, dw, dh);
@@ -452,10 +499,15 @@ export class Hd {
       this.lights.set([l.x, l.z ?? 12, l.y, l.r * 1.4 * f], i * 4);
       const k = rgb(l.color || '#ffd890');
       this.colors.set([k[0], k[1], k[2], l.glow ?? 0.6], i * 4);
+      if (l.cone) { const [bx, bz] = forward(l.heading ?? 0); this.dirs.set([bx, bz, Math.cos(l.cone / 2), 1], i * 4); } else this.dirs.set([0, 0, 0, 0], i * 4);
     }
     gl.uniform1i(s.u.uN, n);
     gl.uniform4fv(s.u.uLight, this.lights);
     gl.uniform4fv(s.u.uLightColor, this.colors);
+    gl.uniform4fv(s.u.uLightDir, this.dirs);
+    // first person: the dark is a fog that thickens with the distance from the eyes
+    gl.uniform3fv(s.u.uEye, c.eye);
+    gl.uniform1f(s.u.uFogFar, first ? (world.map.fog ?? world.game.fog ?? 7) * TILE : 0);
     this.drawAll(s);
     // the floor's picture, blended over it
     gl.enable(gl.BLEND);
@@ -496,6 +548,7 @@ export class Hd {
     gl.uniform2f(p.u.uOut, W, H);
     gl.uniform2f(p.u.uClip, c.near, c.far);
     gl.uniform1f(p.u.uFocus, c.dist);
+    gl.uniform1f(p.u.uDof, first ? 0 : 1);
     gl.uniform3fv(p.u.uHaze, look.haze || [0, 0, 0]);
     // a fade in blocks: the picture itself breaks up here, the colour comes from the buffer
     const fx = e.fx;
@@ -517,16 +570,22 @@ export class Hd {
     gl.bindVertexArray(this.cardGeo.vao);
     gl.drawArrays(gl.TRIANGLES, 0, this.cardCount);
     // the bodies, each its own mesh and picture, kept while its frame of animation lives
+    // in first person every body turns to face the eyes, about the middle of its width
+    const turn = this.first && this.cam?.first ? this.cam.heading : 0;
+    gl.uniform2f(prog.u.uTurn, Math.cos(turn), Math.sin(turn));
     for (const c of this.bodyList) {
       const b = this.body(c.img, c.depth);
       gl.uniform3f(prog.u.uOffset, c.x, c.y, c.lie ? c.z + c.h : c.z);
       gl.uniform1i(prog.u.uLie, c.lie ? 1 : 0);
+      gl.uniform1f(prog.u.uPivot, c.lie ? 0 : c.w / 2);
+      if (c.lie) gl.uniform2f(prog.u.uTurn, 1, 0); else gl.uniform2f(prog.u.uTurn, Math.cos(turn), Math.sin(turn));
       gl.bindTexture(gl.TEXTURE_2D, b.tex);
       gl.bindVertexArray(b.geo.vao);
       gl.drawArrays(gl.TRIANGLES, 0, b.count);
     }
     gl.uniform3f(prog.u.uOffset, 0, 0, 0);
     gl.uniform1i(prog.u.uLie, 0);
+    gl.uniform2f(prog.u.uTurn, 1, 0);
   }
 
   body(img, depth = 8) {
@@ -616,6 +675,16 @@ export class Hd {
         continue;
       }
       const z = c.z;
+      if (this.first && this.cam?.first) {
+        // turned to face the eyes, about its middle
+        const h = this.cam.heading;
+        const rx = Math.cos(h) * (c.w / 2);
+        const rz = Math.sin(h) * (c.w / 2);
+        const cx = (x0 + x1) / 2;
+        const n = [-Math.sin(h), 0.4, Math.cos(h)];
+        for (const [sx, py, u, v] of [[-1, y1, u0, v0], [1, y1, u1, v0], [1, y0, u1, v1], [-1, y1, u0, v0], [1, y0, u1, v1], [-1, y0, u0, v1]]) out.push(cx + sx * rx, py, z + sx * rz, u, v, ...n);
+        continue;
+      }
       const n = [0, 0.6, 0.8];
       for (const [px, py, u, v] of [[x0, y1, u0, v0], [x1, y1, u1, v0], [x1, y0, u1, v1], [x0, y1, u0, v0], [x1, y0, u1, v1], [x0, y0, u0, v1]]) out.push(px, py, z, u, v, ...n);
     }

@@ -14,6 +14,7 @@
 // wall's face is its own face tile and its top its own top tile. Coordinates are the
 // current map's, neighbours included (they sit at their offsets, as the world has them).
 import { TILE } from './gfx.js';
+import { forward } from './firstperson.js';
 
 const LOW = 4;        // a wall between the camera and the floor, cut down to this
 const LIE = 8;        // how tall a prop lying down stands (a bed)
@@ -86,6 +87,8 @@ export function picture(world, R, frame, make) {
   const ctx = c.getContext('2d');
   // under the map: the faces raised cells show (a tile's own `side`, README "Heights")
   for (const s of sides?.list || []) ctx.drawImage(world.tiles.side(s.id, frame, s.fh, world.level), s.x, s.y);
+  // first person: the tiles a wall shows instead of its own, and the ceiling
+  for (const [id, at] of sides?.extra || []) ctx.drawImage(world.tiles.image(id, frame), at.x, at.y);
   for (let y = R.y0; y < R.y1; y++) {
     for (let x = R.x0; x < R.x1; x++) {
       const [sx, sy] = source(world, R, x, y);
@@ -107,7 +110,7 @@ export function picture(world, R, frame, make) {
 
 // The static geometry: interleaved x y z u v nx ny nz, in map pixels (x east, y up, z
 // south), u v in the region's picture.
-export function buildStatic(world, R) {
+export function buildStatic(world, R, { first = false } = {}) {
   const PW = R.w * TILE;
   const OX = R.x0 * TILE;
   const OY = R.y0 * TILE;
@@ -117,8 +120,12 @@ export function buildStatic(world, R) {
   const def = (x, y) => { const i = id(x, y); return i ? world.game.tiles[i] : null; };
   const elev = (x, y) => (world.raised ? world.elev(x, y) : 0);
   // a solid cell with a height is raised ground, not a wall: it stands as tall as the
-  // map says and shows its own face (README "Heights")
-  const wall = (x, y) => isWall(def(x, y)) && !elev(x, y);
+  // map says and shows its own face (README "Heights"). In first person a wall is what
+  // the raycaster (engine/firstperson.js) stands up: water and `wall: false` lie flat.
+  const fpWall = (d) => !!d && !!d.solid && d.wall !== false && !d.medium && !d.low && !d.flat && !d.reflect && d.step !== 'water';
+  const wall = (x, y) => (first ? fpWall(def(x, y)) : isWall(def(x, y))) && !elev(x, y);
+  const WH = first ? world.map.wallHeight ?? world.game.wallHeight ?? TILE * 2 : 0;
+  const ceilId = first ? world.map.ceiling ?? world.game.ceiling ?? null : null;
 
   // the faces raised cells need, packed under the map in the picture: id and height
   const need = new Map();
@@ -141,8 +148,24 @@ export function buildStatic(world, R) {
     sx += TILE;
     row = Math.max(row, s.fh);
   }
-  const PH = sy + row + (need.size ? 1 : 0);
-  world.dioramaSides = { list: [...sideAt.values()], ph: PH };
+  let PH = sy + row + (need.size ? 1 : 0);
+  // first person: the pictures the map itself lacks, in a strip under it: a ceiling tile,
+  // and the tile a wall says it shows (`wall: 'id'`)
+  const extra = new Map();
+  if (first) {
+    const ids = new Set();
+    if (ceilId && world.game.tiles[ceilId]) ids.add(ceilId);
+    for (const d of Object.values(world.game.tiles)) if (typeof d.wall === 'string' && world.game.tiles[d.wall]) ids.add(d.wall);
+    let ex = 0;
+    let ey = PH;
+    for (const i of ids) {
+      if (ex + TILE > PW) { ex = 0; ey += TILE; }
+      extra.set(i, { x: ex, y: ey });
+      ex += TILE;
+    }
+    if (ids.size) PH = ey + TILE;
+  }
+  world.dioramaSides = { list: [...sideAt.values()], ph: PH, extra };
   // a face's texture corners: the side picture of tile i, fh tall, from height lo to hi
   // of it (top 0) — u0, u1 across
   const faceUv = (i, fh, from, to) => {
@@ -204,7 +227,41 @@ export function buildStatic(world, R) {
   }
   const hAt = (x, y) => (inR(x, y) ? height[(y - R.y0) * R.w + x - R.x0] : 0);
 
-  for (const r of runs) {
+  if (first) {
+    // four faces where a neighbour is not a wall, the picture repeated down to the
+    // floor one cell at a time, and the top at the wall's height
+    const picUv = (x, y) => {
+      const d = def(x, y);
+      const at = typeof d?.wall === 'string' ? extra.get(d.wall) : null;
+      if (at) return [[OX + at.x + E, OY + at.y + E], [OX + at.x + TILE - E, OY + at.y + E], [OX + at.x + TILE - E, OY + at.y + TILE - E], [OX + at.x + E, OY + at.y + TILE - E]];
+      return cellUv(x, y);
+    };
+    for (let y = R.y0; y < R.y1; y++) {
+      for (let x = R.x0; x < R.x1; x++) {
+        if (!wall(x, y)) continue;
+        const uv = picUv(x, y);
+        const x0 = x * TILE;
+        const x1 = x0 + TILE;
+        const z0 = y * TILE;
+        const z1 = z0 + TILE;
+        quad([x0, WH, z0], [x1, WH, z0], [x1, WH, z1], [x0, WH, z1], uv[0], uv[1], uv[2], uv[3], [0, 1, 0]);
+        const open = (nx, ny) => inR(nx, ny) && !!id(nx, ny) && !wall(nx, ny);
+        for (let top = WH; top > 0; top -= TILE) {
+          const bot = Math.max(0, top - TILE);
+          const k = (top - bot) / TILE;   // a band shorter than a cell shows that much of the picture
+          const va = uv[0][1];
+          const vb = uv[0][1] + (uv[3][1] - uv[0][1]) * k;
+          const u0 = uv[0][0];
+          const u1 = uv[1][0];
+          if (open(x, y + 1)) quad([x0, top, z1], [x1, top, z1], [x1, bot, z1], [x0, bot, z1], [u0, va], [u1, va], [u1, vb], [u0, vb], [0, 0, 1]);
+          if (open(x, y - 1)) quad([x1, top, z0], [x0, top, z0], [x0, bot, z0], [x1, bot, z0], [u0, va], [u1, va], [u1, vb], [u0, vb], [0, 0, -1]);
+          if (open(x + 1, y)) quad([x1, top, z1], [x1, top, z0], [x1, bot, z0], [x1, bot, z1], [u0, va], [u1, va], [u1, vb], [u0, vb], [1, 0, 0]);
+          if (open(x - 1, y)) quad([x0, top, z0], [x0, top, z1], [x0, bot, z1], [x0, bot, z0], [u0, va], [u1, va], [u1, vb], [u0, vb], [-1, 0, 0]);
+        }
+      }
+    }
+  }
+  for (const r of first ? [] : runs) {
     const { x, r0, r1, F, H } = r;
     const x0 = x * TILE;
     const x1 = x0 + TILE;
@@ -320,6 +377,11 @@ export function buildStatic(world, R) {
       const z1 = z0 + TILE;
       const uv = cellUv(x, y);
       quad([x0, e, z0], [x1, e, z0], [x1, e, z1], [x0, e, z1], uv[0], uv[1], uv[2], uv[3], [0, 1, 0]);
+      if (first && ceilId && extra.has(ceilId)) {
+        const at = extra.get(ceilId);
+        const c = [[OX + at.x + E, OY + at.y + E], [OX + at.x + TILE - E, OY + at.y + E], [OX + at.x + TILE - E, OY + at.y + TILE - E], [OX + at.x + E, OY + at.y + TILE - E]];
+        quad([x0, WH, z1], [x1, WH, z1], [x1, WH, z0], [x0, WH, z0], c[3], c[2], c[1], c[0], [0, -1, 0]);
+      }
       if (!e) continue;
       // the faces: the tile's own side picture, its top at the cell's top
       const t = id(x, y);
@@ -395,7 +457,7 @@ export function gatherCards(world, frame, R) {
   const body = (a, x, y, ez = 0) => {
     const img = a.image();
     if (!img) return;
-    out.push({ img, x: x + (TILE - img.width) / 2, z: y + 11, y: ez + stairLift(world, x + 8, y + 12), w: img.width, h: img.height, body: true });
+    out.push({ img, x: x + (TILE - img.width) / 2, z: y + 11, y: ez + stairLift(world, x + 8, y + 12), w: img.width, h: img.height, body: true, actor: a });
   };
   for (const a of world.actors) {
     if (!a.visible || (a.alpha ?? 1) <= 0) continue;

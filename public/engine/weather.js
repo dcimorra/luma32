@@ -176,7 +176,7 @@ export function gatherLights(world, cx, cy) {
   for (const a of world.actors) {
     const l = a.def.light || a.light;
     if (!l || !a.visible) continue;
-    add(l, a.px + 8 + (l.dx ?? 0), a.py - a.ez + (l.dy ?? 4));
+    add(l.cone ? { ...l, heading: a.heading ?? 0 } : l, a.px + 8 + (l.dx ?? 0), a.py - a.ez + (l.dy ?? 4));
   }
   let extra = world.map.lights;
   if (typeof extra === 'function') extra = extra(world.api);

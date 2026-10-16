@@ -434,7 +434,10 @@ the eyes look, B runs; A talks to, examines or triggers whatever the eyes point 
 a cell and a half; walking into a door takes it. Cells, warps, triggers, spots, scripts
 and saves are exactly the same, so a house in first person sits in an ordinary game and
 the audit and the guide still know their way (the guide's arrow floats over the goal).
-The modern look shows such a map classic.
+In the modern look (since 1.15.1) the same map is built with every face of its walls, a
+ceiling where it says one, and seen from the eyes with the diorama's light: the sun's
+shadows, lights that pool and bloom, a torch as a beam, the dark as a fog thickening with
+the distance, people with relief turned to face the eyes, buildings as boxes.
 
 ```js
 view: 'first',                       // the game, or one map
