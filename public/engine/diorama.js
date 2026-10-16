@@ -81,8 +81,11 @@ export function groundKey(world, R) {
 
 // The region drawn flat: ground tiles, then the props that lie on it (rugs, puddles).
 export function picture(world, R, frame, make) {
-  const c = make(R.w * TILE, R.h * TILE);
+  const sides = world.dioramaSides;
+  const c = make(R.w * TILE, sides?.ph ?? R.h * TILE);
   const ctx = c.getContext('2d');
+  // under the map: the faces raised cells show (a tile's own `side`, README "Heights")
+  for (const s of sides?.list || []) ctx.drawImage(world.tiles.side(s.id, frame, s.fh, world.level), s.x, s.y);
   for (let y = R.y0; y < R.y1; y++) {
     for (let x = R.x0; x < R.x1; x++) {
       const [sx, sy] = source(world, R, x, y);
@@ -106,15 +109,46 @@ export function picture(world, R, frame, make) {
 // south), u v in the region's picture.
 export function buildStatic(world, R) {
   const PW = R.w * TILE;
-  const PH = R.h * TILE;
   const OX = R.x0 * TILE;
   const OY = R.y0 * TILE;
   const out = [];
   const inR = (x, y) => x >= R.x0 && y >= R.y0 && x < R.x1 && y < R.y1;
   const id = (x, y) => (inR(x, y) ? tileOf(world, R, x, y) : null);
   const def = (x, y) => { const i = id(x, y); return i ? world.game.tiles[i] : null; };
-  const wall = (x, y) => isWall(def(x, y));
   const elev = (x, y) => (world.raised ? world.elev(x, y) : 0);
+  // a solid cell with a height is raised ground, not a wall: it stands as tall as the
+  // map says and shows its own face (README "Heights")
+  const wall = (x, y) => isWall(def(x, y)) && !elev(x, y);
+
+  // the faces raised cells need, packed under the map in the picture: id and height
+  const need = new Map();
+  const want = (i, fh) => { if (i && fh > 0) need.set(`${i}|${fh}`, { id: i, fh }); };
+  if (world.raised) {
+    for (let y = R.y0; y < R.y1; y++) for (let x = R.x0; x < R.x1; x++) {
+      const e = elev(x, y);
+      if (!e || !id(x, y)) continue;
+      want(id(x, y), e - (id(x, y + 1) ? elev(x, y + 1) : 0));
+      for (const dx of [-1, 1]) want(id(x, y), e - (id(x + dx, y) ? elev(x + dx, y) : 0));
+    }
+  }
+  const sideAt = new Map();
+  let sx = 0;
+  let sy = R.h * TILE;
+  let row = 0;
+  for (const [k, s] of need) {
+    if (sx + TILE > PW) { sx = 0; sy += row + 1; row = 0; }
+    sideAt.set(k, { ...s, x: sx, y: sy });
+    sx += TILE;
+    row = Math.max(row, s.fh);
+  }
+  const PH = sy + row + (need.size ? 1 : 0);
+  world.dioramaSides = { list: [...sideAt.values()], ph: PH };
+  // a face's texture corners: the side picture of tile i, fh tall, from height lo to hi
+  // of it (top 0) — u0, u1 across
+  const faceUv = (i, fh, from, to) => {
+    const s = sideAt.get(`${i}|${fh}`);
+    return [OX + s.x + E, OY + s.y + from + E, OX + s.x + TILE - E, OY + s.y + to - E];
+  };
 
   const quad = (a, b, c, d, ua, ub, uc, ud, n) => {
     for (const [p, u] of [[a, ua], [b, ub], [c, uc], [a, ua], [c, uc], [d, ud]]) out.push(p[0], p[1], p[2], (u[0] - OX) / PW, (u[1] - OY) / PH, n[0], n[1], n[2]);
@@ -287,15 +321,21 @@ export function buildStatic(world, R) {
       const uv = cellUv(x, y);
       quad([x0, e, z0], [x1, e, z0], [x1, e, z1], [x0, e, z1], uv[0], uv[1], uv[2], uv[3], [0, 1, 0]);
       if (!e) continue;
-      const v = (y + 1) * TILE - 0.5;
+      // the faces: the tile's own side picture, its top at the cell's top
+      const t = id(x, y);
       const es = id(x, y + 1) ? elev(x, y + 1) : 0;
-      if (es < e) quad([x0, e, z1], [x1, e, z1], [x1, es, z1], [x0, es, z1], [x0 + E, v], [x1 - E, v], [x1 - E, v], [x0 + E, v], [0, 0, 1]);
+      if (es < e) {
+        const [u0, v0, u1, v1] = faceUv(t, e - es, 0, e - es);
+        quad([x0, e, z1], [x1, e, z1], [x1, es, z1], [x0, es, z1], [u0, v0], [u1, v0], [u1, v1], [u0, v1], [0, 0, 1]);
+      }
       for (const dx of [-1, 1]) {
         const en = id(x + dx, y) ? elev(x + dx, y) : 0;
         if (en >= e || wall(x + dx, y)) continue;
+        const [u0, v0, u1, v1] = faceUv(t, e - en, 0, e - en);
         const ex = dx < 0 ? x0 : x1;
-        const u = dx < 0 ? x0 + 0.5 : x1 - 0.5;
-        quad([ex, e, z0], [ex, e, z1], [ex, en, z1], [ex, en, z0], [u, z0 + E], [u, z1 - E], [u, z1 - E], [u, z0 + E], [dx, 0, 0]);
+        // seen from the west the face runs south to north, from the east north to south
+        const [za, zb] = dx < 0 ? [z1, z0] : [z0, z1];
+        quad([ex, e, za], [ex, e, zb], [ex, en, zb], [ex, en, za], [u0, v0], [u1, v0], [u1, v1], [u0, v1], [dx, 0, 0]);
       }
     }
   }

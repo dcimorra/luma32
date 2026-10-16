@@ -359,7 +359,7 @@ down a column becomes a block, its face stood up at its south edge (as tall as i
 rows, three at most) and its top laid over it. A solid run with no face takes the height
 most walls have, and one with walkable ground to its north (the wall nearest the camera)
 is cut down low, as a set is cut away. Tiles with `low`, `medium`, `reflect` or `flat`
-are never walls. Heights (README "Heights") rise as they are. Props (but `flat` ones,
+are never walls. Heights (README "Heights") rise as they are, a solid cell with a height included (it is raised ground, not a wall), and every face shows the tile's own `side`. Props (but `flat` ones,
 which lie in the ground) stand up as cards; one whose whole picture is the ground it
 stands on (`foot` as tall as its `size`, two rows or more: a bed, a table drawn from
 above) lies down instead, a low block with its picture on top. Standing props (a
