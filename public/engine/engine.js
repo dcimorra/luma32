@@ -1,12 +1,14 @@
 // The console itself: a 240x160 frame buffer, a fixed 60 Hz loop, a stack of scenes
 // and the full-screen effects (fades, flashes, shakes, glitches) every game shares.
 import { SCREEN_W, SCREEN_H, BASE_W, BASE_H, canvas } from './gfx.js';
-import { Hd, hdOn, hdSupported } from './hd.js';
+import { Hd, hdOn, hdSupported, setHd } from './hd.js';
 
 export class Engine {
   constructor(display, input) {
     this.display = display;            // the visible <canvas>
     this.input = input;
+    // holding START switches between the classic and the modern look, anywhere
+    input.onHoldStart = () => { if (hdSupported()) setHd(!hdOn()); };
     this.buffer = canvas(SCREEN_W, SCREEN_H);
     this.ctx = this.buffer.getContext('2d');
     this.scenes = [];

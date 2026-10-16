@@ -1,9 +1,9 @@
-// The modern look (a setting, off by default): the same world, the same pixel art and the
-// same rules, shown as a diorama in three dimensions. engine/diorama.js builds the map
-// from what it already says (ground, walls with their faces stood up, heights, props and
-// people as cards); this draws it with WebGL 2 under a perspective camera: a sun that
-// casts shadows, the map's lights, depth of field from the real depth, a bloom, and the
-// console's own drawing (dialogue, menus, HUD, fades) flat on top, at the screen's
+// The modern look (a setting, on unless the player chose classic): the same world, the
+// same pixel art and the same rules, shown as a diorama in three dimensions.
+// engine/diorama.js builds the map from what it already says (ground, walls with their
+// faces stood up, heights, props and people as cards); this draws it with WebGL 2 under a
+// perspective camera: a sun that casts shadows, the map's lights, depth of field from the
+// real depth, a bloom, and the console's own drawing (dialogue, menus, HUD, fades) flat on top, at the screen's
 // resolution. Nothing a cartridge writes changes: a game cannot tell which look it is in.
 import { buildStatic, gatherCards, groundKey, bodyMesh, picture } from './diorama.js';
 import { forward } from './firstperson.js';
@@ -37,11 +37,12 @@ export function hdSupported() {
   return supported;
 }
 
-// ?hd=1 / ?hd=0 (testing) wins over the stored setting. Read once: the world asks often.
+// ?hd=1 / ?hd=0 (testing) wins over the stored setting; with none stored, the modern look.
+// Read once: the world asks often.
 let on = (() => {
   const q = new URLSearchParams(location.search).get('hd');
   if (q !== null) return q === '1';
-  try { return localStorage.getItem(KEY) === 'modern'; } catch { return false; }
+  try { return localStorage.getItem(KEY) !== 'classic'; } catch { return true; }
 })();
 export const hdOn = () => on;
 export function setHd(v, { keep = true } = {}) {

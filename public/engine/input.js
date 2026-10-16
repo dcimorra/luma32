@@ -17,6 +17,9 @@ const KEYS = {
 
 const PAD = { 12: 'up', 13: 'down', 14: 'left', 15: 'right', 0: 'a', 1: 'b', 9: 'start', 8: 'select' };
 
+// START held this long is the console's own shortcut (`onHoldStart`), not a press.
+const HOLD_START_MS = 700;
+
 export class Input {
   constructor() {
     this.sources = { key: new Set(), touch: new Set(), pad: new Set() };
@@ -32,10 +35,18 @@ export class Input {
       if (e.target.closest?.('input, textarea, select, dialog')) return;
       e.preventDefault();
       this.lastSource = 'key';
+      if (b === 'start' && !this.sources.key.has(b)) this.startDown ??= performance.now();
       this.sources.key.add(b);
+      // a key let go before the next frame still counts once
+      (this.taps ||= new Set()).add(b);
       this.emit(b);
     });
-    addEventListener('keyup', (e) => { const b = KEYS[e.code]; if (b) this.sources.key.delete(b); });
+    addEventListener('keyup', (e) => {
+      const b = KEYS[e.code];
+      if (!b) return;
+      if (b === 'start') this.startUp = performance.now();
+      this.sources.key.delete(b);
+    });
     addEventListener('blur', () => { this.sources.key.clear(); this.sources.touch.clear(); });
     // read by scenes each frame, like the buttons; rebuilt by update()
     this.pointer = { x: -1, y: -1, over: false, down: false, pressed: false, clicked: false, back: false, moved: false, wheel: 0, type: 'mouse' };
@@ -95,13 +106,17 @@ export class Input {
   emit(b) { for (const fn of this.listeners) fn(b); }
 
   touchDown(b) {
+    if (b === 'start' && !this.sources.touch.has(b)) this.startDown ??= performance.now();
     if (!this.sources.touch.has(b)) this.emit(b);
     this.sources.touch.add(b);
     // a click shorter than a frame (a mouse on the corner button) still counts once
     (this.taps ||= new Set()).add(b);
     this.lastSource = 'touch';
   }
-  touchUp(b) { this.sources.touch.delete(b); }
+  touchUp(b) {
+    if (b === 'start') this.startUp = performance.now();
+    this.sources.touch.delete(b);
+  }
 
   pollPads() {
     const pads = navigator.getGamepads ? navigator.getGamepads() : [];
@@ -120,10 +135,33 @@ export class Input {
   }
 
   // Called once per frame by the engine, before the game updates.
+  // START reaches the game when it is let go, so that holding it can mean something else:
+  // held past HOLD_START_MS it calls `onHoldStart` and the game never sees it.
   update() {
     this.pollPads();
     this.before = this.now;
-    this.now = new Set([...this.sources.key, ...this.sources.touch, ...this.sources.pad, ...(this.taps || [])]);
+    const raw = new Set([...this.sources.key, ...this.sources.touch, ...this.sources.pad]);
+    let start = false;
+    if (raw.has('start')) {
+      // timed from the moment it went down: the first frames of a game can be slow
+      this.startSince ??= this.startDown ?? performance.now();
+      if (!this.startHeld && performance.now() - this.startSince >= HOLD_START_MS) { this.startHeld = true; this.onHoldStart?.(); }
+    } else {
+      // held and let go with no frame in between (a game still loading) is still a hold
+      const long = this.startDown != null && (this.startUp ?? performance.now()) - this.startDown >= HOLD_START_MS;
+      if (long && !this.startHeld) this.onHoldStart?.();
+      // let go (or a tap shorter than a frame) before the hold: an ordinary press
+      else if ((this.startSince != null || this.taps?.has('start')) && !this.startHeld) start = true;
+      this.startSince = this.startDown = this.startUp = null;
+      this.startHeld = false;
+    }
+    raw.delete('start');
+    for (const b of this.taps || []) if (b !== 'start') raw.add(b);
+    if (start) {
+      raw.add('start');
+      this.before.delete('start');
+    }
+    this.now = raw;
     this.taps?.clear();
     for (const b of this.now) if (!this.before.has(b)) this.emit(b);
     const p = this.pointer;
