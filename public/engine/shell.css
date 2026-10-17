@@ -216,10 +216,14 @@ body {
 
 .pad { position: relative; touch-action: none; }
 
+/* upright, the cross and A/B go out to the edges, as on a Game Boy: the cross centred a
+   quarter of the way in, A/B a quarter from the other side, and the middle of the body
+   left bare between them, so that each thumb has its own side. In landscape they flank
+   the screen instead and sit in the middle of their columns. */
 .pad--dir {
   grid-area: dir;
   align-self: center;
-  justify-self: center;
+  justify-self: start;
   width: calc(var(--u) * 38);
   height: calc(var(--u) * 38);
   border-radius: 50%;
@@ -312,7 +316,7 @@ body {
 .pad--ab {
   grid-area: ab;
   align-self: center;
-  justify-self: center;
+  justify-self: end;
   width: calc(var(--u) * 40);
   height: calc(var(--u) * 30);
   transform: rotate(-24deg);
@@ -482,8 +486,8 @@ body.has-buttons .face {
   }
   .bezel__top { height: calc(var(--u) * 3); margin-bottom: calc(var(--u) * 1.2); }
   .bezel__brand { justify-content: center; margin-top: calc(var(--u) * 1.4); }
-  .pad--dir { width: calc(var(--u) * 34); height: calc(var(--u) * 34); align-self: end; }
-  .pad--ab { width: calc(var(--u) * 37); height: calc(var(--u) * 27); align-self: end; }
+  .pad--dir { width: calc(var(--u) * 34); height: calc(var(--u) * 34); align-self: end; justify-self: center; }
+  .pad--ab { width: calc(var(--u) * 37); height: calc(var(--u) * 27); align-self: end; justify-self: center; }
   .btn { top: calc(var(--u) * 6); width: calc(var(--u) * 14); height: calc(var(--u) * 14); }
   body.has-buttons .face {
     grid-template-columns: 1fr auto auto;
@@ -520,16 +524,18 @@ body.has-buttons .face {
   .keys { display: none; }
 }
 
-/* an upright phone: bigger thumbs targets, and the screen pulled up under the notch */
+/* an upright phone: bigger thumbs targets, and the screen pulled up under the notch. The
+   two halves of the row are each a little narrower than their column, so that a bare
+   strip stays between the cross and B; the centres of the cross and of A/B level */
 @media (orientation: portrait) and (pointer: coarse) {
-  .pad--dir { width: calc(var(--u) * 46); height: calc(var(--u) * 46); align-self: start; margin-top: calc(var(--u) * 14); }
-  .pad--ab { width: calc(var(--u) * 46); height: calc(var(--u) * 34); align-self: start; margin-top: calc(var(--u) * 20); }
-  .btn { top: calc(var(--u) * 8); width: calc(var(--u) * 18); height: calc(var(--u) * 18); }
+  .pad--dir { width: calc(var(--u) * 40); height: calc(var(--u) * 40); align-self: start; margin-top: calc(var(--u) * 14); }
+  .pad--ab { width: calc(var(--u) * 44); height: calc(var(--u) * 32); align-self: start; margin-top: calc(var(--u) * 18); }
+  .btn { top: calc(var(--u) * 7.5); width: calc(var(--u) * 17); height: calc(var(--u) * 17); }
   .pad--sys { padding-bottom: max(calc(var(--u) * 10), env(safe-area-inset-bottom)); }
   /* with the row out, the pads above close up so that all of it fits a short phone */
   .pad--xyz { gap: calc(var(--u) * 3.5); margin: calc(var(--u) * 2) calc(var(--u) * 2) 0 0; padding: calc(var(--u) * 2.5) calc(var(--u) * 4) calc(var(--u) * 6.5); }
   body.has-buttons .pad--dir { margin-top: calc(var(--u) * 5); }
-  body.has-buttons .pad--ab { margin-top: calc(var(--u) * 7); }
+  body.has-buttons .pad--ab { margin-top: calc(var(--u) * 9); }
   body.has-buttons .pad--sys { padding-bottom: max(calc(var(--u) * 5), env(safe-area-inset-bottom)); }
 }
 /* a short phone: every button a little smaller, all five the same, so the rows fit */
@@ -582,7 +588,7 @@ body.is-full .cross {
 }
 body.is-full .pad--dir.is-held .cross { opacity: .95; transition: none; }
 
-body.is-full .pad--ab { --bs: 21vw; width: calc(var(--bs) * 2.5); height: calc(var(--bs) * 1.9); margin: 0; align-self: center; background: rgba(255, 255, 255, .04); box-shadow: none; }
+body.is-full .pad--ab { --bs: 17vw; width: calc(var(--bs) * 2.5); height: calc(var(--bs) * 1.9); margin: 0 3vw 0 0; align-self: center; background: rgba(255, 255, 255, .04); box-shadow: none; }
 body.is-full .btn { top: calc(var(--bs) * .3); width: var(--bs); height: var(--bs); }
 body.is-full .btn--b { left: calc(var(--bs) * .1); }
 body.is-full .btn--a { right: calc(var(--bs) * .1); }
@@ -590,7 +596,7 @@ body.is-full .btn span { font-size: calc(var(--bs) * .2); top: calc(100% + var(-
 body.is-full .pad--sys { gap: 12vw; padding: 2vw 0 max(3vw, env(safe-area-inset-bottom)); }
 body.is-full .pill i { width: 13vw; height: 4vw; }
 /* the row lies flat here, as the pads of a full screen do, and keeps clear of START */
-body.is-full .pad--xyz { --bs: 21vw; gap: calc(var(--bs) * .3); padding: calc(var(--bs) * .25) calc(var(--bs) * .3) calc(var(--bs) * .55); margin: 0 2vw 0 0; transform: none; border-radius: calc(var(--bs) * .6); background: rgba(255, 255, 255, .04); box-shadow: none; }
+body.is-full .pad--xyz { --bs: 17vw; gap: calc(var(--bs) * .3); padding: calc(var(--bs) * .25) calc(var(--bs) * .3) calc(var(--bs) * .55); margin: 0 2vw 0 0; transform: none; border-radius: calc(var(--bs) * .6); background: rgba(255, 255, 255, .04); box-shadow: none; }
 body.is-full .pad--xyz .btn { top: 0; width: var(--bs); height: var(--bs); }
 body.is-full .pad--xyz .btn span { transform: translateX(-50%); font-size: calc(var(--bs) * .2); top: calc(100% + var(--bs) * .1); }
 
@@ -615,7 +621,7 @@ body.is-full .pad--xyz .btn span { transform: translateX(-50%); font-size: calc(
   body.is-full .bezel { width: min(150dvh, 100vw - 220px); align-self: center; }
   body.is-full .pad--dir { --cs: min(34dvh, 13.5vw); }
   /* the side columns are narrow: A above and to the right, B below and to the left */
-  body.is-full .pad--ab { --bs: min(18dvh, 7.5vw); width: calc(var(--bs) * 1.7); height: calc(var(--bs) * 2.6); transform: none; border-radius: calc(var(--bs) * .85); }
+  body.is-full .pad--ab { --bs: min(18dvh, 7.5vw); width: calc(var(--bs) * 1.7); height: calc(var(--bs) * 2.6); margin: 0; transform: none; border-radius: calc(var(--bs) * .85); }
   body.is-full .btn--a { top: calc(var(--bs) * .12); right: calc(var(--bs) * .05); }
   body.is-full .btn--b { top: auto; bottom: calc(var(--bs) * .32); left: calc(var(--bs) * .05); }
   body.is-full .btn span { transform: none; top: auto; bottom: calc(100% + var(--bs) * .02); left: auto; right: 0; }
