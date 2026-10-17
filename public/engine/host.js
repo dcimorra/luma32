@@ -16,7 +16,8 @@
 // save slot or to the lines already read goes up to the server through the page, and on
 // boot each slot keeps whichever copy is newer.
 
-const SYNCED = /^luma32\.[a-z0-9_-]+\.(slot\d+|seen)$/;
+// save slots, the lines already read, and the camera the player chose (firstperson.js)
+const SYNCED = /^luma32\.[a-z0-9_-]+\.(slot\d+|seen|camera)$/;
 const PENDING = 'luma32.pending'; // key -> time of the change, until the server has it
 const OWNER = 'luma32.owner';     // whose saves are the synced keys on this device
 const HELLO_WAIT = 4000;

@@ -487,7 +487,8 @@ everything that reads the four buttons see them as before.
 
 The player may choose it too (since 1.16): "Cámara" in the options, or SELECT held for a
 moment, goes round the view from above, first person and third person on any map the
-cartridge leaves to them, kept per game on each device (`?fp=1`, `?fp=3`, `?fp=0` for testing). A map or a game that says a `view`
+cartridge leaves to them, kept per game (`luma32.<game>.camera`, which travels with an account's
+saves since 1.19.2) (`?fp=1`, `?fp=3`, `?fp=0` for testing). A map or a game that says a `view`
 keeps it; `firstPerson: false` on either takes the choice away (a minigame, a chase), and
 at a wheel it is always the view from above. A tap on SELECT still reaches the game when
 it is let go, as START does.

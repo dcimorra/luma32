@@ -10,6 +10,7 @@
 // walls, a row at a time for the floor and the ceiling, sprites sorted by distance and
 // cut by the walls in front of them. All of it on the 240×160 buffer, in pixels.
 import { SCREEN_W, SCREEN_H, TILE, canvas, hex } from './gfx.js';
+import { changed } from './host.js';
 
 // The player's own choice, kept per game and per device: any map the cartridge leaves to
 // them is seen from above ('top'), from the eyes ('first') or from just behind and over the
@@ -21,12 +22,15 @@ export const VIEWS = ['top', 'first', 'third'];
 export const THIRD_STEPS = { far: [56, 76, 96, 120, 150], high: [36, 48, 60, 76, 96] };
 const FEET_ROW = 146;
 const TESTING = (() => { const q = new URLSearchParams(location.search).get('fp'); return q === null ? null : { 1: 'first', 3: 'third' }[q] || 'top'; })();
-const kept = new Map();   // game id -> { view, far, high }
+// Kept as `luma32.<game>.camera`, which goes to the account with the saves (host.js), so a
+// device that loses its storage (Safari does) gets it back; `at` says which copy is newer.
+const kept = new Map();   // game id -> { view, far, high, at }
+const keyOf = (game) => `luma32.${game}.camera`;
 function prefs(game) {
   let p = kept.get(game);
   if (p) return p;
   p = { view: 'top', far: 2, high: 2 };
-  try { Object.assign(p, JSON.parse(localStorage.getItem(`luma32.camera.${game}`)) || {}); } catch { /* the default */ }
+  try { Object.assign(p, JSON.parse(localStorage.getItem(keyOf(game)) ?? localStorage.getItem(`luma32.camera.${game}`)) || {}); } catch { /* the default */ }
   if (!VIEWS.includes(p.view)) p.view = 'top';
   for (const k of ['far', 'high']) p[k] = Math.max(0, Math.min(THIRD_STEPS[k].length - 1, p[k] | 0));
   if (TESTING) p.view = TESTING;
@@ -34,8 +38,12 @@ function prefs(game) {
   return p;
 }
 function keep(game, change) {
-  const p = Object.assign(prefs(game), change);
-  try { localStorage.setItem(`luma32.camera.${game}`, JSON.stringify(p)); } catch { /* a comfort */ }
+  const p = Object.assign(prefs(game), change, { at: Date.now() });
+  try {
+    localStorage.setItem(keyOf(game), JSON.stringify(p));
+    localStorage.removeItem(`luma32.camera.${game}`);
+    changed(keyOf(game));
+  } catch { /* a comfort */ }
 }
 export const viewChoice = (game) => prefs(game).view;
 export const setViewChoice = (game, v) => keep(game, { view: VIEWS.includes(v) ? v : 'top' });
