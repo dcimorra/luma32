@@ -96,7 +96,10 @@ markers) gets none of the engine's checks and comes back with the bugs they prev
 1. **Every game has a title screen with "PULSA START".** The console owns it
    (`engine/console.js` `TitleScreen`); the cartridge only supplies `title.draw` (art),
    `title.music`, and positions. Never bypass it.
-2. **Playable 100% on a phone.** Only the eight buttons exist. No typing, no tap targets
+2. **Playable 100% on a phone.** Only the eight buttons exist, plus X, Y and Z when the
+   game declares them (`buttons: ['x', 'y', 'z']` in game.js; README "Scripts"): three more
+   buttons under A and B, for a game that needs them, never for what A, B or START can
+   do. No typing, no tap targets
    inside the screen, no hover. Anything that would need a keyboard becomes a d-pad
    picker (choose fragments in order instead of typing a word).
 3. **Text a player reads never lives in code.** Spanish strings go in the cartridge's

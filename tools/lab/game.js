@@ -2,7 +2,8 @@
 // the engine after a change. Not on the shelf. Link it in and boot it:
 //   ln -s ../../tools/lab public/games/lab   →   /?game=lab
 // town (grid): ledges, tall grass, a watcher, a bag list, a stage, portraits, the log.
-// cave (free movement): a hitbox, a slime entity, a pushable block, a HUD.
+// cave (free movement): a hitbox, a slime entity, a pushable block, a HUD, and the
+// extra buttons: X heals, Y emotes, Z shakes (declared X and Y; Z comes out by being read).
 // plaza (life and light): passers-by (crowd), a guard on a route, a wanderer, the A hint,
 // directed conversation, footsteps on cobbles, lamps that light the night, snow and
 // fireflies, a music layer, poses and gestures, text effects, a living portrait, cinema
@@ -335,6 +336,14 @@ const maps = {
       '############',
     ],
     warps: [{ x: 6, y: 7, to: 'town', at: [4, 1], face: 'down' }],
+    // the extra buttons: X and Y are declared on the game (`buttons`), Z only read here, so
+    // the handheld shows it from the first frame in the cave and keeps it
+    update(api, e, control) {
+      if (!control) return;
+      if (api.input.pressed('x')) { api.save.hp = 6; api.sfx('bump'); }
+      if (api.input.pressed('y')) api.emote('player', 'heart', 500);
+      if (api.input.pressed('z')) api.shake(200, 3);
+    },
     async enter(api) {
       api.save.hp ??= 6;
       // a slime that drifts toward the player and hurts on touch
@@ -411,6 +420,8 @@ export default {
   saves: 3,
   log: true,
   skip: true,
+  // the handheld shows X and Y from the title; the cave reads Z too (see its update)
+  buttons: ['x', 'y'],
   meta: { title: 'meta.title', tagline: 'meta.tagline' },
   strings: ['locales/es/common.json'],
   theme: { ui: { speakers: { ana: { color: '#b04a3a', voice: 700 }, bo: { color: '#408040', voice: 500 }, guard: { color: '#5a5a7a', voice: 450 }, sage: { color: '#6a4a8a', voice: 650 }, walker: { color: '#a06a30', voice: 600 } } } },

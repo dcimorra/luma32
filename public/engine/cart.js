@@ -12,6 +12,8 @@ export async function runCartridge(engine, game) {
   setTheme(game.theme?.ui || {});
   setPortraits(game.portraits);
   paintShell(game.theme?.shell);
+  // the extra buttons it asks for; any it reads later comes out on its own (input.js)
+  engine.input.useButtons(game.buttons);
   setOrchestra(game.orchestra);
   defineSongs(game.songs || {});
   defineEffects(game.effects || {});

@@ -187,6 +187,7 @@ account's saves from the device). Without an answer to `hello` the console runs 
   figures: { ana(ctx, x, y, frame, mood, state) {} },    // full-body art for the stage, feet at (x, y)
   // state = { talking, mouth, blink }: open the mouth on `mouth`, shut the eyes on `blink`
   log: true,                             // "Historial" in the pause menu
+  buttons: ['x', 'y', 'z'],              // extra buttons under A and B (or `true`): see "Scripts"
   skip: true,                            // holding B skips lines read in any earlier play
   movement: 'free', hitbox: { x, y, w, h }, hud(ctx, api, e),   // see "Action games"
   modes: { swim: { speed: 0.75 }, fly: { height: 12 } },         // see "Getting about"
@@ -820,6 +821,15 @@ A scene gets `e.input` (`pressed('a')`, `held('left')`, `dir()`, and since 1.18 
 direction at any angle: `{ x, y }`, x right and y down, length 1 while held, else 0 — the
 touch pad's, a gamepad's left stick, or the arrows held), `e.frame`, and draws on a 240×160 context. Set `opaque = false` to see the world under it; `aboveFade = true` to stay
 visible during fades.
+
+The console has eight buttons: the four directions, A, B, START and SELECT. Since 1.22 a
+cartridge may have three more, `x`, `y` and `z`, in a row under A and B on the handheld
+(keys C, V and B; a gamepad's X, Y and shoulder buttons). They exist only for the cartridge
+that has them: declare them in game.js (`buttons: ['x', 'y']`, or `true` for all three) and
+the handheld shows them from the title; one that is read (`e.input.pressed('z')`,
+`api.input.held('z')`) without being declared comes out the first time it is read, and
+stays until the cartridge is ejected. A game that never names them plays on the console as
+it was. They are plain buttons: no hold shortcut, nothing of the console's own on them.
 
 ## Visual effects
 

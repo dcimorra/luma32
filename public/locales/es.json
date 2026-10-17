@@ -23,6 +23,21 @@
           "label": "B (correr)"
         },
         {
+          "key": "C",
+          "label": "X",
+          "btn": "x"
+        },
+        {
+          "key": "V",
+          "label": "Y",
+          "btn": "y"
+        },
+        {
+          "key": "B",
+          "label": "Z",
+          "btn": "z"
+        },
+        {
           "key": "Intro",
           "label": "START"
         },

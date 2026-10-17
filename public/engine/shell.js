@@ -6,8 +6,12 @@
 // edges, while the scene on top reads only buttons (engine.js, `needs-pad`).
 import { t, tv, has } from './i18n.js';
 import { theme } from './host.js';
+import { EXTRA_BUTTONS } from './input.js';
 
 export function bindShell(input) {
+  // the three extra buttons come out when the cartridge has them (input.js)
+  input.onButtons = showButtons;
+
   const pressedEls = new Map(); // pointerId -> element (for A/B/start/select)
   const dpad = document.getElementById('dpad');
   const cross = dpad.querySelector('.cross');
@@ -186,10 +190,28 @@ export function applyShellText() {
   document.getElementById('view-toggle')?.setAttribute('aria-label', t(isFull() ? 'console.shell.view_shell' : 'console.shell.view_full'));
   const keys = document.getElementById('keys');
   keys.innerHTML = '';
-  for (const { key, label } of tv('console.shell.keys') || []) {
+  for (const { key, label, btn } of tv('console.shell.keys') || []) {
     const kbd = document.createElement('kbd');
     kbd.textContent = key;
-    keys.append(kbd, ` ${label}\u2003`);
+    const item = document.createElement('span');
+    item.append(kbd, ` ${label}\u2003`);
+    // the key of an extra button shows with its button
+    if (btn) item.dataset.for = btn;
+    keys.append(item);
+  }
+  showButtons(shown);
+}
+
+// Which of the extra buttons (X, Y, Z) the handheld shows, and the keys that are theirs:
+// the ones the running cartridge has (input.js, `useButtons`); none between cartridges.
+// The row of three sits under A and B and takes no room while it is hidden.
+let shown = [];
+export function showButtons(names = []) {
+  shown = EXTRA_BUTTONS.filter((b) => names.includes(b));
+  document.body.classList.toggle('has-buttons', shown.length > 0);
+  document.querySelector('.pad--xyz')?.toggleAttribute('hidden', !shown.length);
+  for (const b of EXTRA_BUTTONS) {
+    for (const el of document.querySelectorAll(`[data-btn="${b}"], [data-for="${b}"]`)) el.hidden = !shown.includes(b);
   }
 }
 

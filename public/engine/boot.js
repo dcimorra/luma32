@@ -37,6 +37,7 @@ async function main() {
   let direct = carts.find((c) => c.id === wanted || c.game.id === wanted);
   for (;;) {
     paintShell();
+    input.useButtons();
     setTheme({});
     let id;
     if (direct) { id = direct.id; direct = null; }

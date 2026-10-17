@@ -1,8 +1,12 @@
-// Eight buttons, three sources: the on-screen pad, the keyboard and any gamepad.
+// Eight buttons, three sources: the on-screen pad, the keyboard and any gamepad. Three
+// more, X, Y and Z, that a cartridge gets by asking (`buttons` in game.js) or by reading
+// them: the handheld shows them only then (shell.js, `onButtons`).
 // Games only ever see button names; `pressed` is true on the frame a button goes down.
 // On a desktop or a tablet (shell.js, `pointerOn`) there is also the pointer: the mouse or
 // a finger on the screen itself, in screen pixels, for the scenes that say `pointer = true`.
 export const BUTTONS = ['up', 'down', 'left', 'right', 'a', 'b', 'start', 'select'];
+export const EXTRA_BUTTONS = ['x', 'y', 'z'];
+const EXTRA = new Set(EXTRA_BUTTONS);
 
 const KEYS = {
   ArrowUp: 'up', KeyW: 'up',
@@ -11,11 +15,14 @@ const KEYS = {
   ArrowRight: 'right', KeyD: 'right',
   KeyZ: 'a', KeyK: 'a', Space: 'a',
   KeyX: 'b', KeyJ: 'b', Escape: 'b', Backspace: 'b',
+  // the three extra buttons follow A and B along the keyboard's bottom row
+  KeyC: 'x', KeyV: 'y', KeyB: 'z',
   Enter: 'start', KeyP: 'start',
   ShiftLeft: 'select', ShiftRight: 'select', Tab: 'select',
 };
 
-const PAD = { 12: 'up', 13: 'down', 14: 'left', 15: 'right', 0: 'a', 1: 'b', 9: 'start', 8: 'select' };
+// the standard layout: X and Y are the face buttons left and top, Z either shoulder
+const PAD = { 12: 'up', 13: 'down', 14: 'left', 15: 'right', 0: 'a', 1: 'b', 9: 'start', 8: 'select', 2: 'x', 3: 'y', 4: 'z', 5: 'z' };
 
 // START or SELECT held this long is the console's own shortcut (`onHoldStart`,
 // `onHoldSelect`), not a press.
@@ -37,6 +44,8 @@ export class Input {
     this.stick = { x: 0, y: 0 };
     this.analog = { touch: null, pad: null };
     this.holds = Object.fromEntries(Object.keys(HOLDS).map((b) => [b, { down: null, up: null, since: null, held: false }]));
+    // the extra buttons the running cartridge has: declared (`useButtons`) or read
+    this.extra = new Set();
 
     addEventListener('keydown', (e) => {
       const b = KEYS[e.code];
@@ -186,9 +195,24 @@ export class Input {
     this.pend = { moved: false, pressed: false, clicked: false, back: false, wheel: 0 };
   }
 
-  held(b) { return this.now.has(b); }
-  pressed(b) { return this.now.has(b) && !this.before.has(b); }
-  released(b) { return !this.now.has(b) && this.before.has(b); }
+  held(b) { this.seen(b); return this.now.has(b); }
+  pressed(b) { this.seen(b); return this.now.has(b) && !this.before.has(b); }
+  released(b) { this.seen(b); return !this.now.has(b) && this.before.has(b); }
+
+  // The extra buttons a cartridge has. Declared by the cartridge (`buttons` in game.js:
+  // a list of them, or `true` for all three), and any it reads is added: either way the
+  // handheld hears of it (`onButtons`, shell.js) and shows them. Nothing: back to eight.
+  useButtons(names = []) {
+    const list = names === true ? EXTRA_BUTTONS : Array.isArray(names) ? names : [];
+    this.extra = new Set(list.filter((b) => EXTRA.has(b)));
+    for (const b of list) if (!EXTRA.has(b)) console.warn(`[luma] buttons: ${b} is not one of ${EXTRA_BUTTONS.join(', ')}`);
+    this.onButtons?.([...this.extra]);
+  }
+  seen(b) {
+    if (!EXTRA.has(b) || this.extra.has(b)) return;
+    this.extra.add(b);
+    this.onButtons?.([...this.extra]);
+  }
 
   // The held direction, preferring the most recent one when two are down.
   // The touch pad says where the thumb points (shell.js): { x, y }, or null let go. Only
