@@ -229,8 +229,9 @@ export const villageMaps = {
       { id: 'villager', doll: 'walker', x: 15, y: 9, dir: 'down', move: 'wander', radius: 2, talk: async (api) => api.say('walker', 'village.villager') },
       { id: 'horse', sprite: { down: 'horse_d', up: 'horse_u', left: 'horse_l', right: 'horse_r' }, shadow: true, x: 20, y: 12, dir: 'left', move: 'turn', talk: async (api) => api.say(null, 'village.horse') },
       { id: 'bo', doll: 'bo', x: 3, y: 12, dir: 'right', talk: async (api) => api.say('bo', 'village.bo') },
+      { id: 'boatman', doll: 'boatman', x: 6, y: 15, dir: 'down', move: 'turn', talk: async (api) => api.say('walker', 'village.boatman') },
     ],
-    spots: [{ x: 20, y: 4, w: 2, h: 1, run: async (api) => api.say(null, 'village.well') }],
+    spots: [{ x: 20, y: 3, w: 2, h: 1, run: async (api) => api.say(null, 'village.well') }],
   },
   field: {
     name: 'place.field',
@@ -263,12 +264,12 @@ export const villageMaps = {
     ground: HOUSE,
     warps: [{ x: 4, y: 11, to: 'village', at: [4, 8], face: 'down' }],
     props: [
-      { t: 'bed', x: 1, y: 4 }, { t: 'table', x: 3, y: 7 }, { t: 'chair', x: 2, y: 7 }, { t: 'shelf', x: 10, y: 4 }, { t: 'chest', x: 10, y: 6 },
+      { t: 'bed', x: 1, y: 4 }, { t: 'table', x: 3, y: 7 }, { t: 'chair', x: 2, y: 7 }, { t: 'shelf', x: 8, y: 3 }, { t: 'chest', x: 10, y: 5 },
       { t: 'stove', x: 4, y: 3 }, { t: 'rug', x: 1, y: 10 }, { t: 'crate', x: 10, y: 9 },
     ],
     actors: [
       { id: 'ana', doll: 'ana', x: 5, y: 7, dir: 'left', pose: 'sit', talk: async (api) => api.say('ana', 'house.ana') },
-      { id: 'bo', doll: 'bo', x: 9, y: 6, dir: 'down', talk: async (api) => api.say('bo', 'house.bo') },
+      { id: 'bo', doll: 'bo', x: 9, y: 7, dir: 'up', talk: async (api) => api.say('bo', 'house.bo') },
     ],
   },
   cellar: {

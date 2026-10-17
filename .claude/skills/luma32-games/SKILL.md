@@ -30,7 +30,7 @@ these rules, not from another game.
 | `art.md` | painting anything: palette, tiles, props, dolls, the contact sheet |
 | `music.md` | composing songs, effects, ambiences |
 | `pitfalls.md` | before scripting; when something hangs, flashes or goes black |
-| `testing.md` | testing: screenshots, dev mode, engine warnings, the fresh-eyes review |
+| `testing.md` | testing: screenshots, dev mode, engine warnings, the bench, the audit and the fresh-eyes review (one round each) |
 
 ## What the engine gives and what the cartridge decides
 
@@ -184,13 +184,20 @@ markers) gets none of the engine's checks and comes back with the bugs they prev
 A cartridge's files are its own business; a common split is `art/`, `world/` (tiles,
 maps), `cast.js`, `music.js`, `sound.js`, `scenes/`, the story code, `locales/es/`.
 
-7. **It is made and judged in the modern look.** The house plays its games in 3D
-   (README "The modern look", `?hd=1`): every screenshot that judges art, a map or a
-   scene is taken with `&hd=1`, and the classic look is assumed to follow. Draw for it:
-   walls as a top row over face rows (they stand up), beds and tables seen from above
-   with a `foot` as tall as their `size` (they lie down), everything else a prop that
-   stands. `node tools/sweep-hd.mjs <url> <id>` draws every map of a cartridge on contact
-   sheets to look over at once.
+7. **It is made and judged in the modern look, from above and from the ground.** The
+   house plays its games in 3D (README "The modern look", `?hd=1`): every screenshot that
+   judges art, a map or a scene is taken with `&hd=1`, and the classic look is assumed to
+   follow. The player may also see any map from behind (third person, `&fp=3`) or from
+   the eyes (`&fp=1`), so every map is built for the three views (`art.md` § 6b,
+   `world.md` "Seen from the ground"): walls as a top row over face rows that read as
+   faces, roofs that read from above, beds and tables seen from above with a `foot` as
+   tall as their `size` (they lie down), buildings as boxes, everything else a prop that
+   stands; a `sky` and a `skirt` where an edge is in view, `clock: false` indoors.
+   `node tools/sweep-hd.mjs <url> <id>` draws every map on contact sheets from above;
+   `node tools/bench.mjs <url> <id>` draws every dev jump from above, from the eyes and
+   from behind with the errors under each picture (testing.md). The cast is drawn with
+   `relief` and the marks of each life (`art.md` § 6.9): from behind, a flat doll is a
+   cut-out.
 
 ## Done means
 
@@ -225,19 +232,62 @@ A cartridge goes on the shelf, or a chapter is handed over, only when all of thi
       (90–120 with what's optional, for a whole story, unless the commission says
       otherwise), `tools/length.mjs` gives at most half of that as reading, and every
       chapter has its played stretch of 5+ minutes.
-- [ ] Every map reads well in the modern look (`tools/sweep-hd.mjs`, and the review is
-      played with `&hd=1`): walls stand, what is drawn from above lies down.
+- [ ] Every map reads well in the modern look from above and from the ground
+      (`tools/sweep-hd.mjs`, `tools/bench.mjs` over every dev jump with nothing under any
+      picture, and the review is played with `&hd=1` and looks from behind at every
+      chapter start): walls stand with faces that read, roofs lie, what is drawn from
+      above lies down, nothing floats, the sky and the skirt are there where an edge shows.
+- [ ] Every named character has `relief` and the marks of their life, within 18 colours
+      (`art.md` § 6.9), and reads from behind as from above.
 - [ ] Art passes `art.md` § 8; every song follows `music.md`; every portrait talks and
       blinks (`story.md`).
 - [ ] The fresh-eyes review scores 4+ on every axis it can score, with no blocker and no
       major defect; minor ones are fixed or listed under "Left" in the author's report.
       An axis the commissioner accepted lower (a length kept by decision) or one the
       reviewer cannot test (sound, headless) doesn't count, and the report says so. For
-      an adaptation, the fidelity review lists only documented cuts. Each round is new
-      eyes on a different stretch, so minors never run out: another round only while a
-      blocker or a major is open, and three rounds at most.
+      an adaptation, the fidelity review lists only documented cuts. One round closes
+      everything in its scope ("Asking the auditor and the reviewer"); a second is asked
+      only for the blockers and majors the first found, after they are fixed, and never
+      a third.
 - [ ] The bar of `classics.md` holds, item by item.
 - [ ] Every note in `reports/feedback.md` is fixed or answered (below).
+
+## Asking the auditor and the reviewer: one round each
+
+The auditor and the reviewer are asked by mail (`mail/auditor.author.md`,
+`mail/reviewer.author.md`) and each answers with one report. **A round closes with
+everything in it**: a report that covers the whole scope, with nothing deferred, no
+questions back and no "ask me again for the rest". Rounds became loops when the author
+asked them for what they cannot do, and they asked back instead of closing. So:
+
+- **The note names the cartridge, the commit and the scope, and nothing to decide.** For
+  the auditor: every jump, or a range after a fix. For the reviewer: round 1 the whole
+  game; a later round the defects of the last review (by number) and the files changed
+  since, with what was changed in a line each. Not "is this fixed?" about one point — the
+  author checks a fixed point themselves, with a screenshot of that point — and never
+  "what would you do here", "which of these two", "is the story good": the auditor has no
+  opinion and the reviewer gives theirs in the scores, once.
+- **What the author doesn't ask them to fix.** Neither edits the game. A report that says
+  "the player never got control back" means the cartridge lacks a `dev.win` exit or a
+  jump's `timeout`, not that the auditor should play the minigame; "no jump for chapter 4"
+  means the author adds it, not that the reviewer should find the chapter another way.
+  Anything the note asks that is not theirs, they answer in one line of the report (what
+  their run can say about it, or that it is not theirs) and go on with the whole scope.
+- **They never wait.** A browser that won't boot, a locale that won't parse, a jump that
+  hangs, a chapter they can't get past: it goes in the report as a blocker with what they
+  saw, they get past it with the next jump, and the report still covers the rest. The
+  round ends with the report, in one turn of theirs; a second turn exists only if the house
+  asks for one.
+- **The author answers a report by fixing, not by writing back.** Every line of it is
+  fixed or answered under "Left" in the author's own report (why it stays), and the next
+  note to them, if any, lists what changed. A note that argues with a defect instead of
+  fixing or listing it is the start of a loop.
+- **Rounds.** The audit is asked after integrating and after each batch of fixes, each
+  time over the jumps the fixes touch; it reports what the tool finds, so it ends when the
+  tool finds nothing. The review is asked once for the whole game, and once more only for
+  the blockers and majors it found, after they are fixed: that second round re-plays those
+  points and the chapters their files feed, carries the rest, and is the last. Minors are
+  fixed by the author and checked by the author.
 
 ## Feedback from whoever plays it
 

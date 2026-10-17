@@ -85,13 +85,17 @@ const tiles = {
   well: { size: [2, 2], foot: [2, 1], draw(p) { p.rect(2, 10, 28, 22, C.rockLo); p.rect(4, 12, 24, 6, C.ink); p.hline(2, 10, 28, C.rockHi); p.rect(4, 0, 2, 12, C.ink); p.rect(26, 0, 2, 12, C.ink); p.rect(4, 0, 24, 2, C.ink); } },
 };
 
+// the cast: each with the marks of a life (engine/doll.js, "A face and clothes that have
+// lived"), so every option of the doll is on the sheet and in the diorama
 const dolls = {
-  hero: { skin: '#e8b48c', hair: '#3a2a1a', hairStyle: 'short', top: '#3a6ab0', bottom: '#2a3040' },
-  ana: { skin: '#c48c64', hair: '#1e1612', hairStyle: 'long', top: '#b04a3a', bottom: '#4a3a2a', dress: true },
-  bo: { skin: '#e0b090', hair: '#c08030', hairStyle: 'buzz', top: '#408040', bottom: '#303030', hat: 'cap' },
-  guard: { skin: '#d0a080', hair: '#2a2a2a', hairStyle: 'short', top: '#5a5a7a', bottom: '#2a2a3a', hat: 'helmet', hatColor: '#9098a8' },
-  sage: { skin: '#e8c0a0', hair: '#d8d8d0', hairStyle: 'long', top: '#6a4a8a', bottom: '#3a2a4a', coat: '#4a3a6a' },
-  walker: { skin: '#a87050', hair: '#1e1612', hairStyle: 'short', top: '#a06a30', bottom: '#4a3a2a' },
+  hero: { skin: '#e8b48c', hair: '#3a2a1a', hairStyle: 'short', top: '#3a6ab0', bottom: '#2a3040', relief: true, belt: '#5a3a22' },
+  ana: { skin: '#c48c64', hair: '#1e1612', hairStyle: 'long', top: '#b04a3a', bottom: '#4a3a2a', dress: true, relief: true, apron: '#e8dcc0', sleeves: 'rolled' },
+  bo: { skin: '#e0b090', hair: '#c08030', hairStyle: 'buzz', top: '#408040', bottom: '#303030', hat: 'cap', relief: true, scarf: '#d8a030', worn: true, gloves: '#6a4a30' },
+  guard: { skin: '#d0a080', hair: '#2a2a2a', hairStyle: 'short', top: '#5a5a7a', bottom: '#2a2a3a', hat: 'helmet', hatColor: '#9098a8', relief: true, weathered: true, scar: 'cheek', beard: 'stubble' },
+  sage: { skin: '#e8c0a0', hair: '#d8d8d0', hairStyle: 'long', top: '#6a4a8a', bottom: '#3a2a4a', coat: '#4a3a6a', relief: true, lines: true, belt: '#8a6a30' },
+  walker: { skin: '#a87050', hair: '#1e1612', hairStyle: 'short', top: '#a06a30', bottom: '#4a3a2a', relief: true, weathered: true, hat: 'bandana', hatColor: '#b03a30', sleeves: 'rolled', worn: true, boots: '#5a3a22' },
+  // the one-eyed boatman: a scar across the other eye too
+  boatman: { skin: '#c89868', hair: '#4a3a2a', hairStyle: 'receding', top: '#4a5a6a', bottom: '#2a3038', relief: true, weathered: true, eyepatch: 'left', scar: 'brow', beard: 'full', beardColor: '#6a5a4a', scarf: '#c04838' },
 };
 
 // a 40×40 face; mood changes the mouth

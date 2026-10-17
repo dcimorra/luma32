@@ -151,6 +151,61 @@ height, readable at 1× from across the screen.
    for a pregnancy; a horse is `creature: 'horse'`. A `beanie` for a plume, a `top` hat
    for a crown, a dog for a horse are what this list replaces. Each layer adds colours:
    watch the count `sheet.mjs` prints.
+9. **Faces and clothes that have lived.** A cast of clean chibis in flat clothes reads as
+   toys. Every named character gets `relief: true` (the collar in the chin's shadow, the
+   far side of the body two tones deep, the face rounded off: no new colour) and the marks
+   of their life, from the doll's own options (header of `engine/doll.js`): `lines` for
+   age, `weathered` for a face that has seen sun and wind (a ruddier, deeper skin shade),
+   `scar: 'cheek' | 'brow' | 'eye'`, `eyepatch`, `beard: 'stubble'`; and the clothes of
+   their trade — `belt`, `boots`, `gloves`, `sleeves: 'rolled'`, `scarf`, `apron`,
+   `hat: 'bandana'`, `worn: true` (a patch on a knee and an elbow). Write the character's
+   life first, then pick what shows it: a boatman is weathered, one-eyed, scarfed; a farmer
+   worn, booted, sleeves rolled; a clerk clean, in an apron; the old mentor lined, with
+   a cane. Background people get less (relief and one mark), so the named ones stand out.
+   Each accessory costs colours (a belt three, boots or a scarf two, gloves one; `relief`,
+   `lines`, `weathered`, `worn`, `sleeves` none; a scar one): a plain doll already spends
+   its 15, so pick one or two per named character and keep the count `sheet.mjs` prints
+   at 18 or under for them (15 for background people). Check the cast on the sheet
+   **and in the diorama from behind** (`&fp=3`): the bodies stand up pixel by pixel, so
+   a belt, a scarf and the relief read there too, and a flat doll reads as a cut-out.
+
+## 6b. Drawing for the modern look (the diorama)
+
+The house judges every game in 3D (README "The modern look"): the diorama is built from
+the same tiles, so what you paint decides what stands up and how. Draw for it:
+
+- **A wall is a top row over face rows.** The diorama stands a solid run up as tall as
+  its face rows (the rows between the walkable ground below and the first "top" tile
+  above): a house is `ridge, roof, window, brick` in a column — two storeys with a roof.
+  A face row must look like a face (bricks, planks, a window, a door): seen from behind
+  the player it is a wall at eye height, and so is its back. A solid run with no face
+  (a side wall of `wall_top` tiles, a hedge) takes the height most walls have. In
+  interiors, the north wall is `wall_top` over two face rows, the side walls `wall_top`
+  down to the floor, the south wall one `wall_top` row with the door in it (cut low from
+  above, a wall from behind). The lab's `village` and `house` (`tools/lab/village.js`)
+  are the reference, in the three views.
+- **Roof rows read from above, face rows from the front.** Never a roof texture on a
+  row that walkable ground touches: it stands up as a wall of tiles.
+- **Props**: a bed or a table drawn from above with `foot` as tall as its `size` lies
+  down; anything else stands as a body as deep as the ground it takes. A building as a
+  prop (four cells or more, or `roof: rows`) is a box: its top rows the roof, the rest
+  its façade; `depth` says how deep. Something big and drawn from the front (a tent, a
+  tree, a tower) stands as it is, its picture carried round its sides; drawn in profile
+  (a cart, a horse) it turns to the camera like a person. A puddle, a rug, a shadow is
+  `flat`.
+- **Trees**: a solid trunk tile with a crown `top` stands as a trunk under a card (a crown
+  that hides whoever is behind it, and from the eyes a column of trunk); a round canopy
+  prop stands as a body. Give the crown a jagged lower edge: a straight one is a shelf.
+- **Water, chasms, ledges** lie flat (`medium`, `reflect`, `step: 'water'`, or
+  `wall: false`); from the ground they are seen into the distance, so they want a
+  horizon: a `sky` on the map (or the hour's by default), and a `skirt` where the map's
+  edge is in view (six cells by default from the ground).
+- **Interiors** say `clock: false` (or `sky: false`): no sky above the walls. A map made
+  for the ground view (`wallHeight`, `ceiling`, `wall: 'brick'` on its tiles) keeps its
+  own walls from behind too.
+- **Check it with the bench**: `node tools/bench.mjs <url> <id>` (testing.md) draws every
+  dev jump from above, from the eyes and from behind, and a wall that lies, a roof that
+  stands, a bed on end or a prop as a card shows at once.
 
 ## 7. Errors the GBA era is remembered for — don't repeat them
 
@@ -175,10 +230,12 @@ height, readable at 1× from across the screen.
 2. **Ground**: base tiles (plain), variants, detail tiles. Contact sheet: no flagged
    plain-ground edge, no visible lattice at 3×3, ≤ 15 colours each.
 3. **Props**: lit top-left, own-ramp outline, drop shadow, ≤ 15 colours.
-4. **Cast**: specs with `outline`, signature colours, silhouettes all different for named
-   characters.
+4. **Cast**: specs with `outline`, `relief`, signature colours, the marks of each life
+   (§ 6.9), silhouettes all different for named characters, 18 colours at most each (15
+   for background people).
 5. **One screenshot per map** with the main characters standing on it: greyscale/squint
-   test (§2.3), the biggest field (§4.6), the landmark of each beat.
+   test (§2.3), the biggest field (§4.6), the landmark of each beat — and the bench's
+   sheets (§ 6b) for how it stands up.
 6. **Fix and re-run the sheet**, then only re-shoot what changed.
 
 ```bash

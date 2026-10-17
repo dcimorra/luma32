@@ -78,6 +78,17 @@ not a one-off; look for the kind across the whole game.
 - **A dev jump that sets flags but not the objective.** It hid the real objective while
   testing. Rule: a jump sets the state a player would have there, objective and place
   included — the audit checks it.
+- **The round that never closed.** An author mailed the auditor "can you check whether
+  the well answers now?" and the reviewer "which of the two endings reads better?"; each
+  wrote back a question, the author answered, and five mails later nothing had been
+  fixed. Rule: a note to them names the cartridge, the commit and the scope, nothing to
+  decide; they answer with one complete report and no questions; the author fixes or lists
+  under "Left" (SKILL.md, "Asking the auditor and the reviewer").
+- **A map that stood up wrong.** A house drawn as roof tiles down to the ground stood as
+  a four-storey wall of tiles from behind the player; a bed as a card on end; the void past
+  a shore's edge a black wall. Rule: every map is seen from the ground too (`art.md` § 6b):
+  faces under roofs, `foot` as tall as `size` on what lies, a `sky` and a `skirt` where an
+  edge shows; `tools/bench.mjs` over the jumps before the review.
 
 
 ## The person behind the desk
