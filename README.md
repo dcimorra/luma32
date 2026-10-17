@@ -130,7 +130,8 @@ library only points to it.
 - `engine/font.js`, `engine/glyphs.js`: the bitmap font (accents composed, `¿¡ñ` included).
 - `engine/doll.js` (its header lists every option a cast may use, down to the marks of a
   life: relief, lines, weather, scars, belts, boots, worn clothes, since 1.21), `engine/creature.js`: people and animals (16×24, 4 directions × 3
-  poses) generated from a spec.
+  poses) generated from a spec. `relief: true` on the game (since 1.21.1) gives its whole
+  cast the deeper modelling; a doll's own `relief: false` keeps it flat.
 - `engine/audio.js`: synthesised chiptune sequencer + effects + ambiences.
 - `engine/weather.js`, `engine/vfx.js`, `engine/gfx.js` (`Painter`, the pixel-art API).
 - `engine/firstperson.js`: the map from the player's eyes, a raycaster (`view: 'first'`).

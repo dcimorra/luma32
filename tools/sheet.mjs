@@ -39,8 +39,10 @@ page.on('console', (m) => { const t = m.text(); if (t.startsWith('[sheet-at] '))
 await page.goto(`${base}/`);
 const res = await page.evaluate(async ({ id, only, match, pageH }) => {
   const { Tileset } = await import('/engine/world.js');
-  const { doll } = await import('/engine/doll.js');
+  const { doll, dollDefaults } = await import('/engine/doll.js');
   const game = (await import(`/games/${id}/game.js`)).default;
+  // the cast as the game shows it: its own defaults (`relief`), as cart.js sets them
+  dollDefaults?.({ relief: game.relief });
   await game.setup?.();
   const tiles = new Tileset(game.tiles || {});
   const S = 2;

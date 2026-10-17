@@ -5,10 +5,12 @@ import { World } from './world.js';
 import { SaveSlot, slotsOf } from './save.js';
 import { setTheme, setPortraits } from './ui.js';
 import { paintShell } from './shell.js';
+import { dollDefaults } from './doll.js';
 import { defineSongs, defineEffects, setOrchestra, music, ambience } from './audio.js';
 import { t } from './i18n.js';
 
 export async function runCartridge(engine, game) {
+  dollDefaults({ relief: game.relief });
   setTheme(game.theme?.ui || {});
   setPortraits(game.portraits);
   paintShell(game.theme?.shell);
@@ -21,7 +23,7 @@ export async function runCartridge(engine, game) {
 
   for (;;) {
     const { id, slot } = await engine.replaceAll(new TitleScreen(game, slotsOf(game)));
-    if (id === 'eject') { music(null); ambience(null); return; }
+    if (id === 'eject') { music(null); ambience(null); dollDefaults(null); return; }
     // the slot chosen on the title is where every save of this play goes
     game.saveSlot = slot;
     const save = id === 'continue' ? slot.load(game) : SaveSlot.fresh(game);

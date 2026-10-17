@@ -1136,10 +1136,16 @@ function creatureDoll(spec) {
   return d;
 }
 
+// What every doll of the cartridge being played has unless its spec says otherwise: the
+// game's `relief: true` gives the whole cast the deeper modelling (cart.js sets it when the
+// cartridge starts; a doll built when its file loads, before that, has to say it itself).
+let defaults = {};
+export function dollDefaults(d) { defaults = d || {}; }
+
 export function doll(spec) {
   if (spec.creature) return creatureDoll(spec);
   const pal = palette(spec);
-  const R = !!spec.relief;
+  const R = !!(spec.relief ?? defaults.relief);
   const frames = {};
   for (const dir of ['down', 'up', 'left']) frames[dir] = [0, 1, 2].map((pose) => render(frameRows(dir, pose, spec), pal, false, null, R));
   frames.right = [0, 1, 2].map((pose) => render(frameRows('left', pose, spec, null, 'right'), pal, true, null, R));
