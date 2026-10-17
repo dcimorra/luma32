@@ -204,10 +204,14 @@ export class Shelf {
       if (inp.pressed('select')) { sfx('confirm'); openAccount(); }
       return;
     }
-    if (!account()) {
+    // nobody logged in: with nothing to play, straight to logging in; with something
+    // anyone may play (the free demos), the shelf as ever, and START or SELECT log in
+    const anon = !account();
+    if (anon && !this.stack[0].items.some((it) => !it.search)) {
       if (!this.asked || inp.pressed('a') || inp.pressed('start') || inp.pressed('select') || tap) { this.asked = true; sfx('confirm'); openAccount(); }
       return;
     }
+    if (anon && (inp.pressed('start') || inp.pressed('select'))) { sfx('confirm'); openAccount(); return; }
     if (this.inserting >= 0) {
       this.inserting++;
       if (this.inserting > 50) this.done(this.items[this.sel].id);
@@ -284,7 +288,7 @@ export class Shelf {
         // every third blink, the way back out (or to the manager, or the account)
         const third = Math.floor(f / 60) % 3 === 2 && (this.stack.length > 1 || !local || canManage());
         const say = t(hint(cur.search ? 'console.shelf.search_hint' : cur.group ? 'console.shelf.open_group'
-          : third ? (this.stack.length > 1 ? 'console.shelf.back' : canManage() ? 'console.shelf.manage_hint' : 'console.shelf.account_hint') : 'console.shelf.insert'));
+          : third ? (this.stack.length > 1 ? 'console.shelf.back' : !account() ? 'console.shelf.login_start' : canManage() ? 'console.shelf.manage_hint' : 'console.shelf.account_hint') : 'console.shelf.insert'));
         drawText(ctx, say, centerX(say), 151, '#5fd0ff');
       }
       if (this.items.length > 1) {
