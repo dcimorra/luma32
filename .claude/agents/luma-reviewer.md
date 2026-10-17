@@ -47,13 +47,15 @@ give, and the reviewer asked back instead of closing.
 - Everything you found goes in this report: no "the rest next round", no "ask me again
   for chapter 5". If a defect's fix is obvious, write the fix; if a defect may be the
   diorama's and not the art's, say which after `&hd=0` told you, in the same line.
-- A second round, if the house asks one, is for the blockers and majors of your first
-  report after they were fixed, and the chapters their files feed; it is the last. There
-  is no third: what is left after it is the author's to fix and list.
+- A later round, if the house asks one, is for the blockers and majors of the last
+  report after they were fixed, and the chapters their files feed. How many rounds there
+  are is the house's to say (`team.md`, "Asking the auditor and the reviewer"); what is
+  left after the last is the author's to fix and list.
 
 ## Read first, and only this
 
-- `.claude/skills/luma32-games/SKILL.md` (the index, "Done means").
+- `.claude/skills/luma32-games/SKILL.md` (the index) and `done.md` (what "done" means:
+  every line of it is checked).
 - `.claude/skills/luma32-games/classics.md` (its last section, "The bar", is checked item
   by item in your report), `feel.md`, `life.md`, the "Directing a cutscene" part of
   `story.md` and the last section of `pitfalls.md` ("What a finished game still came

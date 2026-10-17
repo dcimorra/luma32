@@ -6,7 +6,6 @@ notices first.
 
 ## What the player feels (the difference between "it works" and "it's good")
 
-
 A chapter that finishes is not a chapter that plays well. These are what a player
 notices first; each one came from a real play of a finished cartridge.
 
@@ -61,7 +60,7 @@ notices first; each one came from a real play of a finished cartridge.
   answered from the other end of the house, from another room, or from a person the
   player can't see. A call is a call: the other one is not on the map, and the scene
   shows the phone. The engine walks a free person over when a line answers someone far
-  away and warns when it can't (`direct: true`, README "Directed conversations") — that is
+  away and warns when it can't (`direct: true`, README "Scripts", "Directed conversations") — that is
   a safety net; a `[luma] … answers … from N cells away` means the scene was staged wrong.
 - **Everyone talks.** Every person on a map answers A: named characters with a line that
   fits the moment (read the chapter's flags), background people with their own line.
@@ -89,7 +88,6 @@ notices first; each one came from a real play of a finished cartridge.
   `dust: '#ffffff'`).
 
 ## Craft: what separates a great game from a correct one
-
 
 "What the player feels" makes a game that never feels broken. These make one people remember.
 Each goes on paper in the beat list (step 1) before any code, because they can't be
@@ -142,10 +140,10 @@ added at the end.
   windows that carry `light`), footsteps that sound like the ground (`step` on tiles),
   places that sound like places (`reverb` in halls and caves; `sounds` at a fountain,
   a river, a forge, louder as you near them), and the people of `life.md`.
-- **Respect the player's time.** The engine autosaves when the player has control on
-  arriving at a new map (`autosave: false` only for a game where that would cheat it)
-  and greets a "Continuar" with the objective; so every map arrival must be a safe
-  point — nothing half-done that a reload can't rebuild from flags (`pitfalls.md`).
+- **Respect the player's time.** The engine autosaves on every map arrival and greets a
+  "Continuar" with the objective (`autosave: false` only for a game where that would
+  cheat it); so every arrival must be a safe point (`pitfalls.md`, "Every arrival is
+  saved").
 - **Depth on screen.** Outdoors with sky or sea at the edge, a far layer behind
   (`parallax`: mountains, clouds, the sea) moving slower than the ground; still water
   that reflects whoever stands at its edge (`reflect`); a transition with character for

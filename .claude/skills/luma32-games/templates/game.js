@@ -13,7 +13,9 @@ import { C } from './art/palette.js';
 // ---------- art (painted in code) ----------
 
 const tiles = {
-  grass: { draw(p) { p.fill(C.grass); p.noise(0, 0, 16, 16, [C.grassHi, C.grassLo], 0.18); } },
+  // ground: almost plain, low noise (art.md § 4); detail goes in a variant scattered by position
+  grass: { draw(p) { p.fill(C.grass); p.noise(0, 0, 16, 16, [C.grassHi, C.grassLo], 0.06); } },
+  grass2: { draw(p) { p.fill(C.grass); p.noise(0, 0, 16, 16, [C.grassHi, C.grassLo], 0.06); p.px(4, 9, C.accent); p.px(11, 4, C.paper); p.px(12, 5, C.grassHi); } },
   fence: { solid: true, draw(p) { p.fill(C.grass); p.rect(0, 6, 16, 3, C.ink); p.rect(0, 6, 16, 2, C.woodHi); p.rect(2, 3, 3, 12, C.wood); p.rect(11, 3, 3, 12, C.wood); } },
   gate: { solid: true, examine: 'village.gate_locked', draw(p) { p.fill(C.grass); p.rect(1, 2, 14, 13, C.ink); p.rect(2, 3, 12, 11, C.wood); p.hline(2, 3, 12, C.woodHi); } },
   gate_open: { draw(p) { p.fill(C.grass); p.rect(1, 13, 14, 2, C.wood); } },
@@ -30,9 +32,10 @@ const tiles = {
   },
 };
 
+// named characters: the world's ink as outline, relief, and a mark of their life (art.md § 6)
 const dolls = {
-  hero: { skin: '#e8b48c', hair: '#3a2a1a', hairStyle: 'short', top: '#3a6ab0', bottom: '#2a3040' },
-  ana: { skin: '#c48c64', hair: '#1e1612', hairStyle: 'long', top: '#b04a3a', bottom: '#4a3a2a', dress: true },
+  hero: { skin: '#e8b48c', hair: '#3a2a1a', hairStyle: 'short', top: '#3a6ab0', bottom: '#2a3040', outline: C.ink, relief: true, boots: '#5e3c22' },
+  ana: { skin: '#c48c64', hair: '#1e1612', hairStyle: 'long', top: '#b04a3a', bottom: '#4a3a2a', dress: true, outline: C.ink, relief: true, apron: '#e8dcc0' },
 };
 
 // ---------- the one map ----------
@@ -45,10 +48,11 @@ const maps = {
   village: {
     name: 'place.village',
     music: 'theme',
-    legend: { '.': 'grass', '#': 'fence', G: 'gate' },
+    legend: { '.': 'grass', ',': 'grass2', '#': 'fence', G: 'gate' },
     ground: [
       '#######G#######',
-      ...Array.from({ length: 9 }, () => '#.............#'),
+      // flowers scattered by position, never at random per frame
+      ...Array.from({ length: 9 }, (_, y) => `#${Array.from({ length: 13 }, (_, x) => ((x * 7 + y * 13) % 11 === 0 ? ',' : '.')).join('')}#`),
       '###############',
     ],
     props: [{ t: 'well', x: 10, y: 7, id: 'well' }],
@@ -95,18 +99,34 @@ const maps = {
 
 // ---------- music ----------
 
+// The village at dusk: D Mixolydian in 3/4 (12 steps a bar), calm, no drums. The idea that
+// is this game's: a lilting dotted figure that leaps a sixth, and the flat seventh (C)
+// that gives the village its old, rustic colour (music.md, "The method").
 const songs = {
   theme: {
-    bpm: 112,
-    channels: { lead: { inst: 'pulse25', echo: 0.25 }, bass: { inst: 'bass' }, drums: { inst: 'drums', vol: 0.6 } },
+    bpm: 96,
+    steps: 4,
+    channels: {
+      lead: { inst: 'pulse50', echo: 0.25, gate: 0.9 },
+      // the counter-line holds while the lead moves, a third or sixth below
+      counter: { inst: 'tri', vol: 0.45 },
+      bass: { inst: 'bass' },
+    },
     patterns: {
-      A: {
-        lead: 'C5 - E5 - G5 - - - E5 - D5 - C5 - - -',
-        bass: 'C3 . C3 . G2 . G2 . A2 . A2 . F2 . G2 .',
-        drums: 'k . h . s . h . k k h . s . h h',
+      // question: four bars that end open, on E (the second degree)
+      Q: {
+        lead: 'D5 - - C5 B4 - A4 - F#5 - - - E5 - F#5 E5 D5 - - - . . A4 - D5 - - C5 B4 - G4 - E5 - - - D5 - C#5 D5 E5 - - - - - . .',
+        counter: 'F#4 - - - - - - - A4 - - - C#4 - - - - - - - E4 - - - B3 - - - - - - - D4 - - - C#4 - - - - - - - - - - -',
+        bass: 'D3 - - - . . A2 - - - F#2 - A2 - - - . . E3 - - - C#3 - G2 - - - . . D3 - - - B2 - A2 - - - E2 - - - A2 - G2 -',
+      },
+      // answer: the motif's rhythm again, through the borrowed C chord, home to D
+      R: {
+        lead: 'D5 - - C5 B4 - A4 - F#5 - - - E5 - F#5 E5 D5 - - - . . A4 - G5 - - F#5 E5 - C5 - B4 - - - A4 - B4 C#5 D5 - - - - - . .',
+        counter: 'F#4 - - - - - - - A4 - - - C#4 - - - - - - - E4 - - - E4 - - - - - - - G4 - - - F#4 - - - - - - - - - - -',
+        bass: 'D3 - - - . . A2 - - - F#2 - A2 - - - . . E3 - - - C#3 - C3 - - - . . G2 - - - E2 - D3 - - - A2 - - - D3 - - -',
       },
     },
-    song: ['A'],
+    song: ['Q', 'R'],
   },
 };
 
@@ -146,6 +166,8 @@ export default {
   player: 'hero',
   title,
   cover,
+  // conversations are directed: speakers turn to each other, the camera finds them
+  direct: true,
   // SELECT: what the story wants from the player right now
   async onSelect(api) {
     await api.say(null, api.save.objective || 'obj.none', { style: 'box' });

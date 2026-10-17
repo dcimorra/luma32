@@ -62,6 +62,9 @@ async function load(progress) {
   if (wanted && /^[a-z0-9_-]+$/.test(wanted) && !entries.some((e) => e.id === wanted || e.key === wanted)) {
     entries.push({ key: wanted, id: wanted, base: new URL(`games/${wanted}/`, location.href).href, extra: true });
   }
+  else if (wanted && !/^[a-z0-9_-]+$/.test(wanted) && !entries.some((e) => e.id === wanted || e.key === wanted)) {
+    console.warn(`[luma] ?game=${wanted}: a cartridge id is lowercase letters, digits, - and _ only; the shelf opens instead`);
+  }
   progress.total = entries.length;
   // every cartridge loads, all at once (library.js); the shelf keeps the library's order
   const carts = (await Promise.all(entries.map((entry) => loadCart(entry, progress)))).filter(Boolean);

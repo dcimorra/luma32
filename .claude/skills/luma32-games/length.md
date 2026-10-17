@@ -84,9 +84,9 @@ that comes back), not more to read or farther to walk.
 - `node tools/length.mjs <id>` gives the words of the catalogues and their minutes of
   reading. **More than half of the target is the sign of a game that is read, not
   played**; cut text or add play.
-- The play-through with real keys (`testing.md`) writes down `save.time` at every
-  chapter card. You know the answers, so you play faster than a newcomer: what you
-  measure, plus the reading you skipped, is the floor of a first play, not the estimate.
-- The reviewer's fresh-eyes review reports the time per chapter, the reading and
-  the played minutes, and flags any chapter without its played stretch.
+- The reviewer's play-through with real keys (`testing.md`, `team.md`) writes down
+  `save.time` at every chapter card and reports the time per chapter, the reading and
+  the played minutes, and flags any chapter without its played stretch. Someone who
+  knows the answers plays faster than a newcomer: what they measure, plus the reading
+  they skipped, is the floor of a first play, not the estimate.
 - A game short of its budget is not done. It goes back to the beat list, not to padding.

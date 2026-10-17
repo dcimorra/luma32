@@ -1,6 +1,5 @@
 # Testing (screenshots are the proof)
 
-
 ```bash
 (cd tools && npm install)   # once: playwright-core, pinned in tools/package.json
 cd public && setsid nohup python3 -m http.server 8765 --bind 127.0.0.1 >/tmp/luma-http.log 2>&1 </dev/null &
@@ -52,8 +51,7 @@ node tools/shot.mjs "http://127.0.0.1:8765/?game=<id>" /tmp/out script.json
   before pressing Enter** or every later step is off by one.
 - `window.luma.engine` is the running console: `luma.engine.scenes` is the stack; the
   World is the scene with `.api` — set flags, teleport or `api.warp(...)` to reach a
-  stretch of the story fast. A cartridge may read a URL parameter of its own in
-  `newGame` to start at a given point of its story while it is being built.
+  stretch of the story fast; `dev.jumps` (below) is how a cartridge offers those points.
 - `VP=390x844 TOUCH=1 DPR=2` emulates an upright phone; `VP=844x390` one on its side.
 - Console errors print to stdout. `node --check` every JS file; validate locale JSON.
 - **Art without playing**: `node tools/sheet.mjs http://127.0.0.1:8765 <id> /tmp/<id>-sheet.png`
@@ -64,12 +62,14 @@ node tools/shot.mjs "http://127.0.0.1:8765/?game=<id>" /tmp/out script.json
   (`-2.png`…); if it hangs it says what it was drawing.
 - `tools/shot.mjs` loads `playwright-core` from `tools/node_modules` and the Chromium
   that version expects from `~/.cache/ms-playwright` (missing: `npx playwright-core
-  install chromium` in `tools/`); override with `PLAYWRIGHT=` / `CHROME=`.
+  install chromium` in `tools/`); override with `PLAYWRIGHT=` / `CHROME=`. In a Claude
+  Code cloud container the Chromium is preinstalled under `/opt/pw-browsers` and may be
+  another version than the pinned one: `CHROME=$(ls -d /opt/pw-browsers/chromium-*/chrome-linux*/chrome | head -1)`
+  before any tool (never `playwright install` there).
 - **The audit, at every jump: `node tools/audit.mjs "http://127.0.0.1:8765/?game=<id>"`.**
-  In a team it is the **auditor**'s (`.claude/agents/luma-auditor.md`), asked by mail
-  (`mail/auditor.author.md`) with the cartridge, the commit and the scope — nothing else:
-  it answers with one report in one round, never a question (SKILL.md, "Asking the auditor
-  and the reviewer"); the author never runs it.
+  It is the **auditor**'s (`.claude/agents/luma-auditor.md`), asked with the cartridge,
+  the commit and the scope — nothing else — and answered with one report (`team.md`, "Who
+  plays and who audits" and "Asking the auditor and the reviewer").
   It starts a new game, runs every dev jump (pressing A through its scenes), and after
   each one lists, from where the player really stands: an objective without a place or
   out of reach, a place where nothing answers, a spot no cell touches, a spot on open
@@ -78,32 +78,29 @@ node tools/shot.mjs "http://127.0.0.1:8765/?game=<id>" /tmp/out script.json
   each jump on into its next beat (with play.mjs): a `follow:` line is where to look by
   hand. A jump with a long set piece gets `timeout: <secs>` in `dev.jumps` (45 by
   default). It costs one browser for a
-  few minutes; run it after every block of work and before every hand-over. **A
+  few minutes; it is asked after integrating and after every batch of fixes. **A
   cartridge is not handed over with problems in it.** It needs `dev.jumps` that leave
   the game where a player would be (flags, objective with its place, map, cell): one per
   chapter start and per ★ set piece at least, and one for every objective a beat sets
   is better. The audit sets the flag `dev.win`, and every minigame must end at once as
   won when it reads it under `?dev=1` (`api.is('dev.win')`, the result a win gives the
-  story): one flag for all, never one of each game's own ("Done means"). A minigame that
+  story): one flag for all, never one of each game's own (`done.md`). A minigame that
   doesn't shows as "never got control back", and is a defect. The minigames themselves are
   still played by hand, once each.
 - **The length, measured** (`length.md`): `node tools/length.mjs <id>` for the minutes of
-  reading; on the play-through with real keys, `save.time` at every chapter card. A
+  reading; on the reviewer's play-through with real keys, `save.time` at every chapter card. A
   chapter short of its minutes, or without its played stretch, goes back to the beat list.
 - **The newcomer test, at every chapter start.** Turn the guide off (START → Opciones →
   Guía) and don't open START: play the first minute with real keys from the card. If
   what the game shows and says doesn't tell you where to go and what to do, the beat
   is wrong — fix the scene's last line, the objective text and the visual cue
   (`feel.md`), not the guide. Then turn the guide on and check it points right.
-- **For long stories, an autoplayer.** A script that starts each chapter, presses A on
-  every line, wins every minigame and runs the chapter's own triggers, spots and talks
-  until it's marked done catches the scripts that crash or hang, across dozens of
-  chapters, in the background. It proves the story *runs*, not that it *plays*: it
-  teleports and calls `talk` and `run` directly, so it can't see a hidden spot, a door
-  off the grid, a person A can't reach, a mute person or a missing hint — a game whose
-  autoplayer passed had four blockers of exactly that kind. `tools/audit.mjs` checks
-  those from the player's real position; neither replaces the other. After it passes, play the start of every chapter by hand with real keys
-  (from its card to its first objective) against `feel.md`.
+- **Why play.mjs and the audit, not an autoplayer.** A script that teleports and calls
+  `talk` and `run` directly proves the story *runs*, not that it *plays*: it can't see a
+  hidden spot, a door off the grid, a person A can't reach, a mute person or a missing
+  hint — a game whose autoplayer passed had four blockers of exactly that kind (the old
+  one is archived in `tools/shelved/autopilot/`). `tools/play.mjs` plays with real keys
+  and `tools/audit.mjs` checks from the player's real position; use those.
 - **Dev mode.** `?dev=1` draws the grid, blocking cells, spots, triggers, warps, routes
   and ids over the map (F2 toggles it) and F3 opens a jump menu: give the cartridge
   `dev: { jumps: [...] }` with one entry per chapter or set piece (set its flags, warp
@@ -115,29 +112,19 @@ node tools/shot.mjs "http://127.0.0.1:8765/?game=<id>" /tmp/out script.json
   doesn't answer A, someone who is on a map only because a script spawned them and won't
   be there next visit (passers-by are spawned with `transient: true`), a missing text
   key, a scene pushed under a black fade, two people answering each other from across
-  the place, an objective without a place or out of reach (README "Warnings"). `tools/shot.mjs`
+  the place, an objective without a place or out of reach (README "Warnings the engine prints"). `tools/shot.mjs`
   prints them. **A finished cartridge prints none over a full play-through**; every one
   is fixed in the cartridge, not silenced.
 - **A fresh pair of eyes before calling it done.** The author can't see their own game.
-  The **reviewer** does it, a member of the team with its own conversation and the
-  instructions of `.claude/agents/luma-reviewer.md`: ask it by mail
-  (`mail/reviewer.author.md`) with the cartridge, the commit and the scope (the whole
-  game; or, a second time, the blockers and majors of its last review and the files
-  changed since) — never a question for it to answer, never one point to confirm
-  (SKILL.md, "Asking the auditor and the reviewer"). The house starts it and tells you
-  when it delivers. Never as a sub-agent:
-  no agent launches sub-agents, and the house stops a turn that does. It plays
-  with real keys, from above and from behind (`&fp=3` at every chapter start), scores
-  nine axes 1–5 (next step, life, persistence, direction,
-  writing, look, sound, the verb, and fidelity for adaptations), and writes
-  `reports/review-<date>.md` with every defect by map and cell, in one round that covers
-  the whole scope. It never edits the
-  game. Fix what it finds and check each fixed point (that point only: the author never
-  plays the game through nor reviews it). Ask it once more, by mail, only when the review
-  had a blocker or a major defect, after they are fixed, and never a third time; minors
-  are fixed or listed under "Left" in the author's report.
-- Don't run tests while helpers are still editing files: half-written modules fail and
-  look like story bugs.
+  The **reviewer** (`.claude/agents/luma-reviewer.md`) is asked with the cartridge, the
+  commit and the scope — never a question to answer, never one point to confirm — and
+  how, how often and who starts it is `team.md` ("In a commission, and on your own",
+  "Asking the auditor and the reviewer"). It plays with real keys, from above and from
+  behind (`&fp=3` at every chapter start), scores nine axes 1–5 (next step, life,
+  persistence, direction, writing, look, sound, the verb, and fidelity for adaptations),
+  and writes `reports/review-<date>.md` with every defect by map and cell, in one round
+  that covers the whole scope. It never edits the game. The author fixes what it finds
+  and checks each fixed point, that point only.
 - **Test proportionately.** While building, screenshot the new thing only: a map once
   per season/light, a scene's start and end, a cutscene's key frame. The full
   play-through at the end is the reviewer's. Screenshots are the most expensive part of building a game:

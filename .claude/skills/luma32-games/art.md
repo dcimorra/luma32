@@ -11,7 +11,9 @@ GBA era is remembered for. Every rule has a check; "looks fine to me" is not one
 
 - **15 colours per object.** A GBA tile or sprite used one 16-colour palette (one slot is
   transparent). A tile, a prop or a character with more than 15 colours is not GBA art,
-  it's a downscaled illustration. `tools/sheet.mjs` counts them.
+  it's a downscaled illustration. `tools/sheet.mjs` counts them. The one exception: a
+  named character may reach 18 for the marks of their life (§ 6.9); background people
+  stay at 15.
 - **15-bit colour.** Pick colours with `snap()` in mind: no subtle 1-step gradients, no
   near-duplicates (two greens 4 units apart are one green and a mistake).
 - **A world palette of ~32–48 colours** shared by everything in that place, written in

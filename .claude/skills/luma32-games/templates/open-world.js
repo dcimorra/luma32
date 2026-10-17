@@ -1,6 +1,6 @@
 // <Game name> — an open-world variant of templates/game.js: two maps joined edge to edge
-// (no warp, the camera just walks on), a rule of play written on the hooks (water blocks
-// the walker), a step hook that moves the story, and people who live there: two chat,
+// (no warp, the camera just walks on), water as the engine's medium (a wall until the story
+// grants 'swim') with a bump hook that says so, a step hook that moves the story, and people who live there: two chat,
 // one wanders, one walks a route, and passers-by (crowd) come and go out of sight. Use it as game.js together with
 // art/palette.js and locales/es/common.json from this folder, then boot with ?game=<id>.
 import { SCREEN_W } from '../../engine/gfx.js';
@@ -12,31 +12,43 @@ import { C } from './art/palette.js';
 
 const tiles = {
   // two ground variants chosen by position (see `ground` below), so it doesn't look tiled
-  grass: { draw(p) { p.fill(C.grass); p.noise(0, 0, 16, 16, [C.grassHi, C.grassLo], 0.18); } },
-  grass2: { draw(p) { p.fill(C.grass); p.noise(0, 0, 16, 16, [C.grassHi, C.grassLo], 0.18); p.px(4, 9, C.accent); p.px(11, 4, C.paper); } },
-  sand: { draw(p) { p.fill(C.sand); p.noise(0, 0, 16, 16, [C.sandHi, C.sandLo], 0.15); } },
-  water: { frames: 2, draw(p, f) { p.fill(C.water); p.dither(0, 12, 16, 4, C.water, C.waterLo); p.hline(2 + f * 6, 5, 5, C.waterHi); } },
+  // ground is almost plain, low noise (art.md § 4): detail goes in the variant
+  grass: { draw(p) { p.fill(C.grass); p.noise(0, 0, 16, 16, [C.grassHi, C.grassLo], 0.06); } },
+  grass2: { draw(p) { p.fill(C.grass); p.noise(0, 0, 16, 16, [C.grassHi, C.grassLo], 0.06); p.px(4, 9, C.accent); p.px(11, 4, C.paper); p.px(12, 5, C.grassHi); } },
+  sand: { draw(p) { p.fill(C.sand); p.noise(0, 0, 16, 16, [C.sandHi, C.sandLo], 0.06); } },
+  // the engine's medium: a wall to whoever can't swim (README "Getting about"); the
+  // highlights move, the tile doesn't, and nothing runs along its edges (art.md § 4.3)
+  water: { medium: 'water', step: 'water', frames: 2, draw(p, f) {
+    p.fill(C.water);
+    p.hline(2 + f * 5, 4, 4, C.waterHi); p.hline(9 - f * 4, 10, 3, C.waterHi);
+    p.px(13, 13 - f, C.waterLo); p.px(5, 7 + f, C.waterLo);
+  } },
   // a prop one cell wide and two tall, anchored at its bottom-left cell
   tree: {
     size: [1, 2],
     draw(p) {
+      // a drop shadow in the ground's own shadow tone, down and to the right (art.md § 5)
+      p.ellipse(9, 30, 6, 2, C.grassLo);
+      p.rect(6, 20, 4, 11, C.ink); p.rect(7, 20, 2, 10, C.wood); p.vline(7, 20, 10, C.woodHi);
+      // the canopy in clusters, lit from the top-left, a dark core low on the right
       p.ellipse(8, 11, 8, 10, C.ink);
       p.ellipse(8, 11, 7, 9, C.leaf);
-      p.ellipse(6, 8, 4, 4, C.leafHi);
-      p.dither(2, 14, 12, 5, C.leaf, C.leafLo);
-      p.rect(6, 20, 4, 11, C.ink); p.rect(7, 20, 2, 10, C.wood); p.vline(7, 20, 10, C.woodHi);
+      p.ellipse(10, 14, 5, 5, C.leafLo);
+      p.ellipse(5, 8, 3, 3, C.leafHi); p.ellipse(10, 6, 3, 2, C.leafHi); p.ellipse(4, 13, 2, 2, C.leafHi);
     },
   },
 };
 
+// everyone shares the world's ink as outline and gets relief; background people are told
+// apart by silhouette (hat, hair, coat, a pack), not by colour alone (art.md § 6)
+const ink = { outline: C.ink, relief: true };
 const dolls = {
-  hero: { skin: '#e8b48c', hair: '#3a2a1a', hairStyle: 'short', top: '#3a6ab0', bottom: '#2a3040' },
-  // background people: each one a different silhouette, not a recolour (art.md)
-  farmer: { skin: '#c48c64', hair: '#5a3a1a', hairStyle: 'short', top: '#8a6a30', bottom: '#4a3a2a', hat: 'cap', hatColor: '#c8a860' },
-  girl: { skin: '#f0c8a0', hair: '#d8a040', hairStyle: 'long', top: '#c05a6a', bottom: '#5a4a6a', dress: true },
-  elder: { skin: '#d8a880', hair: '#d8d8d0', hairStyle: 'short', top: '#4a6a5a', bottom: '#3a3a3a', coat: '#5a4a3a' },
-  walker: { skin: '#a87050', hair: '#1e1612', hairStyle: 'short', top: '#3a5a8a', bottom: '#5a4a3a' },
-  shepherd: { skin: '#e0b090', hair: '#8a5a2a', hairStyle: 'buzz', top: '#e8e0d0', bottom: '#5a5040', hat: 'beanie', hatColor: '#6a4a3a', beard: true, beardColor: '#8a5a2a' },
+  hero: { ...ink, skin: '#e8b48c', hair: '#3a2a1a', hairStyle: 'short', top: '#3a6ab0', bottom: '#2a3040', boots: '#5e3c22' },
+  farmer: { ...ink, skin: '#c48c64', hair: '#5a3a1a', hairStyle: 'short', top: '#8a6a30', bottom: '#4a3a2a', hat: 'cap', hatColor: '#c8a860', sleeves: 'rolled' },
+  girl: { ...ink, skin: '#f0c8a0', hair: '#d8a040', hairStyle: 'long', top: '#c05a6a', bottom: '#5a4a6a', dress: true },
+  elder: { ...ink, skin: '#d8a880', hair: '#d8d8d0', hairStyle: 'short', top: '#4a6a5a', bottom: '#3a3a3a', coat: '#5a4a3a', lines: true },
+  walker: { ...ink, skin: '#a87050', hair: '#1e1612', hairStyle: 'ponytail', top: '#a0603a', bottom: '#5a4a3a' },
+  shepherd: { ...ink, skin: '#e0b090', hair: '#8a5a2a', hairStyle: 'buzz', top: '#e8e0d0', bottom: '#5a5040', hat: 'beanie', hatColor: '#6a4a3a' },
 };
 
 // ---------- the world ----------
@@ -48,6 +60,7 @@ const field = (w, h, ch, alt) => Array.from({ length: h }, (_, y) =>
 const maps = {
   meadow: {
     name: 'place.meadow',
+    music: 'meadow',
     legend: { '.': 'grass', ',': 'grass2', '~': 'water' },
     ground: [...field(20, 13, '.', ','), '~'.repeat(20)],
     props: [{ t: 'tree', x: 3, y: 3 }, { t: 'tree', x: 15, y: 9 }, { t: 'tree', x: 8, y: 11 }],
@@ -78,9 +91,35 @@ const maps = {
   },
 };
 
+// ---------- music ----------
+
+// The meadow: A Dorian, 4/4 at 126, open and walking. Its idea: a pickup into a held high
+// note, answered by the bass a beat late, and a shaker that only becomes drums on the last
+// bar of each phrase (music.md: drums written for this song, with a fill).
+const songs = {
+  meadow: {
+    bpm: 126,
+    steps: 4,
+    channels: {
+      lead: { inst: 'pulse25', echo: 0.3, vibrato: 0.2 },
+      bass: { inst: 'bass' },
+      drums: { inst: 'drums', vol: 0.5 },
+    },
+    patterns: {
+      A: {
+        lead: '. . E4 A4 C5 - - - - - B4 A4 G4 - A4 - B4 - - - D5 - C5 B4 A4 - - - . . E4 A4 C5 - - - - - B4 A4 G4 - E5 - D5 - - - C5 - B4 - A4 - - - - - - - . . . .',
+        bass: 'A2 - - - . A2 . . G2 - - - . G2 . . F#2 - - - . F#2 . . E2 - - - G2 - B2 - A2 - - - . A2 . . G2 - - - . G2 . . D3 - - - . C3 . . E2 - - - E2 - G#2 -',
+        drums: 'h . h? . h . h? . h . h? . h . h? . h . h? . h . h? . h . h? . h . h? . h . h? . h . h? . h . h? . h . h? . k . h s k k h . s . k s s! s s s',
+      },
+    },
+    song: ['A'],
+  },
+};
+
 // ---------- title screen and shelf label ----------
 
 const title = {
+  music: 'meadow',
   intro: 60,
   pressY: 124,
   draw(ctx, f) {
@@ -111,14 +150,20 @@ export default {
   tiles,
   dolls,
   maps,
-  songs: {},
+  songs,
   player: 'hero',
   title,
   cover,
   // conversations are directed: speakers turn to each other, the camera finds them
   direct: true,
-  // a rule of play, in the cartridge: nobody walks on water
-  canEnter(api, q) { if (q.tile === 'water') return false; },
+  // the water is a door, not a wall: the first bump says so (world.md, "Getting about")
+  onBump(api, q) {
+    if (q.tile !== 'water' || api.can('swim') || api.is('water_said')) return;
+    return async (api) => {
+      api.set('water_said');
+      await api.narrate('meadow.water_cold');
+    };
+  },
   // a beat that happens where the player goes: first step on the sand. Hooks answer
   // nothing, or hand back a function that the world runs as a script (input waits).
   onStep(api, q) {
@@ -133,6 +178,11 @@ export default {
   async onSelect(api) {
     await api.say(null, api.save.objective || 'obj.none', { style: 'box' });
   },
+  // one entry per point of the story, leaving the game where a player would be
+  dev: { jumps: [
+    { label: 'the meadow', run: async (api) => { api.objective('obj.shore', { map: 'shore' }); await api.warp('meadow', 17, 5, 'right'); } },
+    { label: 'the shore', run: async (api) => { api.set('reached_shore'); api.objective('obj.none', false); await api.warp('shore', 2, 4, 'right'); } },
+  ] },
   async newGame(api) {
     // a whole map as the place: the guide leads there, arriving completes it
     api.objective('obj.shore', { map: 'shore' });

@@ -4,7 +4,6 @@ Read before writing the cast, story scripts, cutscenes or minigames.
 
 ## People and scenes
 
-
 - **Characters:** a doll spec (skin, hair + `hairStyle`, top, shirt, tie, bottom, shoes,
   `coat`, `dress`, `glasses`, and the other options listed at the top of
   `engine/doll.js` — tall, build, long dresses, period hats, crowns, horns, wings,
@@ -24,8 +23,8 @@ Read before writing the cast, story scripts, cutscenes or minigames.
   surprised for named characters). A still face that talks reads as a cut-out.
 - **Decisions:** `api.choose(name, value)` records them in order in the save; anything
   later reads `api.get('choice.<name>')`.
-- **Scenes (minigames):** only where `feel.md` "Minigames are spice" allows, marked ◆ on
-  the beat list with why the map can't do it. Call `this.done(result)`; `opaque = false` to see the map
+- **Scenes (minigames):** only where `feel.md` "Minigames are spice" allows (the budget
+  and the rules are there), marked ◆ on the beat list with why the map can't do it. Call `this.done(result)`; `opaque = false` to see the map
   under; `aboveFade = true` to stay visible over a fade. Draw with `engine/font.js` and
   `ui.frame`. Show the controls on screen (`◀ ▶ elegir · A tomar`). Failing restarts the
   attempt or lets the story go on — never a soft-lock. If a scene is a skill test the
@@ -39,16 +38,12 @@ Read before writing the cast, story scripts, cutscenes or minigames.
 A cutscene is directed, not read: people move while they talk, the camera goes where
 the attention is, silences are timed.
 
-- **Place them before the first line.** Every conversation starts with its people
-  together: within two cells, in the same room, facing. Whoever isn't there walks in
-  first — from a door or the edge, `walkTo(x, y, { timeout: 4000, place: true })` — and
-  then speaks. A conversation the player starts by pressing A on someone already has
-  them together; one a trigger or `enter` starts needs the staging written. Never a line
-  answered from another room or the other end of the house. Phone and chat messages are
-  not conversations on the map: the other person is not an actor there, and the scene
-  shows the phone (a sound, the player taking it out, `reach`). The engine walks someone
-  over when a line answers a person far away, and warns if it can't; treat the warning as
-  a staging bug, not as the engine's job.
+- **Place them before the first line** (the rule: `feel.md`, "People talk face to
+  face"). Whoever isn't there walks in first — from a door or the edge,
+  `walkTo(x, y, { timeout: 4000, place: true })` — and then speaks. A conversation the
+  player starts by pressing A on someone already has them together; one a trigger or
+  `enter` starts needs the staging written. A phone call shows the phone: a sound, the
+  player taking it out, `reach`; the other person is not an actor on the map.
 - **People react while others talk.** Whoever isn't speaking still has a body: an
   `emote` at what was just said, a `gesture`, turning away, a step back. In a group, the
   one being talked about looks at the speaker.

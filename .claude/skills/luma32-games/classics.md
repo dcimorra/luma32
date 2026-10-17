@@ -1,8 +1,8 @@
 # What the best GBA games did, and the bar it sets
 
 Read before the beat list and the world contract, with `feel.md`. The best-selling games
-of the console (Pokémon Ruby/Sapphire, FireRed/LeafGreen and Emerald; Mario Kart: Super
-Circuit; the Super Mario Advance series; Zelda: A Link to the Past and The Minish Cap)
+of the console (Pokémon Ruby/Sapphire, FireRed/LeafGreen and Emerald; the Super Mario
+Advance series; Zelda: A Link to the Past and The Minish Cap)
 and the story games people still remember (Phoenix Wright, Golden Sun, Mother 3, Harvest
 Moon: Friends of Mineral Town, Hamtaro: Ham-Ham Heartbreak, Broken Sword) sold because of
 a handful of things that can be written down and checked. Each rule below says what it
@@ -46,12 +46,12 @@ commissioned to that standard: the one a player would compare it to.**
   greet; townsfolk comment on what you just did. The world reacts to the story within
   one beat: after the big event, three people mention it.
 
-## It feels good in the hands (Mario, Mario Kart, Zelda)
+## It feels good in the hands (Mario, Zelda)
 
 - **Instant response.** A press does something on the next frame, with a sound. Walking,
   running (B) with its own animation and a puff of dust, bumping with a thud, doors with
   their sound and transition — the engine gives all of it; never slow it down with a
-  script on every step (README "Hooks").
+  script on every step (README "Hooks for the cartridge's rules").
 - **Failing is cheap and readable.** You see why you failed and you are trying again in
   two seconds, near where you were. Never back to a title or a long replay.
 - **Each dungeon is built around its thing (Zelda).** When a chapter gives the player a
@@ -113,7 +113,7 @@ The best story games of the console made talking *playable*, without minigames:
 ## The bar (checked before a game is handed over)
 
 What "as good as the games it would be compared to" means here, in things a reviewer can
-check. Each is in "Done means" (`SKILL.md`) or the reviewer's rubric:
+check. Each is in `done.md` or the reviewer's rubric:
 
 - [ ] Every chapter shows a door it doesn't open yet, and the game opens each later.
 - [ ] Every new verb or rule is taught safely before it is tested; none debuts in a ★.

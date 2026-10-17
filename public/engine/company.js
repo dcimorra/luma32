@@ -10,7 +10,10 @@ import { frame, getTheme } from './ui.js';
 
 const DIRS = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
 const OPPOSITE = { up: 'down', down: 'up', left: 'right', right: 'left' };
-const EMOTE_NAMES = new Set(['!', '?', 'heart', 'anger', 'sweat', 'note', 'idea', 'sad', 'shock', 'dots', 'zzz']);
+// every bubble world.js draws (its EMOTES, plus '!', '?', 'dots' and 'zzz'): a chat line that
+// names one shows the bubble instead of reading it as a text key
+const EMOTE_NAMES = new Set(['!', '?', 'dots', 'zzz', 'heart', 'anger', 'sweat', 'note', 'idea', 'sad', 'shock',
+  'blush', 'laugh', 'fear', 'doubt', 'love', 'cry', 'sparkle', 'sigh', 'disgust', 'scribble']);
 const ms = (n) => n / 16.67;
 const dist = (a, b) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
 

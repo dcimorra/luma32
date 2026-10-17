@@ -55,7 +55,7 @@ not scripts:
   nothing done at either end is a person pacing.
 - **They talk among themselves.** Two people standing together get a `chat` with two or
   four short lines of the place's block ("¿Has visto qué frío?" / "Ni los patos salen."),
-  or emotions (`note`, `dots`, `heart`) when words would be too much. Their lines change
+  or emotions (`note`, `dots`, `heart`, or any bubble of `story.md`) when words would be too much. Their lines change
   with the story like their `talk`.
 - **They notice the player.** A shopkeeper `look`s up when you come near and `greet`s
   you once a visit; a guard turns to watch; someone bumped into turns round, and may say

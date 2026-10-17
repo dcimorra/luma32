@@ -5,7 +5,6 @@ helper. Art itself is `art.md`; who lives on the maps is `life.md`.
 
 ## The world
 
-
 - **Map first, then script.** Draw the ground as ASCII rows. The view is 3/4 from above:
   a horizontal wall is a row of wall-top over a row of wall-face; a darker "shadow" floor
   row under walls sells the depth. Props are anchored at their **bottom-left** cell and
@@ -32,7 +31,6 @@ helper. Art itself is `art.md`; who lives on the maps is `life.md`.
   flowers, cracks) so it doesn't look tiled.
 
 ## The world map
-
 
 A Town Map like the GBA Pokémon games: a full-screen view of the whole world that shows
 **where the player is**, the **name of that place** and **where the current objective
@@ -61,7 +59,6 @@ leads**.
 - **Test it** with a screenshot from at least two places and two objectives, and once
   after a reload.
 
-
 ## Heights and Mode 7: places with depth
 
 A place that goes up — a hill fort, terraces, a tower, a palace on its steps, a raised
@@ -81,7 +78,6 @@ of tiles on a map with heights: the face is the raised tile's `side`.
   of its own up there (steering, a race) is a cartridge scene on `engine/mode7.js`.
 
 ## Getting about: water, sky, cliffs
-
 
 The engine swims, dives, flies and climbs (README "Getting about"): paint the place, give
 the tile its `medium`, and let the story grant the ability. Never write a `canEnter` for

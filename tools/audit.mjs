@@ -57,7 +57,7 @@ try {
     return false;
   };
   await settle(60e3);
-  // every minigame lets a test through when it reads this (SKILL.md, "Done means")
+  // every minigame lets a test through when it reads this (the skill's done.md)
   await page.evaluate(`${world}.api.set('dev.win')`);
   const jumps = await page.evaluate(`(() => { const w = ${world}; let j = w.game.dev?.jumps || []; if (typeof j === 'function') j = j(w.api); return j.map((x) => ({ label: x.label, timeout: Number(x.timeout) || 0 })); })()`);
   const labels = jumps.map((j) => j.label);
