@@ -6,7 +6,7 @@
 // real depth, a bloom, and the console's own drawing (dialogue, menus, HUD, fades) flat on top, at the screen's
 // resolution. Nothing a cartridge writes changes: a game cannot tell which look it is in.
 import { buildStatic, gatherCards, groundKey, bodyMesh, picture } from './diorama.js';
-import { forward, viewpoint, THIRD_PITCH } from './firstperson.js';
+import { forward, viewpoint } from './firstperson.js';
 import { canvas, TILE } from './gfx.js';
 
 const KEY = 'luma32.gfx';
@@ -97,6 +97,10 @@ uniform vec4 uLightColor[${MAX_LIGHTS}]; // rgb, strength
 uniform vec4 uLightDir[${MAX_LIGHTS}];   // a torch: the way it points (x z) and the cosine of its half angle; w 0 for a lamp
 uniform vec3 uEye;      // first person: where the eyes are
 uniform float uFogFar;  // and how far the dark reaches its full (0: the dark is everywhere, as in the classic look)
+uniform vec3 uSeeFrom;  // third person: the camera, and the player it must always see:
+uniform vec3 uSeeTo;    // whatever stands between them thins out round the line between,
+uniform float uSee;     // this wide at the player (map pixels; 0 off)
+uniform bool uWhole;    // the player's own body: never thinned
 in vec2 vUv;
 in vec3 vN;
 in vec3 vP;
@@ -128,9 +132,29 @@ float lit() {
   return s / 9.0;
 }
 
+// A 4x4 ordered dither, 0 to 1: what thins out loses pixels in a fine, even pattern.
+float bayer(vec2 p) {
+  ivec2 i = ivec2(mod(p, 4.0));
+  int m[16] = int[16](0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5);
+  return (float(m[i.y * 4 + i.x]) + 0.5) / 16.0;
+}
+
 void main() {
   vec4 t = pix(uTex, vUv);
   if (t.a < (uDecal ? 0.01 : 0.5)) discard;
+  // third person: what stands between the camera and the player (not the ground under
+  // them) thins out round the line between, so a building never swallows them
+  if (uSee > 0.0 && !uWhole && vP.y > 3.0) {
+    vec3 ab = uSeeTo - uSeeFrom;
+    float len = length(ab);
+    vec3 d = ab / len;
+    float along = dot(vP - uSeeFrom, d);
+    if (along > 0.0 && along < len - 4.0) {
+      float r = uSee * (0.35 + 0.65 * along / len);
+      float k = 1.0 - smoothstep(r * 0.55, r, length(vP - uSeeFrom - d * along));
+      if (k * 0.85 > bayer(gl_FragCoord.xy)) discard;
+    }
+  }
   vec3 n = normalize(vN);
   float sun = max(dot(n, uToSun), 0.0) * lit();
   vec3 col = t.rgb * (uAmbient + uSun * sun) * uGrade;
@@ -369,7 +393,7 @@ export class Hd {
     const h = v.h;
     const [fx, fz] = forward(h);
     const eye = [v.x, world.thirdPerson ? v.eye : FP_EYE, v.y];
-    const drop = world.thirdPerson ? (FP_FOCUS * THIRD_PITCH) / (120 / Math.tan(FP_FOV / 2)) : 0;
+    const drop = (FP_FOCUS * v.pitch) / (120 / Math.tan(FP_FOV / 2));
     const target = [eye[0] + fx * FP_FOCUS, eye[1] - drop, eye[2] + fz * FP_FOCUS];
     const fovY = 2 * Math.atan(Math.tan(FP_FOV / 2) / aspect);
     const near = 2;
@@ -511,6 +535,13 @@ export class Hd {
     // first person: the dark is a fog that thickens with the distance from the eyes
     gl.uniform3fv(s.u.uEye, c.eye);
     gl.uniform1f(s.u.uFogFar, first ? (world.map.fog ?? world.game.fog ?? 7) * TILE : 0);
+    const see = world.thirdPerson && world.player;
+    if (see) {
+      const p = world.player;
+      gl.uniform3fv(s.u.uSeeFrom, c.eye);
+      gl.uniform3f(s.u.uSeeTo, p.px + 8 + (p.ox || 0), 12, p.py + 12 + (p.oy || 0));
+    }
+    gl.uniform1f(s.u.uSee, see ? 26 : 0);
     this.drawAll(s);
     // the floor's picture, blended over it
     gl.enable(gl.BLEND);
@@ -577,29 +608,35 @@ export class Hd {
     const turn = this.first && this.cam?.first ? this.cam.heading : 0;
     gl.uniform2f(prog.u.uTurn, Math.cos(turn), Math.sin(turn));
     for (const c of this.bodyList) {
-      const b = this.body(c.img, c.depth);
+      const b = this.body(c.img, c.depth, c.shape);
       gl.uniform3f(prog.u.uOffset, c.x, c.y, c.lie ? c.z + c.h : c.z);
       gl.uniform1i(prog.u.uLie, c.lie ? 1 : 0);
+      if (prog.u.uWhole) gl.uniform1i(prog.u.uWhole, c.actor && c.actor === c.actor.world.player ? 1 : 0);
       gl.uniform1f(prog.u.uPivot, c.lie ? 0 : c.w / 2);
-      if (c.lie) gl.uniform2f(prog.u.uTurn, 1, 0); else gl.uniform2f(prog.u.uTurn, Math.cos(turn), Math.sin(turn));
+      // a body lying down, or something big that stands as it is (gatherCards), never turns
+      if (c.lie || c.still) gl.uniform2f(prog.u.uTurn, 1, 0); else gl.uniform2f(prog.u.uTurn, Math.cos(turn), Math.sin(turn));
       gl.bindTexture(gl.TEXTURE_2D, b.tex);
       gl.bindVertexArray(b.geo.vao);
       gl.drawArrays(gl.TRIANGLES, 0, b.count);
     }
     gl.uniform3f(prog.u.uOffset, 0, 0, 0);
     gl.uniform1i(prog.u.uLie, 0);
+    if (prog.u.uWhole) gl.uniform1i(prog.u.uWhole, 0);
     gl.uniform2f(prog.u.uTurn, 1, 0);
   }
 
-  body(img, depth = 8) {
-    let b = this.bodies.get(img);
+  body(img, depth = 8, shape = 'round') {
+    let byShape = this.bodies.get(img);
+    if (!byShape) this.bodies.set(img, (byShape = new Map()));
+    const key = `${depth}:${shape}`;
+    let b = byShape.get(key);
     if (!b) {
       const gl = this.gl;
       b = { geo: geometry(gl), tex: texture(gl, gl.LINEAR, gl.LINEAR) };
-      b.count = upload(gl, b.geo, bodyMesh(img, depth));
+      b.count = upload(gl, b.geo, bodyMesh(img, depth, shape));
       gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
-      this.bodies.set(img, b);
+      byShape.set(key, b);
     }
     return b;
   }

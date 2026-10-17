@@ -12,7 +12,10 @@ export class Engine {
     input.onHoldStart = () => { if (hdSupported()) setHd(!hdOn()); };
     // holding SELECT goes round the views (from above, first person, third person), where
     // the map leaves it to the player
-    input.onHoldSelect = () => { if (this.scenes.some((s) => s.eyesChoice)) setViewChoice(nextView(viewChoice())); };
+    input.onHoldSelect = () => {
+      const w = this.scenes.find((s) => s.eyesChoice);
+      if (w) setViewChoice(w.game.id, nextView(viewChoice(w.game.id)));
+    };
     this.buffer = canvas(SCREEN_W, SCREEN_H);
     this.ctx = this.buffer.getContext('2d');
     this.scenes = [];

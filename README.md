@@ -444,6 +444,7 @@ view: 'first',                       // the game, or one map
 wallHeight: 32, ceiling: 'planks',   // walls two cells tall (map pixels); a tile overhead, else the map's `sky` or `void`
 fog: 7,                              // cells to the full `dark` (7 with a dark, 24 without)
 turnSpeed: 0.05,                     // radians a frame
+eyesSpeed: 1.7,                      // the walk from the ground, times the walk from above (since 1.18.1)
 // tiles
 sea:   { solid: true, wall: false },          // blocks the feet, lies flat (water, a chasm); `medium`, `reflect` and `step: 'water'` lie flat by themselves
 cliff: { solid: true, wall: 'cliff_face' },   // the picture its wall shows, when not its own
@@ -458,12 +459,35 @@ card, not a block.
 
 `view: 'third'` (since 1.17) is the same with the camera a little way behind and over the
 player, tipped down, so they are seen from behind walking ahead of it; it turns as they
-turn, and comes in close where a wall behind would be in the way. Everything else is as in
-first person: the same walk, the same A, the same map.
+turn, and comes in close where a wall behind would be in the way. It never stands inside
+a building (a prop three cells wide or tall, or with `roof`), but may be past one: then in
+the modern look whatever stands between thins out in a circle round the player, and in the
+classic look the player is drawn over it (since 1.18.3).
+
+From the ground (first and third person, modern look) people, animals and small things turn
+to face the eyes, and so does what is drawn in profile (a dragon, a cart: a picture that is
+not about the same mirrored); something big drawn from the front — a prop three cells wide
+or tall, a tent, a tree, a tower — does not (since 1.19; profiles since 1.19.1): it
+stands as it is, as deep as 0.8 of its height in cells (up to its width; `depth` on the tile
+says otherwise), each row of its picture as deep as it is wide, so from the side it keeps its
+outline, and its sides carry its own picture round from front to back. Buildings (`roof`, or
+the big ones the modern look builds as boxes) never turned. Everything else is as in
+first person: the same walk, the same A, the same map. How far behind and how high the
+camera is the player sets in the options ("Distancia", "Altura", five steps each, shown
+while in third person; kept per game, on each device), and the view tips down to keep their feet near
+the bottom of the screen.
+
+The pad is omnidirectional (since 1.18): the touch cross gives the thumb's own angle
+besides the arm it is nearest (only the angle: the pace is always the same, as with the
+arrows), and sinks leaning that way. It is drawn as a disc
+d-pad (1.18.1): a round plate with the cross moulded on it in facets, and the rim lit where
+the thumb points. First and third person read it (across turns, along walks, at a
+slant both, at the arrows' pace), and so do free movement and the compass of a vehicle; the grid, the menus and
+everything that reads the four buttons see them as before.
 
 The player may choose it too (since 1.16): "Cámara" in the options, or SELECT held for a
 moment, goes round the view from above, first person and third person on any map the
-cartridge leaves to them, kept per device (`?fp=1`, `?fp=3`, `?fp=0` for testing). A map or a game that says a `view`
+cartridge leaves to them, kept per game on each device (`?fp=1`, `?fp=3`, `?fp=0` for testing). A map or a game that says a `view`
 keeps it; `firstPerson: false` on either takes the choice away (a minigame, a chase), and
 at a wheel it is always the view from above. A tap on SELECT still reaches the game when
 it is let go, as START does.
@@ -765,8 +789,9 @@ An actor with `sight: { range, flag, when, run(api, self) }` stops the player wh
 into its line of view: it shows '!', walks up and `run` plays. `flag` is set first, so it
 happens once.
 
-A scene gets `e.input` (`pressed('a')`, `held('left')`, `dir()`), `e.frame`, and draws on a
-240×160 context. Set `opaque = false` to see the world under it; `aboveFade = true` to stay
+A scene gets `e.input` (`pressed('a')`, `held('left')`, `dir()`, and since 1.18 `stick`, the
+direction at any angle: `{ x, y }`, x right and y down, length 1 while held, else 0 — the
+touch pad's, a gamepad's left stick, or the arrows held), `e.frame`, and draws on a 240×160 context. Set `opaque = false` to see the world under it; `aboveFade = true` to stay
 visible during fades.
 
 ## Visual effects

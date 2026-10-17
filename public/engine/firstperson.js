@@ -11,28 +11,37 @@
 // cut by the walls in front of them. All of it on the 240×160 buffer, in pixels.
 import { SCREEN_W, SCREEN_H, TILE, canvas, hex } from './gfx.js';
 
-// The player's own choice (a setting, like the modern look): any map the cartridge leaves
-// to them is seen from above ('top'), from the eyes ('first') or from just behind and over
-// the player ('third'). ?fp=1 / ?fp=3 / ?fp=0 (testing) win over the stored setting.
-const KEY = 'luma32.view';
+// The player's own choice, kept per game and per device: any map the cartridge leaves to
+// them is seen from above ('top'), from the eyes ('first') or from just behind and over the
+// player ('third'); and in third person, how far behind the player's middle the camera is
+// and how high, in map pixels, five steps of each (the middle one by default). The view is
+// tipped down to keep the player framed: the raycaster cannot tilt, so it lowers the
+// horizon by that many screen pixels. ?fp=1 / ?fp=3 / ?fp=0 (testing) win over the view kept.
 export const VIEWS = ['top', 'first', 'third'];
-let chosen = (() => {
-  const q = new URLSearchParams(location.search).get('fp');
-  if (q !== null) return { 1: 'first', 3: 'third' }[q] || 'top';
-  try { const v = localStorage.getItem(KEY); return VIEWS.includes(v) ? v : 'top'; } catch { return 'top'; }
-})();
-export const viewChoice = () => chosen;
-export function setViewChoice(v) {
-  chosen = VIEWS.includes(v) ? v : 'top';
-  try { localStorage.setItem(KEY, chosen); } catch { /* a comfort */ }
+export const THIRD_STEPS = { far: [56, 76, 96, 120, 150], high: [36, 48, 60, 76, 96] };
+const FEET_ROW = 146;
+const TESTING = (() => { const q = new URLSearchParams(location.search).get('fp'); return q === null ? null : { 1: 'first', 3: 'third' }[q] || 'top'; })();
+const kept = new Map();   // game id -> { view, far, high }
+function prefs(game) {
+  let p = kept.get(game);
+  if (p) return p;
+  p = { view: 'top', far: 2, high: 2 };
+  try { Object.assign(p, JSON.parse(localStorage.getItem(`luma32.camera.${game}`)) || {}); } catch { /* the default */ }
+  if (!VIEWS.includes(p.view)) p.view = 'top';
+  for (const k of ['far', 'high']) p[k] = Math.max(0, Math.min(THIRD_STEPS[k].length - 1, p[k] | 0));
+  if (TESTING) p.view = TESTING;
+  kept.set(game, p);
+  return p;
 }
+function keep(game, change) {
+  const p = Object.assign(prefs(game), change);
+  try { localStorage.setItem(`luma32.camera.${game}`, JSON.stringify(p)); } catch { /* a comfort */ }
+}
+export const viewChoice = (game) => prefs(game).view;
+export const setViewChoice = (game, v) => keep(game, { view: VIEWS.includes(v) ? v : 'top' });
 export const nextView = (v) => VIEWS[(VIEWS.indexOf(v) + 1) % VIEWS.length];
-
-// Third person: the camera this far behind the player's middle and this high, the view
-// tipped down by this many screen pixels (the raycaster cannot tilt: it lowers the horizon).
-const THIRD_BACK = 72;
-const THIRD_EYE = 44;
-export const THIRD_PITCH = 40;
+export const thirdCamera = (game) => prefs(game);
+export const setThirdCamera = (game, key, step) => keep(game, { [key]: Math.max(0, Math.min(THIRD_STEPS[key].length - 1, step)) });
 
 export const HEADING = { up: 0, right: Math.PI / 2, down: Math.PI, left: -Math.PI / 2 };
 export const headingOf = (dir) => HEADING[dir] ?? 0;
@@ -76,24 +85,49 @@ function wallCell(w, x, y) {
   return d.wall || id;
 }
 
-// Where the camera stands: the player's eyes, or in third person behind and over them,
-// drawn in short of a wall behind so it never looks through one. x, y: map pixels on the
-// floor; h: the heading; eye: its height; back: how far behind the player it ended.
+// What the third-person camera cannot stand inside: something big that stops the feet (a
+// building, a tent, a carriage: three cells wide or tall, or what says `roof`). Past one it
+// may be (what is between thins out round the player, hd.js); smaller things it ignores.
+function bigAt(w, cx, cy) {
+  const p = w.propAt(cx, cy);
+  if (!p || p.hidden || p.def.flat) return false;
+  return p.def.roof !== undefined || p.w >= 3 || p.h >= 3;
+}
+
+// Where the camera stands: the player's eyes, or in third person behind and over them:
+// never past a wall behind (the classic look cannot see through one), never inside a
+// building; it comes in at once and goes back out gently, so a corner does not jolt it. x, y: map pixels on the
+// floor; h: the heading; eye: its height; back: how far behind the player it ended; pitch:
+// how many screen pixels the horizon goes down, so the view keeps the player framed.
 export function viewpoint(w) {
   const p = w.player;
   const b = w.box(p);
   const x = b.x + b.w / 2;
   const y = b.y + b.h / 2;
   const h = p.heading ?? headingOf(p.dir);
-  if (!w.thirdPerson) return { x, y, h, eye: EYE, back: 0 };
+  if (!w.thirdPerson) return { x, y, h, eye: EYE, back: 0, pitch: 0 };
   const [fx, fy] = forward(h);
   const wallH = w.map.wallHeight ?? w.game.wallHeight ?? TILE * 2;
   const ceiled = !!(w.map.ceiling ?? w.game.ceiling);
   let back = 0;
-  while (back < THIRD_BACK && !wallCell(w, Math.floor((x - fx * (back + 6)) / TILE), Math.floor((y - fy * (back + 6)) / TILE))) back += 2;
+  const third = thirdCamera(w.game.id);
+  const far = THIRD_STEPS.far[third.far];
+  const cellAt = (d) => [Math.floor((x - fx * d) / TILE), Math.floor((y - fy * d) / TILE)];
+  while (back < far && !wallCell(w, ...cellAt(back + 6))) back += 2;
+  while (back > 30 && bigAt(w, ...cellAt(back))) back -= 2;
+  // eased once a frame (the view asks several times in one)
+  const frame = w.engine.frame;
+  if (w.thirdBack?.frame !== frame) {
+    const was = w.thirdBack?.back ?? back;
+    w.thirdBack = { frame, back: back < was ? back : Math.min(back, was + 1.5) };
+  }
+  back = Math.min(back, w.thirdBack.back);
   // under a ceiling the camera stays under it
-  const eye = ceiled ? Math.min(THIRD_EYE, wallH - 4) : THIRD_EYE;
-  return { x: x - fx * back, y: y - fy * back, h, eye, back };
+  const eye = ceiled ? Math.min(THIRD_STEPS.high[third.high], wallH - 4) : THIRD_STEPS.high[third.high];
+  const D = SCREEN_W / 2 / Math.tan(FOV / 2);
+  // the player's feet always on the same row near the bottom of the screen
+  const pitch = Math.max(0, Math.min(SCREEN_H, Math.round(SCREEN_H / 2 - (FEET_ROW - (eye * D) / Math.max(back, 12)))));
+  return { x: x - fx * back, y: y - fy * back, h, eye, back, pitch };
 }
 
 const smooth = (k) => (k <= 0 ? 0 : k >= 1 ? 1 : k * k * (3 - 2 * k));
@@ -114,7 +148,7 @@ export class FirstPerson {
   // Where the camera is (viewpoint above), and the row of the horizon: lowered in third
   // person, so the view looks down a little.
   eye() { return viewpoint(this.world); }
-  horizon() { return SCREEN_H / 2 - (this.world.thirdPerson ? THIRD_PITCH : 0); }
+  horizon(e = this.eye()) { return SCREEN_H / 2 - e.pitch; }
 
   // How tall the walls are, in map pixels (two cells by default).
   get wallH() { return this.world.map.wallHeight ?? this.world.game.wallHeight ?? TILE * 2; }
@@ -130,7 +164,7 @@ export class FirstPerson {
     if (depth < 1) return null;
     const right = dx * -fy + dz * fx;
     const s = this.D / depth;
-    return { x: SCREEN_W / 2 + right * s, y: this.horizon() + (e.eye - y) * s, depth, scale: s };
+    return { x: SCREEN_W / 2 + right * s, y: this.horizon(e) + (e.eye - y) * s, depth, scale: s };
   }
 
   wallAt(x, y) { return wallCell(this.world, x, y); }
@@ -208,7 +242,7 @@ export class FirstPerson {
     const D = this.D;
     const WH = this.wallH;
     const animF = Math.floor(e.frame / (w.map.animRate || 20));
-    const half = this.horizon();
+    const half = this.horizon(eye);
     const EYE = eye.eye;
 
     // the light of the place: the hour's or the map's grade and dark, and every light
@@ -261,7 +295,7 @@ export class FirstPerson {
       cols[x * 3 + 1] = -Math.cos(eye.h + a);
       cols[x * 3 + 2] = 1 / Math.cos(a);
     }
-    for (let y = half; y < H; y++) {
+    for (let y = Math.max(0, half); y < H; y++) {
       const rowD = (EYE * D) / (y - half + 0.5);
       const cy = half - 1 - (y - half);   // the ceiling row this floor row mirrors (none past the top)
       const ceilD = ((WH - EYE) * D) / (y - half + 0.5);
@@ -358,6 +392,8 @@ export class FirstPerson {
       sp.right = dx * rx + dz * ry;
     }
     list.sort((a, b) => b.depth - a.depth);
+    // in third person the player is drawn last: nothing standing between hides them
+    if (w.thirdPerson) list.sort((a, b) => (a.actor === w.player) - (b.actor === w.player));
     const tctx = this.tmp.getContext('2d');
     const mctx = this.mask.getContext('2d');
     for (const sp of list) {
@@ -376,8 +412,10 @@ export class FirstPerson {
       // its shape, drawn beside it: what the light below is cut back to
       if (grade) { mctx.clearRect(x0, 0, x1 - x0, H); mctx.imageSmoothingEnabled = false; }
       let any = false;
+      // the player in third person is never hidden by a wall's corner between them and the camera
+      const always = sp.actor === w.player;
       for (let x = x0; x < x1; x++) {
-        if (zbuf[x] <= sp.depth) continue;
+        if (zbuf[x] <= sp.depth && !always) continue;
         const u = Math.min(sp.w - 1, Math.floor((x - left) / s));
         tctx.drawImage(sp.img, u, 0, 1, sp.h, x, top, 1, sh);
         if (grade) mctx.drawImage(sp.img, u, 0, 1, sp.h, x, top, 1, sh);

@@ -533,7 +533,7 @@ export class Card {
 
 export class Menu {
   constructor(items, { objective = '', title = '' } = {}) {
-    this.items = items;           // [{ label, run?: () => any, value?: () => string }]
+    this.items = items;           // [{ label, run?: () => any, value?: () => string, toggle?, step?: (d) => void }]
     this.objective = objective;
     this.title = title;
     this.sel = 0;
@@ -556,6 +556,9 @@ export class Menu {
     if (inp.pressed('down') || pt.wheel > 0) { this.sel = (this.sel + 1) % n; sfx('cursor'); }
     if (pt.hover >= 0 && pt.hover !== this.sel) { this.sel = pt.hover; sfx('cursor'); }
     if (inp.pressed('b') || inp.pressed('start') || pt.back) { sfx('cancel'); this.done(null); return; }
+    // a setting with steps goes down and up with left and right
+    const it = this.items[this.sel];
+    if (it.step && (inp.pressed('left') || inp.pressed('right'))) { it.step(inp.pressed('left') ? -1 : 1); sfx('cursor'); return; }
     if (inp.pressed('a') || pt.pick >= 0) {
       const it = this.items[this.sel];
       sfx('confirm');

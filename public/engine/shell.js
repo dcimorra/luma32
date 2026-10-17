@@ -41,11 +41,30 @@ export function bindShell(input) {
   }
 
   // The d-pad reads the angle from its centre, with a small dead zone, so sliding the
-  // thumb from one arm to the next changes direction without lifting it.
+  // thumb from one arm to the next changes direction without lifting it. It is
+  // omnidirectional: besides the four buttons (the arm nearest the thumb) it gives the
+  // input the thumb's own angle and how far it pushes (input.stick), and the cross leans
+  // that way; whoever walks at any angle (free movement, first and third person, driving)
+  // reads that.
   // In full screen the whole left side is the d-pad: a press anywhere reads its direction
   // from the cross's centre, and if the thumb wanders off, the cross follows it, so the
   // thumb never has to find the pad again.
   const origins = new Map(); // pointerId -> { x, y } in full screen
+  // the thumb on the pad as a vector, for the input and for the cross to lean that way
+  let stickId = null;
+  const stickTo = (id, v) => {
+    if (v) stickId = id;
+    else if (stickId !== id) return;
+    else stickId = null;
+    input.setTouchStick(v);
+    // pressed, the disc sinks leaning the thumb's way, as the cross did on its arms; set
+    // from here because Safari does not take a variable inside rotate3d
+    if (v) {
+      const d = Math.hypot(v.x, v.y) || 1;
+      cross.style.transform = `perspective(${Math.round(cross.offsetWidth * 2.3)}px) rotate3d(${(-v.y / d).toFixed(3)}, ${(v.x / d).toFixed(3)}, 0, 10deg) scale(.97)`;
+      dpad.style.setProperty('--aim', `${Math.round((Math.atan2(v.x, -v.y) * 180) / Math.PI)}deg`);
+    } else cross.style.transform = '';
+  };
   const dirFrom = (e) => {
     const r = dpad.getBoundingClientRect();
     const o = origins.get(e.pointerId);
@@ -64,7 +83,12 @@ export function bindShell(input) {
     const x = e.clientX - (o ? o.x : r.left + r.width / 2);
     const y = e.clientY - (o ? o.y : r.top + r.height / 2);
     const dead = o ? cross.offsetWidth * 0.12 : r.width * 0.08;
-    if (Math.hypot(x, y) < dead) return null;
+    const d = Math.hypot(x, y);
+    if (d < dead) { stickTo(e.pointerId, null); return null; }
+    // full push at the arm's end
+    const full = (o ? cross.offsetWidth : r.width) * 0.32;
+    const k = Math.min(1, (d - dead) / (full - dead)) / d;
+    stickTo(e.pointerId, { x: x * k, y: y * k });
     return Math.abs(x) > Math.abs(y) ? (x > 0 ? 'right' : 'left') : (y > 0 ? 'down' : 'up');
   };
   const setDir = (id, dir) => {
@@ -72,7 +96,7 @@ export function bindShell(input) {
     if (before === dir) return;
     if (before) input.touchUp(before);
     if (dir) { input.touchDown(dir); dpadPointers.set(id, dir); buzz(); } else dpadPointers.delete(id);
-    dpad.className = 'pad pad--dir' + [...new Set(dpadPointers.values())].map((d) => ` is-${d}`).join('') + (origins.size ? ' is-held' : '');
+    dpad.className = 'pad pad--dir' + [...new Set(dpadPointers.values())].map((d) => ` is-${d}`).join('') + (origins.size ? ' is-held' : '') + (stickId !== null ? ' is-aimed' : '');
   };
   dpad.addEventListener('pointerdown', (e) => {
     e.preventDefault();
@@ -87,6 +111,7 @@ export function bindShell(input) {
   dpad.addEventListener('pointermove', (e) => { if (dpadPointers.has(e.pointerId) || e.buttons) setDir(e.pointerId, dirFrom(e)); });
   const release = (e) => {
     origins.delete(e.pointerId);
+    stickTo(e.pointerId, null);
     if (!origins.size) { dpad.style.removeProperty('--ox'); dpad.style.removeProperty('--oy'); }
     setDir(e.pointerId, null);
   };
@@ -94,6 +119,9 @@ export function bindShell(input) {
   dpad.addEventListener('pointercancel', release);
   dpad.addEventListener('lostpointercapture', release);
   dpad.addEventListener('contextmenu', (e) => e.preventDefault());
+  // iOS shows its magnifier (and selects) on a long press even with user-select off; only a
+  // touchstart that is cancelled keeps it away. The pointer events still come.
+  for (const el of document.querySelectorAll('.pad, [data-btn]')) el.addEventListener('touchstart', (e) => e.preventDefault(), { passive: false });
 
   // a page with the handheld but no full-screen view (the landing) has no toggle
   const toggle = document.getElementById('view-toggle');

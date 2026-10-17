@@ -435,8 +435,21 @@ export function gatherCards(world, frame, R) {
       // a point; the centre a little behind the cell's edge so its front stays in it
       else {
         // wide and low (a parked car, a bench): deeper than a thin thing of its height
-        const depth = p.def.depth ?? Math.max(6, Math.min(16, Math.max(fh * TILE * 0.75, p.w >= 2 && p.h === 1 ? 16 : 0)));
-        out.push({ img, x, z: z - depth / 2 - 0.5, y, w: img.width, h: img.height, body: true, depth });
+        let depth = p.def.depth ?? Math.max(6, Math.min(16, Math.max(fh * TILE * 0.75, p.w >= 2 && p.h === 1 ? 16 : 0)));
+        let shape = 'round';
+        let still = false;
+        // seen from the ground (first and third person) something big and drawn from the
+        // front (a tent, a tree, a tower: its picture about as much on the left as on the
+        // right) does not turn to the eyes: it stands as it is, as deep as it is tall in
+        // cells, its rows as deep as they are wide and its picture carried round its sides
+        // (bodyMesh 'solid'). Drawn in profile (a dragon, a horse, a cart) it is a body that
+        // turns, as people do: deep as wide it would be a block.
+        if (world.firstPerson && (p.w >= 3 || p.h >= 3) && frontOn(img)) {
+          depth = p.def.depth ?? Math.max(8, Math.min(img.width, Math.round(p.h * TILE * 0.8)));
+          shape = 'solid';
+          still = true;
+        }
+        out.push({ img, x, z: z - depth / 2 - 0.5, y, w: img.width, h: img.height, body: true, depth, shape, still });
       }
     }
   };
@@ -480,7 +493,32 @@ export function stairLift(world, px, pz) {
 // the edge), so the front and the back have relief, the sun shapes them, and the top of
 // a head or a shoulder shows from the camera. Local coordinates: x 0..width, y up from
 // the feet, z centred on the card's plane; u v at the centre of the pixel each face is.
-export function bodyMesh(img, DEPTH = 8) {
+// Is a picture drawn from the front: its shape about the same mirrored left to right? Kept
+// per picture.
+const fronts = new WeakMap();
+function frontOn(img) {
+  let f = fronts.get(img);
+  if (f !== undefined) return f;
+  const w = img.width;
+  const h = img.height;
+  const data = img.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, w, h).data;
+  let both = 0;
+  let any = 0;
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const a = data[(y * w + x) * 4 + 3] >= 128;
+      const b = data[(y * w + (w - 1 - x)) * 4 + 3] >= 128;
+      if (a || b) any++;
+      if (a && b) both++;
+    }
+  }
+  // a front-on tent or tree mirrors at 0.85 and up; a dragon or a cart in profile, under 0.75
+  f = any > 0 && both / any >= 0.84;
+  fronts.set(img, f);
+  return f;
+}
+
+export function bodyMesh(img, DEPTH = 8, shape = 'round') {
   const w = img.width;
   const h = img.height;
   const data = img.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, w, h).data;
@@ -504,10 +542,27 @@ export function bodyMesh(img, DEPTH = 8) {
     queue = next;
   }
   // half the thickness of each pixel: a rounded profile, not a slab
-  const half = (x, y) => (solid(x, y) ? Math.min(DEPTH, 1.5 + Math.sqrt(dist[y * w + x] - 1) * 2.6 * (DEPTH / 8)) / 2 : 0);
+  // 'solid': each row as deep as it is wide (up to DEPTH), so from the side the thing shows
+  // its own outline (a dome stays a dome, a tree a cone), and its sides carry the row's own
+  // picture front to back
+  const rowW = new Float32Array(h);
+  const rowL = new Float32Array(h);
+  for (let y = 0; y < h; y++) { let l = -1; let r = -1; for (let x = 0; x < w; x++) if (solid(x, y)) { if (l < 0) l = x; r = x; } rowW[y] = l < 0 ? 0 : r - l + 1; rowL[y] = Math.max(0, l); }
+  const half = shape === 'solid' ? (x, y) => (solid(x, y) ? Math.max(1, Math.min(DEPTH, rowW[y])) / 2 : 0)
+    : (x, y) => (solid(x, y) ? Math.min(DEPTH, 1.5 + Math.sqrt(dist[y * w + x] - 1) * 2.6 * (DEPTH / 8)) / 2 : 0);
   const out = [];
   const quad = (a, b, c, d, u, v, n) => {
-    for (const p of [a, b, c, a, c, d]) out.push(p[0], p[1], p[2], u, v, n[0], n[1], n[2]);
+    for (const p of [a, b, c, a, c, d]) out.push(p[0], p[1], p[2], p[3] ?? u, p[4] ?? v, n[0], n[1], n[2]);
+  };
+  // where along its row a point of a 'solid' side is, back (-d) to front (d)
+  const along = (y, z, d) => (rowL[y] + 0.5 + (rowW[y] - 1) * (z + d) / (2 * d)) / w;
+  // a side takes the colour a little inside the outline, not the outline's own (a dark line
+  // round every sprite would make every side of a deep body black)
+  const inner = (x, y, dx, dy) => {
+    let ix = x;
+    let iy = y;
+    for (let i = 0; i < 2 && solid(ix - dx, iy - dy) && DEPTH > 16; i++) { ix -= dx; iy -= dy; }
+    return [(ix + 0.5) / w, (iy + 0.5) / h];
   };
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
@@ -523,20 +578,32 @@ export function bodyMesh(img, DEPTH = 8) {
       // the steps to thinner neighbours, both sides of the card
       const up = half(x, y - 1);
       if (up < d) {
-        quad([x, y1, -d], [x + 1, y1, -d], [x + 1, y1, -up], [x, y1, -up], u, v, [0, 1, 0]);
-        quad([x, y1, up], [x + 1, y1, up], [x + 1, y1, d], [x, y1, d], u, v, [0, 1, 0]);
+        const [su, sv] = inner(x, y, 0, -1);
+        quad([x, y1, -d], [x + 1, y1, -d], [x + 1, y1, -up], [x, y1, -up], su, sv, [0, 1, 0]);
+        quad([x, y1, up], [x + 1, y1, up], [x + 1, y1, d], [x, y1, d], su, sv, [0, 1, 0]);
       }
       const down = half(x, y + 1);
       if (down < d) {
-        quad([x, y0, d], [x + 1, y0, d], [x + 1, y0, down], [x, y0, down], u, v, [0, -1, 0]);
-        quad([x, y0, -down], [x + 1, y0, -down], [x + 1, y0, -d], [x, y0, -d], u, v, [0, -1, 0]);
+        const [su, sv] = inner(x, y, 0, 1);
+        quad([x, y0, d], [x + 1, y0, d], [x + 1, y0, down], [x, y0, down], su, sv, [0, -1, 0]);
+        quad([x, y0, -down], [x + 1, y0, -down], [x + 1, y0, -d], [x, y0, -d], su, sv, [0, -1, 0]);
       }
       for (const dx of [-1, 1]) {
         const s = half(x + dx, y);
         if (s >= d) continue;
         const ex = dx < 0 ? x : x + 1;
-        quad([ex, y1, s], [ex, y1, d], [ex, y0, d], [ex, y0, s], u, v, [dx, 0, 0]);
-        quad([ex, y1, -d], [ex, y1, -s], [ex, y0, -s], [ex, y0, -d], u, v, [dx, 0, 0]);
+        const [su, sv] = inner(x, y, dx, 0);
+        if (shape === 'solid' && s === 0) {
+          const vv = (y + 0.5) / h;
+          const b = along(y, -d, d);
+          const f = along(y, d, d);
+          // seen from its right the front is on the left, and the other way round
+          const [ub, uf] = dx > 0 ? [b, f] : [f, b];
+          quad([ex, y1, -d, ub, vv], [ex, y1, d, uf, vv], [ex, y0, d, uf, vv], [ex, y0, -d, ub, vv], 0, 0, [dx, 0, 0]);
+          continue;
+        }
+        quad([ex, y1, s], [ex, y1, d], [ex, y0, d], [ex, y0, s], su, sv, [dx, 0, 0]);
+        quad([ex, y1, -d], [ex, y1, -s], [ex, y0, -s], [ex, y0, -d], su, sv, [dx, 0, 0]);
       }
     }
   }

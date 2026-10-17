@@ -257,10 +257,52 @@ body {
 .cross__tri--l { top: calc(50% - var(--u) * 1.2); left: 5%; border-right-color: #6b6976; border-left-width: 0; }
 .cross__tri--r { top: calc(50% - var(--u) * 1.2); right: 5%; border-left-color: #6b6976; border-right-width: 0; }
 
-.pad--dir.is-up .cross { transform: perspective(calc(var(--u) * 60)) rotateX(9deg); }
-.pad--dir.is-down .cross { transform: perspective(calc(var(--u) * 60)) rotateX(-9deg); }
-.pad--dir.is-left .cross { transform: perspective(calc(var(--u) * 60)) rotateY(-9deg); }
-.pad--dir.is-right .cross { transform: perspective(calc(var(--u) * 60)) rotateY(9deg); }
+/* omnidirectional, as a disc d-pad: a round plate, the cross moulded on it in facets (a
+   square in the middle, the four arms sloping down from it, the corners lower still), and
+   nothing past its rim; pressed it sinks leaning the thumb's way (shell.js), and a light
+   on the rim says where it points */
+.cross__disc {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background:
+    linear-gradient(180deg, #403f49, #34333c) center / 34% 34% no-repeat,
+    linear-gradient(180deg, #3a3943 0 33%, transparent 33% 67%, #1f1e25 67%) center / 34% 100% no-repeat,
+    linear-gradient(90deg, #2c2b33 0 33%, transparent 33% 67%, #25242b 67%) center / 100% 34% no-repeat,
+    conic-gradient(#25242b 0 90deg, #1d1c22 90deg 180deg, #19181e 180deg 270deg, #222128 270deg);
+  box-shadow:
+    0 calc(var(--u) * .9) calc(var(--u) * .7) rgba(0, 0, 0, .55),
+    inset 0 calc(var(--u) * .35) calc(var(--u) * .25) rgba(255, 255, 255, .14),
+    inset 0 calc(var(--u) * -.5) calc(var(--u) * .6) rgba(0, 0, 0, .6);
+}
+/* the facets' edges, catching the light */
+.cross__disc::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background:
+    linear-gradient(90deg, transparent calc(33% - 1px), rgba(255, 255, 255, .07) 33%, transparent calc(33% + 1px), transparent calc(67% - 1px), rgba(0, 0, 0, .25) 67%, transparent calc(67% + 1px)),
+    linear-gradient(180deg, transparent calc(33% - 1px), rgba(255, 255, 255, .08) 33%, transparent calc(33% + 1px), transparent calc(67% - 1px), rgba(0, 0, 0, .3) 67%, transparent calc(67% + 1px));
+}
+.cross__aim {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  opacity: 0;
+  transition: opacity 120ms;
+  background: conic-gradient(from calc(var(--aim, 0deg) - 30deg), rgba(255, 214, 120, .8) 0 60deg, transparent 60deg);
+  -webkit-mask: radial-gradient(circle closest-side, transparent 86%, #000 89% 100%);
+  mask: radial-gradient(circle closest-side, transparent 86%, #000 89% 100%);
+}
+/* on the disc the arms and the dimple go; the arrows stay, moulded on it */
+.cross:has(.cross__disc) .cross__arm, .cross__disc ~ .cross__dimple { display: none; }
+.cross__disc ~ .cross__tri { opacity: .4; }
+.cross__tri--u { top: 13%; }
+.cross__tri--d { bottom: 13%; }
+.cross__tri--l { left: 13%; }
+.cross__tri--r { right: 13%; }
+.pad--dir.is-aimed .cross__aim { opacity: 1; transition: none; }
 
 /* ---------- A and B ---------- */
 

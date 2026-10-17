@@ -621,8 +621,7 @@ export function driveTick(world, e, inp) {
   } else {
     // the compass: the pad says where to go, the vehicle turns that way and goes; nothing
     // held, it slows down; the way back, it brakes and turns round
-    const dx = (inp.held('right') ? 1 : 0) - (inp.held('left') ? 1 : 0);
-    const dy = (inp.held('down') ? 1 : 0) - (inp.held('up') ? 1 : 0);
+    const { x: dx, y: dy } = inp.stick;   // at any angle the pad says
     throttle = 0;
     steer = 0;
     if (dx || dy) {

@@ -31,6 +31,11 @@ export class Input {
     this.lastSource = 'touch';
     // per holdable button: when it went down and up, since which frame it is held, and
     // whether the hold already fired
+    // the direction as a vector at any angle, x right and y down, length up to 1: the touch
+    // pad's (shell.js), else a gamepad's left stick, else the arrows held (a diagonal is
+    // two). Rebuilt by update(); the four buttons stay as they were, for whoever reads them.
+    this.stick = { x: 0, y: 0 };
+    this.analog = { touch: null, pad: null };
     this.holds = Object.fromEntries(Object.keys(HOLDS).map((b) => [b, { down: null, up: null, since: null, held: false }]));
 
     addEventListener('keydown', (e) => {
@@ -127,10 +132,12 @@ export class Input {
     const pads = navigator.getGamepads ? navigator.getGamepads() : [];
     const held = this.sources.pad;
     held.clear();
+    this.analog.pad = null;
     for (const gp of pads) {
       if (!gp) continue;
       for (const [i, b] of Object.entries(PAD)) if (gp.buttons[i]?.pressed) held.add(b);
-      const [ax, ay] = gp.axes;
+      const [ax = 0, ay = 0] = gp.axes;
+      if (Math.hypot(ax, ay) > 0.2) this.analog.pad = { x: ax, y: ay };
       if (ax < -0.5) held.add('left');
       if (ax > 0.5) held.add('right');
       if (ay < -0.5) held.add('up');
@@ -171,6 +178,7 @@ export class Input {
     }
     this.now = raw;
     this.taps?.clear();
+    this.stick = this.readStick();
     for (const b of this.now) if (!this.before.has(b)) this.emit(b);
     const p = this.pointer;
     if (this.leaveAfter && !this.pend.clicked) { this.leaveAfter = false; p.over = false; }
@@ -183,6 +191,21 @@ export class Input {
   released(b) { return !this.now.has(b) && this.before.has(b); }
 
   // The held direction, preferring the most recent one when two are down.
+  // The touch pad says where the thumb points (shell.js): { x, y }, or null let go. Only
+  // the angle counts: the pace is always the same, as with the arrows.
+  setTouchStick(v) { this.analog.touch = v; }
+  readStick() {
+    const v = this.analog.touch || this.analog.pad;
+    if (v) {
+      const d = Math.hypot(v.x, v.y) || 1;
+      return { x: v.x / d, y: v.y / d };
+    }
+    const x = (this.held('right') ? 1 : 0) - (this.held('left') ? 1 : 0);
+    const y = (this.held('down') ? 1 : 0) - (this.held('up') ? 1 : 0);
+    const k = x && y ? Math.SQRT1_2 : 1;
+    return { x: x * k, y: y * k };
+  }
+
   dir() {
     for (const d of ['up', 'down', 'left', 'right']) if (this.pressed(d)) { this.lastDir = d; return d; }
     if (this.lastDir && this.held(this.lastDir)) return this.lastDir;

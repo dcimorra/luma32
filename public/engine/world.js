@@ -17,7 +17,7 @@ import { goalOf, drawGuide, audit, guideOn, setGuide, pressFrom, rectCells } fro
 import { placeParty, tickParty, tickLife, hushLife, bark, drawBarks, bumped, routeStop } from './company.js';
 import { Effects, EASE } from './vfx.js';
 import { Mode7 } from './mode7.js';
-import { FirstPerson, headingOf, dirOf, forward, viewChoice, setViewChoice, nextView } from './firstperson.js';
+import { FirstPerson, headingOf, dirOf, forward, viewChoice, setViewChoice, nextView, thirdCamera, setThirdCamera, THIRD_STEPS } from './firstperson.js';
 import { City } from './city.js';
 import { board, unboard, boardable, driveTick } from './vehicle.js';
 import { seek, clearLine, centreOf, shoot } from './pursuit.js';
@@ -1546,7 +1546,7 @@ export class World {
   // the map or the game says, else what the player chose, where they may.
   get groundView() {
     if (!this.map) return null;
-    const view = (this.map.view ?? this.game.view) || (this.eyesChoice ? viewChoice() : null);
+    const view = (this.map.view ?? this.game.view) || (this.eyesChoice ? viewChoice(this.game.id) : null);
     return view === 'first' || view === 'third' ? view : null;
   }
   // either of them: the eyes' way of walking, looking and talking
@@ -1665,15 +1665,14 @@ export class World {
   }
 
   walkFree(e, inp, p) {
-    const vx = (inp.held('right') ? 1 : 0) - (inp.held('left') ? 1 : 0);
-    const vy = (inp.held('down') ? 1 : 0) - (inp.held('up') ? 1 : 0);
+    // at any angle the pad says (input.stick): a diagonal of the arrows is one
+    const { x: vx, y: vy } = inp.stick;
     const dir = inp.dir();
     if (dir) p.face(dir);
     if (!vx && !vy) { p.strolling = false; return; }
     const sp = stepSpeed(this, p, inp.held('b') && this.map.run !== false && this.game.run !== false);
-    const k = vx && vy ? Math.SQRT1_2 : 1;
     const before = Math.floor(p.anim / TILE);
-    const res = this.moveBox(p, vx * sp * k, vy * sp * k);
+    const res = this.moveBox(p, vx * sp, vy * sp);
     p.strolling = !!(res.x || res.y);
     p.speed = sp;
     p.anim += p.strolling ? sp : 0;
@@ -1700,15 +1699,20 @@ export class World {
   // The feet are the same box as free movement, so walls, props and people stop them the
   // same, and the cell under them is the player's cell for warps, triggers and edges.
   walkFirst(e, inp, p) {
-    const turn = (inp.held('right') ? 1 : 0) - (inp.held('left') ? 1 : 0);
-    const go = (inp.held('up') ? 1 : 0) - (inp.held('down') ? 1 : 0);
+    // the pad at any angle (input.stick): across turns, along walks, both at once at a
+    // slant; always at the same pace, as from above, however far the thumb pushes
+    const axis = (v) => (Math.abs(v) < 0.38 ? 0 : Math.sign(v));
+    const turn = axis(inp.stick.x);
+    const go = axis(-inp.stick.y);
     if (turn) {
       p.heading += turn * (this.map.turnSpeed ?? this.game.turnSpeed ?? 0.05);
       p.heading = ((p.heading + Math.PI) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2) - Math.PI;
     }
     p.dir = dirOf(p.heading);
     if (!go) { p.strolling = false; return; }
-    const sp = stepSpeed(this, p, inp.held('b') && this.map.run !== false && this.game.run !== false);
+    // seen from the ground a step covers less of the screen than from above: the walk is
+    // quicker so it feels the same (`eyesSpeed` on the map or the game)
+    const sp = stepSpeed(this, p, inp.held('b') && this.map.run !== false && this.game.run !== false) * (this.map.eyesSpeed ?? this.game.eyesSpeed ?? 1.7);
     const [fx, fy] = forward(p.heading);
     const before = Math.floor(p.anim / TILE);
     const res = this.moveBox(p, fx * sp * go, fy * sp * go);
@@ -3331,11 +3335,18 @@ export class StoryApi {
 
   // The settings: how the console looks, sounds, reads and vibrates. Kept per device.
   optionsMenu() {
+    const game = this.world.game.id;
     const items = [
       ...(isWeb() ? [] : [{ id: 'view', label: t('console.menu.view'), value: () => t(isFull() ? 'console.menu.view_full' : 'console.menu.view_shell'), toggle: () => setFull(!isFull()) }]),
       ...(hdSupported() ? [{ id: 'graphics', label: t('console.menu.graphics'), value: () => t(hdOn() ? 'console.menu.graphics_modern' : 'console.menu.graphics_classic'), toggle: () => setHd(!hdOn()) }] : []),
-      // the map from the player's eyes, where the cartridge leaves it to them
-      ...(this.world.eyesChoice ? [{ id: 'camera', label: t('console.menu.camera'), value: () => t(`console.menu.camera_${viewChoice()}`), toggle: () => setViewChoice(nextView(viewChoice())) }] : []),
+      // the map from the player's eyes, where the cartridge leaves it to them (kept per game)
+      ...(this.world.eyesChoice ? [{ id: 'camera', label: t('console.menu.camera'), value: () => t(`console.menu.camera_${viewChoice(game)}`), toggle: () => setViewChoice(game, nextView(viewChoice(game))) }] : []),
+      // in third person, how far behind and how high the camera is: left and right, or A
+      // round the steps
+      ...(this.world.thirdPerson ? ['far', 'high'].map((k) => ({ id: `camera_${k}`, label: t(`console.menu.camera_${k}`),
+        value: () => `◀ ${thirdCamera(game)[k] + 1} ▶`,
+        step: (d) => setThirdCamera(game, k, thirdCamera(game)[k] + d),
+        toggle: () => setThirdCamera(game, k, (thirdCamera(game)[k] + 1) % THIRD_STEPS[k].length) })) : []),
       { id: 'sound', label: t('console.menu.sound'), value: () => t(isMuted() ? 'console.menu.off' : 'console.menu.on'), toggle: () => setMuted(!isMuted()) },
       // real instruments or the console's own, in a game that has an orchestra
       ...(hasOrchestra() ? [{ id: 'real', label: t('console.menu.instruments'), value: () => t(realOn() ? 'console.menu.instruments_real' : 'console.menu.instruments_chip'), toggle: () => setReal(!realOn()) }] : []),
