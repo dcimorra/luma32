@@ -273,6 +273,9 @@ mail. Only work that stands alone and has a written contract goes to a helper:
   composers `music.md`, whole: they are the contract for quality.
 - **Scenes:** each ◆ minigame of the beat list with its options and result, documented —
   only those; a helper doesn't propose more.
+- **Cover:** the title screen and the 58×56 shelf label, after the cover of the book or
+  the poster of the work the game retells (`.claude/agents/luma-cover-artist.md`). Its
+  section of the contract names the edition, or the look wanted.
 
 Rules that keep it affordable:
 
