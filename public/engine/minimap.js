@@ -5,7 +5,7 @@
 //
 //   game or map: minimap: true | { r: 26, corner: 'tr' | 'tl' | 'br' | 'bl', scale: 1 }
 //   api.blip('shop', { at: [x, y] | 'ana' | entity, color: '#40c0ff' }); api.blip('shop', null)
-import { SCREEN_W, SCREEN_H, TILE, canvas } from './gfx.js';
+import { SCREEN_W, SCREEN_H, TILE, canvas, pixels } from './gfx.js';
 import { guidePoint } from './guide.js';
 import { getTheme } from './ui.js';
 import { drawText } from './font.js';
@@ -24,7 +24,7 @@ function tileColour(world, id) {
   let c = d.mapColor;
   if (!c) {
     const img = world.tiles.image(id, 0, 0);
-    const data = img.getContext('2d').getImageData(0, 0, img.width, img.height).data;
+    const data = pixels(img).data;
     let r = 0; let g = 0; let b = 0; let n = 0;
     for (let i = 0; i < data.length; i += 4) { if (data[i + 3] < 128) continue; r += data[i]; g += data[i + 1]; b += data[i + 2]; n++; }
     c = n ? `rgb(${Math.round(r / n)},${Math.round(g / n)},${Math.round(b / n)})` : '#000000';
@@ -43,7 +43,10 @@ export function mapPicture(world) {
   const img = g.createImageData(world.w, world.h);
   const px = new Uint32Array(img.data.buffer);
   const rgba = new Map();
-  const probe = canvas(1, 1).getContext('2d', { willReadFrequently: true });
+  // its own canvas, made for reading back (one from canvas() has its context already)
+  const probeCanvas = document.createElement('canvas');
+  probeCanvas.width = probeCanvas.height = 1;
+  const probe = probeCanvas.getContext('2d', { willReadFrequently: true });
   const colourOf = (id) => {
     let v = rgba.get(id);
     if (v !== undefined) return v;

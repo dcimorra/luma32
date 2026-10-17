@@ -19,11 +19,16 @@
     "reef": "El arrecife",
     "hill": "La colina",
     "city": "La ciudad",
-    "zaragoza": "Zaragoza"
+    "zaragoza": "Zaragoza",
+    "village": "La aldea",
+    "field": "El campo",
+    "house": "La casa",
+    "cellar": "La bodega"
   },
   "obj": {
     "town": "Ve al pozo de la plaza: la puerta del este del pueblo lleva allí.",
-    "sage": "Habla con la farolera, al norte de la plaza."
+    "sage": "Habla con la farolera, al norte de la plaza.",
+    "explore": "Date una vuelta por la ciudad."
   },
   "town": {
     "ana_1": "Hola. Soy la prueba de los retratos.",
@@ -115,5 +120,30 @@
   "experiments": {
     "title": "Lab",
     "tagline": "Experimentos del motor, solo para administradores"
+  },
+  "village": {
+    "villager": "Las casas grandes tienen bodega. La del fondo, por lo menos.",
+    "horse": "El caballo te mira de reojo.",
+    "bo": "Aquí pruebo que el pueblo se vea en tres dimensiones.",
+    "well": "Un pozo. Se oye el agua muy abajo.",
+    "bigtree": "Un árbol enorme. Desde cualquier lado parece el mismo.",
+    "cart": "Un carro cargado de heno.",
+    "hut": "Una cabaña de adobe con el tejado de paja.",
+    "barrel": "Un barril. Huele a sidra."
+  },
+  "field": {
+    "ana": "Desde la terraza se ve el pueblo entero."
+  },
+  "house": {
+    "ana": "Siéntate, que la mesa es grande.",
+    "bo": "En este rincón no cabe ni la cámara.",
+    "bed": "La cama está hecha.",
+    "shelf": "Tarros y un libro de cuentas.",
+    "chest": "Cerrado con llave.",
+    "stove": "La estufa está encendida."
+  },
+  "cellar": {
+    "guard": "Cuidado con las columnas: a oscuras no se ven.",
+    "lantern": "Un farol que apenas alumbra."
   }
 }

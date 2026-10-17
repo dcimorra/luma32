@@ -246,8 +246,10 @@ export function audit(world, { goalOnly = false } = {}) {
       const cells = rectCells(here);
       const has = (r) => cells.some(([x, y]) => x >= r.x && x < r.x + (r.w || 1) && y >= r.y && y < r.y + (r.h || 1));
       const stepOn = triggers.some(has) || warps.some((w) => has(w) && !world.blocked(w.x, w.y, p));
+      // a vehicle standing there answers A too: the player gets in
+      const vehicle = (x, y) => world.entities.some((en) => en.kind === 'vehicle' && !en.removed && !en.hidden && (() => { const b = world.box(en); return x * TILE < b.x + b.w && (x + 1) * TILE > b.x && y * TILE < b.y + b.h && (y + 1) * TILE > b.y; })());
       const answers = here.actor?.def.talk || spots.some(has) || warps.some(has) || triggers.some(has)
-        || cells.some(([x, y]) => world.examineAt(x, y));
+        || cells.some(([x, y]) => world.examineAt(x, y) || vehicle(x, y));
       if (!answers) out.push(`objective "${key}" points at (${here.x},${here.y}) and nothing there answers A or reacts when stepped on.`);
       const ok = reach.capped || (stepOn ? cells.some(([x, y]) => reach.has(`${x},${y}`)) : pressable(world, reach, cells));
       if (!ok) out.push(`objective "${key}" at (${here.x},${here.y}) can't be reached from where the player stands (${p.x},${p.y}).`);

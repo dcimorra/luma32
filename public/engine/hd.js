@@ -106,6 +106,7 @@ uniform vec3 uSeeFrom;  // third person: the camera, and the player it must alwa
 uniform vec3 uSeeTo;    // whatever stands between them thins out round the line between,
 uniform float uSee;     // this wide at the player (map pixels; 0 off)
 uniform float uThin;    // how much of what is drawn may go: all but a little of a wall or a tree, half of a person at the player's heels (a figure, not dust), none of the player
+uniform float uNear;    // from the ground: a body or a card this near the camera (map pixels) thins out to nothing, so a companion at the eyes never fills the screen; wider for the player, who goes when a cornered camera (under a ceiling) comes over their shoulder (0 off)
 in vec2 vUv;
 in vec3 vN;
 in vec3 vP;
@@ -159,6 +160,10 @@ void main() {
       float k = 1.0 - smoothstep(r * 0.55, r, length(vP - uSeeFrom - d * along));
       if (k * uThin > bayer(gl_FragCoord.xy)) discard;
     }
+  }
+  if (uNear > 0.0 && vP.y > 3.0) {
+    float k = 1.0 - smoothstep(uNear * 0.45, uNear, distance(vP, uSeeFrom));
+    if (k * 0.92 > bayer(gl_FragCoord.xy)) discard;
   }
   vec3 n = normalize(vN);
   float sun = max(dot(n, uToSun), 0.0) * lit();
@@ -551,11 +556,10 @@ export class Hd {
     const at = see ? [pl.px + 8 + (pl.ox || 0), 12 + (world.raised ? pl.ez || 0 : 0), pl.py + 12 + (pl.oy || 0)] : c.eye;
     gl.uniform3fv(s.u.uEye, at);
     gl.uniform1f(s.u.uFogFar, ground ? (world.map.fog ?? world.game.fog ?? 7) * TILE : 0);
-    if (see) {
-      gl.uniform3fv(s.u.uSeeFrom, c.eye);
-      gl.uniform3fv(s.u.uSeeTo, at);
-    }
+    gl.uniform3fv(s.u.uSeeFrom, c.eye);
+    if (see) gl.uniform3fv(s.u.uSeeTo, at);
     gl.uniform1f(s.u.uSee, see ? 26 : 0);
+    this.near = ground ? 28 : 0;
     this.drawAll(s);
     // the floor's picture, blended over it
     gl.enable(gl.BLEND);
@@ -614,10 +618,13 @@ export class Hd {
     const gl = this.gl;
     gl.uniform1i(prog.u.uTex, 0);
     if (prog.u.uThin) gl.uniform1f(prog.u.uThin, 0.85);
+    if (prog.u.uNear) gl.uniform1f(prog.u.uNear, 0);
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, this.mapTex);
     gl.bindVertexArray(this.staticGeo.vao);
     gl.drawArrays(gl.TRIANGLES, 0, this.staticCount);
+    // what stands (cards and bodies) thins out right at the camera
+    if (prog.u.uNear) gl.uniform1f(prog.u.uNear, this.near || 0);
     gl.bindTexture(gl.TEXTURE_2D, this.cardTex);
     gl.bindVertexArray(this.cardGeo.vao);
     gl.drawArrays(gl.TRIANGLES, 0, this.cardCount);
@@ -629,7 +636,9 @@ export class Hd {
       const b = this.body(c.img, c.depth, c.shape);
       gl.uniform3f(prog.u.uOffset, c.x, c.y, c.lie ? c.z + c.h : c.z);
       gl.uniform1i(prog.u.uLie, c.lie ? 1 : 0);
-      if (prog.u.uThin) gl.uniform1f(prog.u.uThin, c.actor ? (c.actor === c.actor.world.player ? 0 : 0.55) : 0.85);
+      const player = !!c.actor && c.actor === c.actor.world.player;
+      if (prog.u.uThin) gl.uniform1f(prog.u.uThin, c.actor ? (player ? 0 : 0.55) : 0.85);
+      if (prog.u.uNear && this.near) gl.uniform1f(prog.u.uNear, player ? 48 : this.near);
       gl.uniform1f(prog.u.uPivot, c.lie ? 0 : c.w / 2);
       // a body lying down, or something big that stands as it is (gatherCards), never turns
       if (c.lie || c.still) gl.uniform2f(prog.u.uTurn, 1, 0); else gl.uniform2f(prog.u.uTurn, Math.cos(turn), Math.sin(turn));
@@ -640,6 +649,7 @@ export class Hd {
     gl.uniform3f(prog.u.uOffset, 0, 0, 0);
     gl.uniform1i(prog.u.uLie, 0);
     if (prog.u.uThin) gl.uniform1f(prog.u.uThin, 0.85);
+    if (prog.u.uNear) gl.uniform1f(prog.u.uNear, 0);
     gl.uniform2f(prog.u.uTurn, 1, 0);
   }
 

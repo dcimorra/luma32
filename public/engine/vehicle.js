@@ -14,7 +14,7 @@
 //
 // Driving (on foot, A beside a vehicle gets in): up accelerates, down brakes and then
 // reverses, left and right steer, B is the handbrake (it drifts), A gets out once slow.
-import { TILE, canvas, snap, mix, shade, tint, Painter } from './gfx.js';
+import { TILE, canvas, snap, mix, shade, tint, Painter, pixels } from './gfx.js';
 import { sfx, motor } from './audio.js';
 import { propStops, mediumOf } from './move.js';
 
@@ -186,7 +186,7 @@ function frames(body, color, state, lit, f = 0) {
   const src = paintBody(body, color, state, lit, f);
   const sw = src.width;
   const sh = src.height;
-  const data = src.getContext('2d').getImageData(0, 0, sw, sh).data;
+  const data = pixels(src).data;
   const size = Math.ceil(Math.hypot(sw, sh)) + 2;
   set = [];
   for (let i = 0; i < ANGLES; i++) {

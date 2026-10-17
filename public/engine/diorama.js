@@ -17,7 +17,7 @@
 // Every face samples one picture: the map drawn flat with its neighbours (`picture`), so a
 // wall's face is its own face tile and its top its own top tile. Coordinates are the
 // current map's, neighbours included (they sit at their offsets, as the world has them).
-import { TILE } from './gfx.js';
+import { TILE, pixels } from './gfx.js';
 import { forward } from './firstperson.js';
 
 const LOW = 4;        // a wall between the camera and the floor, cut down to this
@@ -532,7 +532,7 @@ function frontOn(img) {
   if (f !== undefined) return f;
   const w = img.width;
   const h = img.height;
-  const data = img.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, w, h).data;
+  const data = pixels(img).data;
   let both = 0;
   let any = 0;
   for (let y = 0; y < h; y++) {
@@ -552,7 +552,7 @@ function frontOn(img) {
 export function bodyMesh(img, DEPTH = 8, shape = 'round') {
   const w = img.width;
   const h = img.height;
-  const data = img.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, w, h).data;
+  const data = pixels(img).data;
   const solid = (x, y) => x >= 0 && y >= 0 && x < w && y < h && data[(y * w + x) * 4 + 3] >= 128;
   // distance to the outline, in pixels (1 at the edge)
   const dist = new Int16Array(w * h);

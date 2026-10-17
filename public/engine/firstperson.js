@@ -9,7 +9,7 @@
 // A raycaster, as the GBA's first-person games were: one ray a screen column for the
 // walls, a row at a time for the floor and the ceiling, sprites sorted by distance and
 // cut by the walls in front of them. All of it on the 240×160 buffer, in pixels.
-import { SCREEN_W, SCREEN_H, TILE, canvas, hex } from './gfx.js';
+import { SCREEN_W, SCREEN_H, TILE, canvas, hex, pixels } from './gfx.js';
 import { changed } from './host.js';
 
 // The player's own choice, kept per game and per device: any map the cartridge leaves to
@@ -79,7 +79,7 @@ function pixelsOf(img) {
   if (t) return t;
   const w = img.width;
   const h = img.height;
-  const data = new Uint32Array(img.getContext('2d').getImageData(0, 0, w, h).data.buffer);
+  const data = new Uint32Array(pixels(img).data.buffer);
   t = { w, h, data };
   texels.set(img, t);
   return t;

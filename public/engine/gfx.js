@@ -20,6 +20,25 @@ export function canvas(w, h) {
   return c;
 }
 
+// A picture's pixels (RGBA, as ImageData), read through one scratch canvas made for
+// reading back: a canvas drawn on is not, and the browser warns at every read of it.
+let reader;
+export function pixels(img) {
+  const w = img.width;
+  const h = img.height;
+  if (!reader || reader.width < w || reader.height < h) {
+    const rw = Math.max(w, reader?.width || 0);
+    const rh = Math.max(h, reader?.height || 0);
+    reader = document.createElement('canvas');
+    reader.width = rw;
+    reader.height = rh;
+  }
+  const ctx = reader.getContext('2d', { willReadFrequently: true });
+  ctx.clearRect(0, 0, w, h);
+  ctx.drawImage(img, 0, 0);
+  return ctx.getImageData(0, 0, w, h);
+}
+
 // ---------- colour ----------
 
 export function hex(c) {

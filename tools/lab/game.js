@@ -21,6 +21,10 @@
 // (a day in six minutes) lights every outdoor map, and Pip rides along in a vehicle.
 // zaragoza (dev menu, ./zaragoza.js): the whole city from OpenStreetMap on one map, its
 // streets a graph with diagonals, signals and traffic.
+// village, field, house, cellar (dev menu, ./village.js): what an ordinary cartridge is
+// made of, as a bench for the modern look and the ground views — houses from 3/4 tiles,
+// an interior, a map made for the eyes, maps joined edge to edge, big props, a terrace —
+// with a jump at every place the camera has a hard time. tools/bench.mjs walks them.
 // ?dev=1 adds the overlay (F2) and the jump menu (F3).
 import { SCREEN_W } from '../../engine/gfx.js';
 import { drawText, drawBig, measure, measureBig } from '../../engine/font.js';
@@ -28,6 +32,7 @@ import { t } from '../../engine/i18n.js';
 import { bar, panel, textBox } from '../../engine/ui.js';
 import { cityTiles, cityDolls, cityMap, cityMissions, cityJumps, cityVehicles } from './city.js';
 import { zaragozaTiles, zaragozaMap, zaragozaJumps } from './zaragoza.js';
+import { villageTiles, villageMaps, villageJumps } from './village.js';
 
 const C = {
   ink: '#22201c', grass: '#5a9a4a', grassHi: '#74b65e', grassLo: '#3e7a34', tall: '#2e6e2a', tallHi: '#58a048',
@@ -149,14 +154,14 @@ const maps = {
       '####D#########',
       '#............#',
       '#.....,,,,...#',
-      '#.....,,,,...#',
+      '#.....,,,,...D',
       '#____...._____',
       '#............#',
       '#............D',
       '#............#',
       '##############',
     ],
-    warps: [{ x: 4, y: 0, to: 'cave', at: [6, 7], face: 'up' }, { x: 13, y: 6, to: 'plaza', at: [12, 2], face: 'down' }],
+    warps: [{ x: 4, y: 0, to: 'cave', at: [6, 7], face: 'up' }, { x: 13, y: 6, to: 'plaza', at: [12, 2], face: 'down' }, { x: 13, y: 3, to: 'village', at: [1, 9], face: 'right' }],
     actors: [
       { id: 'ana', doll: 'ana', x: 2, y: 6, dir: 'right', talk: async (api) => {
         await api.say('ana', 'town.ana_1', { mood: 'smile' });
@@ -405,7 +410,7 @@ export default {
   meta: { title: 'meta.title', tagline: 'meta.tagline' },
   strings: ['locales/es/common.json'],
   theme: { ui: { speakers: { ana: { color: '#b04a3a', voice: 700 }, bo: { color: '#408040', voice: 500 }, guard: { color: '#5a5a7a', voice: 450 }, sage: { color: '#6a4a8a', voice: 650 }, walker: { color: '#a06a30', voice: 600 } } } },
-  tiles: { ...tiles, ...cityTiles, ...zaragozaTiles }, dolls: { ...dolls, ...cityDolls }, maps: { ...maps, city: cityMap, zaragoza: zaragozaMap }, portraits, figures,
+  tiles: { ...tiles, ...cityTiles, ...zaragozaTiles, ...villageTiles }, dolls: { ...dolls, ...cityDolls }, maps: { ...maps, ...villageMaps, city: cityMap, zaragoza: zaragozaMap }, portraits, figures,
   missions: cityMissions,
   vehicles: cityVehicles,
   // the hour passes (engine/clock.js): a day in six minutes; the cave and the reef are indoors
@@ -462,6 +467,7 @@ export default {
     },
   },
   dev: { jumps: [
+    ...villageJumps,
     ...cityJumps,
     ...zaragozaJumps,
     { label: 'credits', run: async (api) => api.credits({ lines: [{ title: 'credits.made', names: ['credits.engine'] }, 'credits.thanks'] }) },{ label: 'plaza, night', run: async (api) => { api.set('night'); await api.warp('plaza', 12, 2, 'down'); } },

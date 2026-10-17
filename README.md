@@ -468,7 +468,11 @@ turns the view towards one from above instead of swallowing them; it comes in at
 goes back out gently. In the modern look it looks over a wall lower than it (up to two rows
 under the camera's height), from past the map's edge if need be, as a room is seen over its
 near wall; and whatever still stands between it and the player thins out in a circle round
-them (in the classic look the player is drawn over it, since 1.18.3).
+them (in the classic look the player is drawn over it, since 1.18.3): a wall or a tree to
+almost nothing, a person at the player's heels to a half ghost, never the player. What
+stands right at the camera thins out too (since 1.20.1): a companion at the eyes in first
+person, and the player themselves when a cornered camera under a ceiling comes in over
+their shoulder.
 
 In the modern look the map seen from behind the player is the diorama itself (since 1.20):
 walls with the faces and tops their 3/4 art draws, buildings as boxes, heights as they
@@ -1320,9 +1324,31 @@ ability, in held flight) with sea to swim, deep water to dive into a reef with a
 a chasm to fly over, a cliff to climb, ice, a current, a fence a flyer crosses, a gull that
 always flies and a swimmer who never leaves the water; a hill with heights (a mesa, a tower,
 stairs, an edge to drop off, someone walking behind it) and a flyover of the plaza in Mode 7
-(both from the dev menu). After changing the engine, link it in
+(both from the dev menu). Since 1.20 it also has what an ordinary cartridge is made of, as
+a bench for the modern look and the ground views (`tools/lab/village.js`): a village of
+houses built from 3/4 tiles (façades of one, two and three storeys under their roofs, a
+door in each, a window row, a shed, a hedge), trees as a trunk with a crown `top`, a big
+tree, a tent, a cart in profile and a hut as props, a bench, barrels, a puddle lying flat,
+a stream along the edge, a sprite actor with a picture a direction (a horse), a one-cell gap
+between the houses, and a connection east to a field with its own `sky`, `skirt` and far
+layer and a terrace with stairs that climb east; a house inside (`clock: false`: a wall of
+a top row over two face rows, side walls of tops, a south wall of one row with the door, a
+window, furniture that lies, stands and lies flat, a partition that leaves a one-cell
+corridor with a dead end, an alcove); and a cellar made for the ground view (`wallHeight`,
+`ceiling`, `fog`, walls that show another tile's picture, pillars, a torch on the player).
+Each place where the camera has a hard time (the player's back to a wall, the gap, the
+map's edge, under the crown, the corridor, the dead end, the terrace) is a dev jump that
+puts the player there, in the view it is about. After changing the engine, link it in
 (`ln -s ../../tools/lab public/games/lab`), boot `?game=lab`, then remove the link: the
 folder under `public/` is served to everyone.
+
+`node tools/bench.mjs <url> <id> [--match <label parts>] [--views top,first,third]` walks
+a cartridge's dev jumps in the modern look and looks at each from above, from the eyes and
+from behind (and from behind after a turn and after a few steps) on contact sheets, with
+every console error and `[luma]` warning under the picture it came up in, and a line a jump
+on the console (`/tmp/luma-bench`, `OUT=` elsewhere; the exit code is 1 when anything came
+up). `node tools/bench.mjs http://127.0.0.1:8765 lab` after a change to the engine is the
+lab's whole bench in one run; `--match village,house` a part of it.
 
 `node tools/compare.mjs <base url> <candidate url> [game ...]` draws every map of every
 cartridge (each whole, a screen at a time, game time stopped and `Math.random` seeded) with

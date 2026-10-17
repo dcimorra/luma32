@@ -241,9 +241,10 @@ export const zaragozaMap = {
   },
 };
 
+const here = async (api) => { await api.warp('zaragoza', ZGZ_START[0], ZGZ_START[1], 'down'); api.objective('obj.explore', [ZGZ_START[0], ZGZ_START[1]]); };
 export const zaragozaJumps = [
-  { label: 'zaragoza', run: async (api) => { await api.warp('zaragoza', ZGZ_START[0], ZGZ_START[1], 'down'); } },
-  { label: 'zaragoza, at the wheel', run: async (api) => { await api.warp('zaragoza', ZGZ_START[0], ZGZ_START[1], 'down'); api.board('zgz_car'); } },
+  { label: 'zaragoza', run: async (api) => { await here(api); } },
+  { label: 'zaragoza, at the wheel', run: async (api) => { await here(api); api.board('zgz_car'); } },
 ];
 
 export const ZGZ_ATTRIBUTION = city.attribution;
