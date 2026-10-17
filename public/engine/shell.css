@@ -367,17 +367,18 @@ body {
 /* the face makes the row's room only while the pad is out: hidden, the grid is as before */
 body.has-buttons .face {
   grid-template-rows: auto auto 1fr auto;
-  grid-template-areas: "bezel bezel" "dir ab" "dir xyz" "sys sys";
+  grid-template-areas: "bezel bezel" "dir ab" "xyz xyz" "sys sys";
 }
 .pad--xyz {
   grid-area: xyz;
   align-self: start;
-  justify-self: center;
+  justify-self: end;
   display: flex;
   justify-content: center;
   gap: calc(var(--u) * 3);
-  padding: calc(var(--u) * 1.5) calc(var(--u) * 3) calc(var(--u) * 5);
-  border-radius: calc(var(--u) * 10);
+  margin: calc(var(--u) * 2) calc(var(--u) * 2) 0 0;
+  padding: calc(var(--u) * 3) calc(var(--u) * 4) calc(var(--u) * 7);
+  border-radius: calc(var(--u) * 15);
   transform: rotate(-24deg);
   background: rgba(0, 0, 0, .14);
   box-shadow: inset 0 calc(var(--u) * .5) calc(var(--u) * 1) rgba(0, 0, 0, .25), 0 calc(var(--u) * .3) 0 rgba(255, 255, 255, .1);
@@ -387,10 +388,7 @@ body.has-buttons .face {
   top: 0;
   left: auto;
   right: auto;
-  width: calc(var(--u) * 10);
-  height: calc(var(--u) * 10);
 }
-.pad--xyz .btn span { top: calc(100% + var(--u) * 1.4); font-size: calc(var(--u) * 2.4); }
 
 /* ---------- START and SELECT ---------- */
 
@@ -488,12 +486,12 @@ body.has-buttons .face {
   .pad--ab { width: calc(var(--u) * 37); height: calc(var(--u) * 27); align-self: end; }
   .btn { top: calc(var(--u) * 6); width: calc(var(--u) * 14); height: calc(var(--u) * 14); }
   body.has-buttons .face {
+    grid-template-columns: 1fr auto auto;
     grid-template-rows: 1fr auto auto;
     grid-template-areas: "dir bezel ab" "dir bezel xyz" "sys bezel grille";
   }
-  .pad--xyz { gap: calc(var(--u) * 2.5); padding: calc(var(--u) * 1.5) calc(var(--u) * 2.5) calc(var(--u) * 4.5); margin-top: calc(var(--u) * 1.5); }
-  .pad--xyz .btn { width: calc(var(--u) * 9); height: calc(var(--u) * 9); }
-  .pad--xyz .btn span { font-size: calc(var(--u) * 2.2); }
+  .pad--xyz { justify-self: center; gap: calc(var(--u) * 2.5); margin: calc(var(--u) * 2) 0 0; padding: calc(var(--u) * 2) calc(var(--u) * 2.5) calc(var(--u) * 6); }
+  body.has-buttons .grille { display: none; }
   .pad--sys { flex-direction: column; align-items: center; gap: calc(var(--u) * 2); padding: calc(var(--u) * 3) 0 0; }
   .pill { transform: none; }
   .grille { position: static; grid-area: grille; justify-self: center; align-self: center; transform: rotate(-30deg) translateY(calc(var(--u) * 2)); }
@@ -528,9 +526,18 @@ body.has-buttons .face {
   .pad--ab { width: calc(var(--u) * 46); height: calc(var(--u) * 34); align-self: start; margin-top: calc(var(--u) * 20); }
   .btn { top: calc(var(--u) * 8); width: calc(var(--u) * 18); height: calc(var(--u) * 18); }
   .pad--sys { padding-bottom: max(calc(var(--u) * 10), env(safe-area-inset-bottom)); }
-  .pad--xyz { gap: calc(var(--u) * 3.5); padding: calc(var(--u) * 2) calc(var(--u) * 3.5) calc(var(--u) * 6); margin-top: calc(var(--u) * 4); }
-  .pad--xyz .btn { width: calc(var(--u) * 12); height: calc(var(--u) * 12); }
-  .pad--xyz .btn span { font-size: calc(var(--u) * 2.8); }
+  /* with the row out, the pads above close up so that all of it fits a short phone */
+  .pad--xyz { gap: calc(var(--u) * 3.5); margin: calc(var(--u) * 2) calc(var(--u) * 2) 0 0; padding: calc(var(--u) * 2.5) calc(var(--u) * 4) calc(var(--u) * 6.5); }
+  body.has-buttons .pad--dir { margin-top: calc(var(--u) * 5); }
+  body.has-buttons .pad--ab { margin-top: calc(var(--u) * 7); }
+  body.has-buttons .pad--sys { padding-bottom: max(calc(var(--u) * 5), env(safe-area-inset-bottom)); }
+}
+/* a short phone: every button a little smaller, all five the same, so the rows fit */
+@media (orientation: portrait) and (pointer: coarse) and (max-height: 720px) {
+  body.has-buttons .btn { width: calc(var(--u) * 15); height: calc(var(--u) * 15); }
+  body.has-buttons .pad--dir { width: calc(var(--u) * 40); height: calc(var(--u) * 40); margin-top: calc(var(--u) * 4); }
+  body.has-buttons .pad--ab { width: calc(var(--u) * 40); height: calc(var(--u) * 29); margin-top: calc(var(--u) * 5); }
+  body.has-buttons .pad--xyz { margin-top: calc(var(--u) * 1); padding-bottom: calc(var(--u) * 6); }
 }
 
 /* ---------- full screen: no plastic, the biggest screen that fits ---------- */
@@ -583,9 +590,9 @@ body.is-full .btn span { font-size: calc(var(--bs) * .2); top: calc(100% + var(-
 body.is-full .pad--sys { gap: 12vw; padding: 2vw 0 max(3vw, env(safe-area-inset-bottom)); }
 body.is-full .pill i { width: 13vw; height: 4vw; }
 /* the row lies flat here, as the pads of a full screen do, and keeps clear of START */
-body.is-full .pad--xyz { --bs: 10vw; gap: calc(var(--bs) * .35); padding: calc(var(--bs) * .2) calc(var(--bs) * .35) calc(var(--bs) * .5); margin: 0; transform: none; background: rgba(255, 255, 255, .04); box-shadow: none; }
+body.is-full .pad--xyz { --bs: 21vw; gap: calc(var(--bs) * .3); padding: calc(var(--bs) * .25) calc(var(--bs) * .3) calc(var(--bs) * .55); margin: 0 2vw 0 0; transform: none; border-radius: calc(var(--bs) * .6); background: rgba(255, 255, 255, .04); box-shadow: none; }
 body.is-full .pad--xyz .btn { top: 0; width: var(--bs); height: var(--bs); }
-body.is-full .pad--xyz .btn span { transform: translateX(-50%); font-size: calc(var(--bs) * .22); top: calc(100% + var(--bs) * .1); }
+body.is-full .pad--xyz .btn span { transform: translateX(-50%); font-size: calc(var(--bs) * .2); top: calc(100% + var(--bs) * .1); }
 
 @media (orientation: portrait) {
   body.is-full .face {
@@ -593,9 +600,9 @@ body.is-full .pad--xyz .btn span { transform: translateX(-50%); font-size: calc(
     padding: env(safe-area-inset-top) 0 0;
   }
   /* A and B down where the thumb is, the row right under them, over START */
-  body.is-full.has-buttons .face { grid-template-rows: auto 1fr auto auto; }
+  body.is-full.has-buttons .face { grid-template-rows: auto 1fr auto auto; grid-template-areas: "bezel bezel" "dir ab" "xyz xyz" "sys sys"; }
   body.is-full.has-buttons .pad--ab { align-self: end; }
-  body.is-full.has-buttons .pad--xyz { margin-top: calc(var(--bs) * .4); }
+  body.is-full.has-buttons .pad--xyz { margin-top: calc(var(--bs) * .3); }
 }
 
 @media (orientation: landscape) {
@@ -615,7 +622,8 @@ body.is-full .pad--xyz .btn span { transform: translateX(-50%); font-size: calc(
   body.is-full .btn--b span { bottom: auto; top: calc(100% + var(--bs) * .04); right: auto; left: 0; }
   body.is-full .pad--sys { flex-direction: row; gap: 1.5vw; padding: 0 0 max(4dvh, env(safe-area-inset-bottom)); }
   body.is-full.has-buttons .face { grid-template-areas: "dir bezel ab" "sys bezel xyz"; }
-  body.is-full .pad--xyz { --bs: min(9dvh, 4vw); flex-direction: column; align-self: end; gap: calc(var(--bs) * .35); padding: calc(var(--bs) * .3) calc(var(--bs) * .25); margin-bottom: max(9dvh, env(safe-area-inset-bottom)); transform: none; border-radius: calc(var(--bs) * .75); }
+  body.is-full.has-buttons .pad--ab { --bs: min(14dvh, 7.5vw); align-self: end; margin-bottom: 1dvh; }
+  body.is-full .pad--xyz { --bs: min(14dvh, 7.5vw); flex-direction: column; align-self: start; gap: calc(var(--bs) * .3); padding: calc(var(--bs) * .3) calc(var(--bs) * .25); margin: 0; transform: none; border-radius: calc(var(--bs) * .75); }
   body.is-full .pad--xyz .btn span { transform: none; left: auto; right: calc(100% + var(--bs) * .15); top: 50%; translate: 0 -50%; }
   body.is-full .pill { padding: 1dvh .5vw; }
   body.is-full .pill { transform: none; }
@@ -771,14 +779,15 @@ body.is-tablet.needs-pad .btn--b { left: calc(var(--bs) * .1); }
 body.is-tablet.needs-pad .btn--a { right: calc(var(--bs) * .1); }
 body.is-tablet.needs-pad .btn span { font-size: calc(var(--bs) * .2); top: calc(100% + var(--bs) * .1); }
 body.is-tablet.needs-pad .pad--xyz {
-  --bs: min(7.5vw, 7.5dvh);
+  --bs: min(13vw, 13dvh);
   right: max(2vw, env(safe-area-inset-right));
   bottom: max(2dvh, env(safe-area-inset-bottom));
   display: flex;
-  gap: calc(var(--bs) * .35);
-  padding: calc(var(--bs) * .2) calc(var(--bs) * .35) calc(var(--bs) * .5);
+  gap: calc(var(--bs) * .3);
+  padding: calc(var(--bs) * .2) calc(var(--bs) * .3) calc(var(--bs) * .5);
   margin: 0;
   transform: none;
+  border-radius: calc(var(--bs) * .6);
   background: rgba(255, 255, 255, .05);
   box-shadow: none;
   opacity: .7;
@@ -786,7 +795,7 @@ body.is-tablet.needs-pad .pad--xyz {
 body.is-tablet.needs-pad .pad--xyz .btn { top: 0; width: var(--bs); height: var(--bs); }
 body.is-tablet.needs-pad .pad--xyz .btn span { transform: translateX(-50%); font-size: calc(var(--bs) * .22); top: calc(100% + var(--bs) * .1); }
 /* the A/B pad moves up to leave the row its room (the row is 1.7 buttons tall) */
-body.is-tablet.needs-pad.has-buttons .pad--ab { bottom: calc(max(2dvh, env(safe-area-inset-bottom)) + min(7.5vw, 7.5dvh) * 1.7 + 2dvh); }
+body.is-tablet.needs-pad.has-buttons .pad--ab { bottom: calc(max(2dvh, env(safe-area-inset-bottom)) + min(13vw, 13dvh) * 1.7 + 2dvh); }
 body.is-tablet.needs-pad .pad--sys {
   display: flex;
   left: 50%;
