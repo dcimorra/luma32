@@ -11,67 +11,31 @@
 // A zip or a repository is unpacked into public/games/<id>/ (only what a game runs on, as
 // luma32.com stores a package: server/packages.mjs); a folder is linked there. Either way
 // the game goes into public/games/index.json. --force replaces a game already there.
+// The console does the same from its own shelf (SELECT): server/library.mjs is what both run.
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { readZip, unpack, describe, parseGithub, fetchGithub } from '../server/packages.mjs';
+import { installFolder, installZip, installGithub } from '../server/library.mjs';
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const GAMES = path.join(ROOT, 'public', 'games');
 const args = process.argv.slice(2);
 const force = args.includes('--force');
 const what = args.find((a) => !a.startsWith('--'));
 if (!what) { console.error('usage: node tools/add-game.mjs <owner/repo[@ref][/path] | github URL | file.zip | folder> [--force]'); process.exit(2); }
 
-function place(id) {
-  const target = path.join(GAMES, id);
-  if (fs.existsSync(target) || fs.lstatSync(target, { throwIfNoEntry: false })) {
-    if (!force) { console.error(`public/games/${id} already exists (--force replaces it)`); process.exit(1); }
-    fs.rmSync(target, { recursive: true, force: true });
-  }
-  return target;
-}
-
-function shelve(id, title) {
-  const file = path.join(GAMES, 'index.json');
-  let list = { games: [], groups: [] };
-  try { list = JSON.parse(fs.readFileSync(file, 'utf8')); } catch { /* a new shelf */ }
-  if (!list.games.some((g) => g.id === id)) list.games.push({ id });
-  fs.writeFileSync(file, `${JSON.stringify(list, null, 2)}\n`);
-  console.log(`added "${title}" as public/games/${id}/`);
-}
-
 const local = path.resolve(what.replace(/^~(?=\/)/, process.env.HOME || '~'));
-fs.mkdirSync(GAMES, { recursive: true });
-if (fs.existsSync(local) && fs.statSync(local).isDirectory()) {
-  if (!fs.existsSync(path.join(local, 'game.js'))) { console.error(`${what}: no game.js in that folder`); process.exit(1); }
-  const files = ['game.js', 'luma.json', 'locales/es/common.json', 'locales/es.json'].filter((p) => fs.existsSync(path.join(local, p)))
-    .map((p) => ({ path: p, data: fs.readFileSync(path.join(local, p)) }));
-  const meta = describe(files);
-  fs.symlinkSync(local, place(meta.id), 'dir');
-  shelve(meta.id, meta.title);
-} else {
-  let zip;
-  let within = '';
-  if (fs.existsSync(local)) zip = fs.readFileSync(local);
+try {
+  let meta;
+  if (fs.existsSync(local) && fs.statSync(local).isDirectory()) meta = installFolder(local, { force });
+  else if (fs.existsSync(local)) meta = installZip(fs.readFileSync(local), { force, source: what });
   else {
-    const gh = parseGithub(what);
-    console.log(`fetching ${gh.owner}/${gh.repo}${gh.ref ? `@${gh.ref}` : ''} from GitHub…`);
-    zip = await fetchGithub(gh);
-    within = gh.path;
+    console.log(`fetching ${what} from GitHub…`);
+    meta = await installGithub(what, { force });
   }
-  let files;
-  try { ({ files } = unpack(readZip(zip), within)); } catch (err) {
-    // one repository, one game: with several, say which folders there are
-    if (err.message !== 'several_games') throw err;
-    console.error(`more than one game in there: add one by its folder (${err.games.map((g) => `${what.replace(/\/+$/, '')}/${g}`).join(', ')})`);
-    process.exit(1);
-  }
-  const meta = describe(files);
-  const target = place(meta.id);
-  for (const f of files) {
-    fs.mkdirSync(path.dirname(path.join(target, f.path)), { recursive: true });
-    fs.writeFileSync(path.join(target, f.path), f.data);
-  }
-  shelve(meta.id, meta.title);
+  console.log(`added "${meta.title}" as public/games/${meta.id}/`);
+} catch (err) {
+  // one repository, one game: with several, say which folders there are
+  if (err.message === 'several_games') console.error(`more than one game in there: add one by its folder (${err.games.map((g) => `${what.replace(/\/+$/, '')}/${g}`).join(', ')})`);
+  else if (err.message === 'exists') console.error(`that game is already in public/games (--force replaces it)`);
+  else if (err.message === 'no_game_js') console.error(`${what}: no game.js in there`);
+  else console.error(err.status ? `${what}: ${err.message}` : err);
+  process.exit(1);
 }
