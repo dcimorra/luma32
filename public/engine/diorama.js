@@ -9,6 +9,10 @@
 // walls of a room) takes the height most walls have; one with walkable ground to its north
 // (the wall nearest the camera) is cut down low, as a set is cut away so a scene can be
 // seen. Heights (README "Heights") rise as they are. Props and people stand up as cards.
+// Seen from behind the player (`third`: the camera turns with them) the same diorama is
+// built to be seen from any side: no wall is cut down, and every wall and every raised
+// cell has its north face too. From the eyes (`first`) walls are built as the raycaster
+// stands them up: every face, the picture repeated down to the floor, a ceiling.
 //
 // Every face samples one picture: the map drawn flat with its neighbours (`picture`), so a
 // wall's face is its own face tile and its top its own top tile. Coordinates are the
@@ -38,7 +42,9 @@ const isWall = (d) => !!d && !!d.solid && !d.low && !d.medium && !d.reflect && !
 
 // The cells the diorama covers, in tiles: the map and every neighbour across its edges,
 // and a map's `skirt` (cells) all round: past its edges the ground goes on, each cell
-// its nearest edge cell's tile, so a low camera sees land and sea, not the cut.
+// its nearest edge cell's tile, so a low camera sees land and sea, not the cut. Seen from
+// the ground (first and third person) a map without one gets six cells of it: the camera
+// is low there, and the cut would be in every view that looks towards an edge.
 export function regionOf(world) {
   const r = { x0: 0, y0: 0, x1: world.w, y1: world.h };
   for (const n of world.neighbours || []) {
@@ -47,7 +53,7 @@ export function regionOf(world) {
     r.x1 = Math.max(r.x1, n.ox + n.w);
     r.y1 = Math.max(r.y1, n.oy + n.h);
   }
-  const k = Math.max(0, Math.min(24, world.map.skirt | 0));
+  const k = Math.max(0, Math.min(24, (world.map.skirt ?? (world.firstPerson ? 6 : 0)) | 0));
   r.skirt = k;
   r.x0 -= k; r.y0 -= k; r.x1 += k; r.y1 += k;
   r.w = r.x1 - r.x0;
@@ -56,11 +62,24 @@ export function regionOf(world) {
 }
 
 // The cell whose tile a cell of the region shows: itself, or, in the skirt, the nearest
-// cell of the map.
+// cell of the map; not a door or a warp on the edge (a hole in a wall carried on for
+// six cells would be a trench), but the nearest plain cell along it.
 function source(world, R, x, y) {
   if (!R.skirt || world.tileAt(x, y)) return [x, y];
   if (world.neighbourAt(x, y)) return [x, y];
-  return [Math.max(0, Math.min(world.w - 1, x)), Math.max(0, Math.min(world.h - 1, y))];
+  const sx = Math.max(0, Math.min(world.w - 1, x));
+  const sy = Math.max(0, Math.min(world.h - 1, y));
+  const odd = (cx, cy) => /door|gate|exit|portal|warp/i.test(world.tileAt(cx, cy) || '') || (world.map.warps || []).some((w) => cx >= w.x && cx < w.x + (w.w || 1) && cy >= w.y && cy < w.y + (w.h || 1));
+  if (!odd(sx, sy)) return [sx, sy];
+  const alongX = sy !== y;   // past the top or the bottom edge: look left and right
+  for (let k = 1; k <= 3; k++) {
+    for (const s of [-1, 1]) {
+      const cx = alongX ? sx + s * k : sx;
+      const cy = alongX ? sy : sy + s * k;
+      if (cx >= 0 && cy >= 0 && cx < world.w && cy < world.h && world.tileAt(cx, cy) && !odd(cx, cy)) return [cx, cy];
+    }
+  }
+  return [sx, sy];
 }
 export const tileOf = (world, R, x, y) => { const [sx, sy] = source(world, R, x, y); return world.tileAt(sx, sy); };
 
@@ -110,7 +129,7 @@ export function picture(world, R, frame, make) {
 
 // The static geometry: interleaved x y z u v nx ny nz, in map pixels (x east, y up, z
 // south), u v in the region's picture.
-export function buildStatic(world, R, { first = false } = {}) {
+export function buildStatic(world, R, { first = false, third = false } = {}) {
   const PW = R.w * TILE;
   const OX = R.x0 * TILE;
   const OY = R.y0 * TILE;
@@ -134,7 +153,7 @@ export function buildStatic(world, R, { first = false } = {}) {
     for (let y = R.y0; y < R.y1; y++) for (let x = R.x0; x < R.x1; x++) {
       const e = elev(x, y);
       if (!e || !id(x, y)) continue;
-      want(id(x, y), e - (id(x, y + 1) ? elev(x, y + 1) : 0));
+      for (const dy of [1, -1]) want(id(x, y), e - (id(x, y + dy) ? elev(x, y + dy) : 0));
       for (const dx of [-1, 1]) want(id(x, y), e - (id(x + dx, y) ? elev(x + dx, y) : 0));
     }
   }
@@ -222,10 +241,13 @@ export function buildStatic(world, R, { first = false } = {}) {
   const height = new Float32Array(R.w * R.h);
   for (const r of runs) {
     const north = id(r.x, r.r0 - 1) && !wall(r.x, r.r0 - 1);
-    r.H = r.F ? r.F * TILE : north ? LOW : usualF * TILE;
+    r.H = r.F ? r.F * TILE : north && !third ? LOW : usualF * TILE;
     for (let y = r.r0; y <= r.r1; y++) height[(y - R.y0) * R.w + r.x - R.x0] = r.H;
   }
   const hAt = (x, y) => (inR(x, y) ? height[(y - R.y0) * R.w + x - R.x0] : 0);
+  // how tall the wall at a cell stands (nothing past the diorama), for the third-person
+  // camera (engine/firstperson.js), which may look over a low one, the skirt included
+  world.dioramaWallH = third ? (cx, cy) => (inR(cx, cy) ? hAt(cx, cy) : Infinity) : null;
 
   if (first) {
     // four faces where a neighbour is not a wall, the picture repeated down to the
@@ -295,6 +317,9 @@ export function buildStatic(world, R, { first = false } = {}) {
     const z = (r1 + 1) * TILE;
     const hs = hAt(x, r1 + 1);
     if (hs < H) quad([x0, H, z], [x1, H, z], [x1, hs, z], [x0, hs, z], [x0 + E, fv0], [x1 - E, fv0], [x1 - E, fv1], [x0 + E, fv1], [0, 0, 1]);
+    // seen from any side: its back too, the face's rows the other way round
+    const hn = hAt(x, r0 - 1);
+    if (third && hn < H) quad([x1, H, r0 * TILE], [x0, H, r0 * TILE], [x0, hn, r0 * TILE], [x1, hn, r0 * TILE], [x1 - E, fv0], [x0 + E, fv0], [x0 + E, fv1], [x1 - E, fv1], [0, 0, -1]);
   }
 
   // stairs: each run of stair cells along the way it climbs is a flight of steps, its
@@ -389,6 +414,12 @@ export function buildStatic(world, R, { first = false } = {}) {
       if (es < e) {
         const [u0, v0, u1, v1] = faceUv(t, e - es, 0, e - es);
         quad([x0, e, z1], [x1, e, z1], [x1, es, z1], [x0, es, z1], [u0, v0], [u1, v0], [u1, v1], [u0, v1], [0, 0, 1]);
+      }
+      // seen from any side: its north face too
+      const en = id(x, y - 1) ? elev(x, y - 1) : 0;
+      if (third && en < e && !wall(x, y - 1)) {
+        const [u0, v0, u1, v1] = faceUv(t, e - en, 0, e - en);
+        quad([x1, e, z0], [x0, e, z0], [x0, en, z0], [x1, en, z0], [u0, v0], [u1, v0], [u1, v1], [u0, v1], [0, 0, -1]);
       }
       for (const dx of [-1, 1]) {
         const en = id(x + dx, y) ? elev(x + dx, y) : 0;

@@ -1,6 +1,6 @@
 // The overworld: tile maps seen from above at three quarters, actors that walk the
 // grid, and the story API scripts use to drive everything (see README, "Scripts").
-import { SCREEN_W, SCREEN_H, BASE_W, BASE_H, setView, TILE, Painter, canvas } from './gfx.js';
+import { SCREEN_W, SCREEN_H, BASE_W, BASE_H, setView, TILE, Painter, canvas, hex, mix } from './gfx.js';
 import { doll as makeDoll } from './doll.js';
 import { Dialog, Choice, Card, Menu, List, Log, Credits, textSpeed, setTextSpeed, speakerName, banner as showBanner, frame, getTheme, stripMarkup } from './ui.js';
 import { drawText, measure } from './font.js';
@@ -2132,9 +2132,37 @@ export class World {
     // a region bigger than the GPU takes in one picture is shown classic
     const R = regionOf(this);
     if (Math.max(R.w, R.h) * TILE > (this.engine.hdPass?.maxTex ?? 4096)) return null;
-    // first person in the modern look: the same walls stood up with every face, seen
-    // from the player's eyes (engine/hd.js, buildStatic's `first`)
-    return { world: this, frame: e.frame, region: R, first: this.firstPerson };
+    // from the eyes (engine/hd.js, buildStatic's `first`): the walls stood up with every
+    // face, a ceiling. From behind the player on an ordinary map (`third`): the diorama,
+    // built to be seen from any side. A map made for the ground view (a `view` on it or
+    // the game, a ceiling, a `wallHeight`) keeps its own walls from behind too.
+    const view = this.groundView;
+    const made = !!(this.map.view ?? this.game.view) || !!(this.map.ceiling ?? this.game.ceiling) || (this.map.wallHeight ?? this.game.wallHeight) !== undefined;
+    const first = view === 'first' || (view === 'third' && made);
+    return { world: this, frame: e.frame, region: R, first, third: view === 'third' && !first };
+  }
+
+  // The sky of the modern look: the map's own (`sky`, colours from the top down), or, seen
+  // from the ground on a map that is outdoors, one of the hour's: blue by day, the dark's
+  // colour at night, the dusk's or the dawn's grade between (the map's own `grade` and
+  // `dark` where it has them, as its light). Indoors is a map that says `clock: false`,
+  // `sky: false`, or has a ceiling; a map with far layers says what lies past it; from
+  // above there is none.
+  hdSky(e) {
+    const sky = typeof this.map.sky === 'function' ? this.map.sky(this.api, e) : this.map.sky;
+    if (sky?.length) return sky;
+    if (sky === false || !this.firstPerson || this.map.parallax?.length || this.map.clock === false || (this.map.ceiling ?? this.game.ceiling)) return null;
+    const grade = this.map.grade === undefined ? clockGrade(this) : typeof this.map.grade === 'function' ? this.map.grade(this.api, e) : this.map.grade;
+    const dark = this.map.dark === undefined ? clockDark(this) : typeof this.map.dark === 'function' ? this.map.dark(this.api, e) : this.map.dark;
+    const night = dark?.color || '#0a1030';
+    const k = Math.min(1, (dark?.alpha ?? 0) * 1.5);
+    const tint = (c) => {
+      if (!grade) return c;
+      const a = hex(c);
+      const g = hex(grade);
+      return `#${[0, 1, 2].map((i) => Math.round((a[i] * g[i]) / 255).toString(16).padStart(2, '0')).join('')}`;
+    };
+    return [tint(mix('#6494d8', night, k)), tint(mix('#c8dcf0', night, Math.min(1, k * 0.9)))];
   }
 
   // What lies on the ground, drawn as the classic look does into a picture of the view
@@ -2189,7 +2217,7 @@ export class World {
   drawHdBackdrop(ctx, e) {
     const cx = Math.round(this.cam.x);
     const cy = Math.round(this.cam.y);
-    const sky = typeof this.map.sky === 'function' ? this.map.sky(this.api, e) : this.map.sky;
+    const sky = this.hdSky(e);
     if (sky?.length) {
       const g = ctx.createLinearGradient(0, 0, 0, BASE_H);
       sky.forEach((c, i) => g.addColorStop(sky.length > 1 ? i / (sky.length - 1) : 0, c));
@@ -2282,7 +2310,7 @@ export class World {
     const dc = rgb(dark?.color || '#0a1030');
     const da = dark?.alpha > 0 ? dark.alpha : 0;
     // the colour of the distance: the sky's foot (or the void), and the dark's share of it
-    const sky = typeof this.map.sky === 'function' ? this.map.sky(this.api, e) : this.map.sky;
+    const sky = this.hdSky(e);
     const hz = rgb(sky?.length ? sky[sky.length - 1] : this.map.void || '#000000');
     return {
       sun: [0.5, 0.47, 0.4],

@@ -16,10 +16,12 @@ import { changed } from './host.js';
 // them is seen from above ('top'), from the eyes ('first') or from just behind and over the
 // player ('third'); and in third person, how far behind the player's middle the camera is
 // and how high, in map pixels, five steps of each (the middle one by default). The view is
-// tipped down to keep the player framed: the raycaster cannot tilt, so it lowers the
-// horizon by that many screen pixels. ?fp=1 / ?fp=3 / ?fp=0 (testing) win over the view kept.
+// tipped down to keep the player framed, their feet on one row near the bottom of the
+// screen: the modern look tilts its camera by that angle (`tilt`), the raycaster cannot
+// tilt, so it lowers the horizon by as many screen pixels (`pitch`). ?fp=1 / ?fp=3 / ?fp=0
+// (testing) win over the view kept.
 export const VIEWS = ['top', 'first', 'third'];
-export const THIRD_STEPS = { far: [56, 76, 96, 120, 150], high: [36, 48, 60, 76, 96] };
+export const THIRD_STEPS = { far: [64, 84, 108, 136, 170], high: [40, 50, 60, 74, 92] };
 const FEET_ROW = 146;
 const TESTING = (() => { const q = new URLSearchParams(location.search).get('fp'); return q === null ? null : { 1: 'first', 3: 'third' }[q] || 'top'; })();
 // Kept as `luma32.<game>.camera`, which goes to the account with the saves (host.js), so a
@@ -67,6 +69,8 @@ export const forward = (h) => [Math.sin(h), -Math.cos(h)];
 const FOV = (66 * Math.PI) / 180;
 const EYE = 16;            // the eyes, in map pixels over the floor
 const MAX_DEPTH = 40;      // cells a ray walks at most
+const PLANE = SCREEN_W / 2 / Math.tan(FOV / 2);                    // the projection plane, in screen pixels
+const FEET_ANGLE = Math.atan((FEET_ROW - SCREEN_H / 2) / PLANE);   // the feet's row, as an angle under the view's axis
 
 // A tile's picture as pixels, once per (image). Pictures are small; the cache is by canvas.
 const texels = new WeakMap();
@@ -102,40 +106,71 @@ function bigAt(w, cx, cy) {
   return p.def.roof !== undefined || p.w >= 3 || p.h >= 3;
 }
 
-// Where the camera stands: the player's eyes, or in third person behind and over them:
-// never past a wall behind (the classic look cannot see through one), never inside a
-// building; it comes in at once and goes back out gently, so a corner does not jolt it. x, y: map pixels on the
-// floor; h: the heading; eye: its height; back: how far behind the player it ended; pitch:
-// how many screen pixels the horizon goes down, so the view keeps the player framed.
+// Where the camera stands: the player's eyes, or in third person behind and over them.
+// x, y: map pixels on the floor; h: the heading the view looks along; eye: its height over
+// the floor; lift: the ground's own height under the player (README "Heights"), which the
+// modern look adds; back: how far behind the player it stands; tilt: how far it looks down
+// (radians) so the player's feet sit on FEET_ROW; pitch: the same as screen pixels of
+// horizon, for the raycaster.
+//
+// In third person the camera follows the player's heading with a little lag, so a turn
+// swings the view round instead of snapping it, and it stands as far back as the chosen
+// distance lets it: never past a wall behind (the classic look cannot see through one),
+// never inside a building. Pushed in by one, it climbs: it keeps its distance from the
+// player, from higher up, so they stay the same size on the screen and a corner turns the
+// view towards one from above instead of swallowing them. It comes in at once (never into
+// a wall) and goes back out gently.
 export function viewpoint(w) {
   const p = w.player;
   const b = w.box(p);
   const x = b.x + b.w / 2;
   const y = b.y + b.h / 2;
+  const lift = w.raised ? p.ez || 0 : 0;
   const h = p.heading ?? headingOf(p.dir);
-  if (!w.thirdPerson) return { x, y, h, eye: EYE, back: 0, pitch: 0 };
-  const [fx, fy] = forward(h);
+  if (!w.thirdPerson) return { x, y, h, eye: EYE, lift, back: 0, pitch: 0, tilt: 0 };
   const wallH = w.map.wallHeight ?? w.game.wallHeight ?? TILE * 2;
   const ceiled = !!(w.map.ceiling ?? w.game.ceiling);
-  let back = 0;
   const third = thirdCamera(w.game.id);
   const far = THIRD_STEPS.far[third.far];
-  const cellAt = (d) => [Math.floor((x - fx * d) / TILE), Math.floor((y - fy * d) / TILE)];
-  while (back < far && !wallCell(w, ...cellAt(back + 6))) back += 2;
-  while (back > 30 && bigAt(w, ...cellAt(back))) back -= 2;
-  // eased once a frame (the view asks several times in one)
-  const frame = w.engine.frame;
-  if (w.thirdBack?.frame !== frame) {
-    const was = w.thirdBack?.back ?? back;
-    w.thirdBack = { frame, back: back < was ? back : Math.min(back, was + 1.5) };
-  }
-  back = Math.min(back, w.thirdBack.back);
   // under a ceiling the camera stays under it
-  const eye = ceiled ? Math.min(THIRD_STEPS.high[third.high], wallH - 4) : THIRD_STEPS.high[third.high];
-  const D = SCREEN_W / 2 / Math.tan(FOV / 2);
-  // the player's feet always on the same row near the bottom of the screen
-  const pitch = Math.max(0, Math.min(SCREEN_H, Math.round(SCREEN_H / 2 - (FEET_ROW - (eye * D) / Math.max(back, 12)))));
-  return { x: x - fx * back, y: y - fy * back, h, eye, back, pitch };
+  const high = ceiled ? Math.min(THIRD_STEPS.high[third.high], wallH - 4) : THIRD_STEPS.high[third.high];
+  // the camera's own state, moved once a frame (the view asks several times in one); new
+  // on another map or after a jump
+  const frame = w.engine.frame;
+  let s = w.thirdCam;
+  if (!s || s.map !== w.mapId || Math.hypot(s.x - x, s.y - y) > 48) s = w.thirdCam = { map: w.mapId, frame: -1, h, back: far, eye: high, x, y };
+  if (s.frame !== frame) {
+    s.frame = frame;
+    s.x = x;
+    s.y = y;
+    // the heading: the shortest way round, a fifth of what is left each frame
+    let d = h - s.h;
+    d = ((d + Math.PI) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2) - Math.PI;
+    s.h = Math.abs(d) < 0.002 ? h : s.h + d * 0.2;
+    const [fx, fy] = forward(s.h);
+    const cellAt = (k) => [Math.floor((x - fx * k) / TILE), Math.floor((y - fy * k) / TILE)];
+    // in the modern look's diorama (engine/diorama.js, `third`) a wall well under the
+    // camera's height does not stop it: it looks over it, from past the map's edge if need
+    // be (the skirt goes on there), as a room is seen over its near wall. The raycaster
+    // cannot see over one, and never leaves the map.
+    const over = w.engine.hdFrame?.third ? w.dioramaWallH : null;
+    const blocks = (cx, cy) => { const c = wallCell(w, cx, cy); return !!c && (!over || over(cx, cy) + 28 > high); };
+    let back = 0;
+    while (back < far && !blocks(...cellAt(back + 6))) back += 2;
+    while (back > 30 && bigAt(w, ...cellAt(back))) back -= 2;
+    s.back = back < s.back ? back : Math.min(back, s.back + 2);
+    // pushed in, it climbs, the same distance from the player
+    const dist = Math.hypot(far, high);
+    let eye = Math.sqrt(Math.max(0, dist * dist - s.back * s.back));
+    if (ceiled) eye = Math.min(eye, wallH - 4);
+    s.eye = Math.max(high, eye);
+  }
+  const [fx, fy] = forward(s.h);
+  // the view tipped down so the feet sit on their row: as an angle for a camera that tilts,
+  // and as the rows the raycaster's horizon goes down (it cannot tilt, only shift)
+  const tilt = Math.max(0, Math.atan2(s.eye, Math.max(s.back, 1)) - FEET_ANGLE);
+  const pitch = Math.max(0, Math.min(SCREEN_H, Math.round(SCREEN_H / 2 - (FEET_ROW - (s.eye * PLANE) / Math.max(s.back, 12)))));
+  return { x: x - fx * s.back, y: y - fy * s.back, h: s.h, eye: s.eye, lift, back: s.back, pitch, tilt };
 }
 
 const smooth = (k) => (k <= 0 ? 0 : k >= 1 ? 1 : k * k * (3 - 2 * k));
@@ -149,7 +184,7 @@ export class FirstPerson {
     this.zbuf = new Float32Array(SCREEN_W);
     this.tmp = canvas(SCREEN_W, SCREEN_H);
     this.mask = canvas(SCREEN_W, SCREEN_H);
-    this.D = SCREEN_W / 2 / Math.tan(FOV / 2);   // the projection plane, in screen pixels
+    this.D = PLANE;
     this.floorKey = null;
   }
 

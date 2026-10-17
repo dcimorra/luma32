@@ -454,15 +454,36 @@ await api.look('left'); await api.look('ana', 600); await api.look(Math.PI / 4) 
 ```
 
 `api.player.heading` is where the eyes point (radians, 0 north, π/2 east), kept in the
-save. Heights are not shown yet (raised cells lie flat); a prop bigger than a cell is a
-card, not a block.
+save. In the classic look heights are not shown (raised cells lie flat) and a prop bigger
+than a cell is a card, not a block; the modern look stands both up.
 
 `view: 'third'` (since 1.17) is the same with the camera a little way behind and over the
 player, tipped down, so they are seen from behind walking ahead of it; it turns as they
-turn, and comes in close where a wall behind would be in the way. It never stands inside
-a building (a prop three cells wide or tall, or with `roof`), but may be past one: then in
-the modern look whatever stands between thins out in a circle round the player, and in the
-classic look the player is drawn over it (since 1.18.3).
+turn (following their heading with a little lag since 1.20, so a turn swings the view round
+instead of snapping it). It never stands inside a building (a prop three cells wide or
+tall, or with `roof`), and in the classic look never past a wall behind (the raycaster
+cannot see through one). Pushed in by either, it climbs (since 1.20): it keeps its distance
+from the player, from higher up, so they stay the same size on the screen and a corner
+turns the view towards one from above instead of swallowing them; it comes in at once and
+goes back out gently. In the modern look it looks over a wall lower than it (up to two rows
+under the camera's height), from past the map's edge if need be, as a room is seen over its
+near wall; and whatever still stands between it and the player thins out in a circle round
+them (in the classic look the player is drawn over it, since 1.18.3).
+
+In the modern look the map seen from behind the player is the diorama itself (since 1.20):
+walls with the faces and tops their 3/4 art draws, buildings as boxes, heights as they
+stand, built to be seen from any side (no wall is cut down for the camera, and every wall
+and raised cell has its back face too), and the camera stands on the ground's own height
+under the player. The player is what is in focus: only the far distance softens, a little.
+A map made for the ground view (a `view` on it or the game, a `ceiling`, a `wallHeight`)
+keeps the first-person build from behind too: its walls as tall as it says, with every
+face, its ceiling. From the ground a map without a `skirt` gets six cells of one, so the
+ground goes on past its edges instead of ending in a cut (a door on the edge is not carried
+on), and a map without a `sky` gets the hour's when it is outdoors: blue by day, the dark's
+colour at night, the dusk's or the dawn's grade between (the map's own `grade` and `dark`
+where it has them). Indoors is a map that says `clock: false`, `sky: false` or has a
+ceiling; from above there is no default sky. The dark from the ground is a fog that
+thickens with the distance from the player, not from the camera behind them.
 
 From the ground (first and third person, modern look) people, animals and small things turn
 to face the eyes, and so does what is drawn in profile (a dragon, a cart: a picture that is
@@ -474,8 +495,8 @@ outline, and its sides carry its own picture round from front to back. Buildings
 the big ones the modern look builds as boxes) never turned. Everything else is as in
 first person: the same walk, the same A, the same map. How far behind and how high the
 camera is the player sets in the options ("Distancia", "Altura", five steps each, shown
-while in third person; kept per game, on each device), and the view tips down to keep their feet near
-the bottom of the screen.
+while in third person; kept per game, on each device), and the view tips down to keep their feet on
+one row near the bottom of the screen, whatever the distance.
 
 The pad is omnidirectional (since 1.18): the touch cross gives the thumb's own angle
 besides the arm it is nearest (only the angle: the pace is always the same, as with the
