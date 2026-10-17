@@ -30,7 +30,7 @@ export function clockNow(world) {
 
 export function tickClock(world) {
   const c = clockConf(world);
-  if (!c || world.engine.top() !== world) return;
+  if (!c || !world.onTop) return;
   const now = clockNow(world);
   world.save.clock = now + (c.speed ?? 1) / 60;
 }

@@ -737,7 +737,7 @@ export class City {
   // Over the map: the A over a vehicle the player can take.
   marker(ctx, cx, cy, e) {
     const w = this.world;
-    if (!w.driving && !w.busy && w.engine.top() === w && w.map.hint !== false) {
+    if (!w.driving && !w.busy && w.onTop && w.map.hint !== false) {
       const v = boardable(w);
       if (v && Math.floor(e.frame / 20) % 2) {
         const x = Math.round(v.cx - cx - 3);

@@ -238,7 +238,7 @@ function tickBreath(world, e) {
   const m = world.map;
   if (!m.above || !m.breath) { world.air = null; return; }
   if (!world.air || world.air.map !== world.mapId) world.air = { map: world.mapId, left: m.breath * 60, max: m.breath * 60 };
-  if (world.busy || world.engine.top() !== world) return;
+  if (world.busy || !world.onTop) return;
   if (--world.air.left > 0) return;
   const p = world.player;
   const up = nearestDeep(world, m.above, p.x, p.y);

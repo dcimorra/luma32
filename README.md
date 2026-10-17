@@ -714,6 +714,10 @@ the people on the map are drawn where they stand. A skips it (`skip: false` does
 await api.flyover({ from: [12, 30], to: [12, 4], turn: 30, ms: 5000, height: 48 });
 ```
 
+Since 1.24, `api.flyoverScene(opts)` is the same flight as a scene not yet played (`{ update, draw }`,
+calling `done()` at its end), for whoever shows it themselves: the landing's demo reel
+draws it in place of the world.
+
 ## Two bodies, one cell: never
 
 Nobody walks into a cell someone stands in, solid or not; the player passes only
@@ -1212,6 +1216,10 @@ api.addEntity({ x, y, w, h,              // hitbox in map pixels
 api.move(self, dx, dy)                   // → { x, y, hitX, hitY }, against the map
 api.overlaps(self, 'player'); api.box('player'); api.solidPixel(x, y); api.removeEntity(self)
 ```
+
+In the modern look an entity lies on the floor as it is drawn (a shot, a block, a
+trap); since 1.24 one with `stand: true` stands up as a card instead, as people do (an enemy, a
+creature), drawn into a 64×64 picture whose bottom is the foot of its box.
 
 Entities are not saved and vanish when the map changes: add them in `enter`, from flags.
 `hud(ctx, api, e)` on the game or a map draws over the world (hearts, a counter).

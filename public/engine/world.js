@@ -1260,7 +1260,7 @@ export class World {
       const sy = this.miss.y * TILE - cy + 4 - this.elev(this.miss.x, this.miss.y);
       for (let i = 0; i < 8; i++) { ctx.fillRect(sx + i, sy + i, 2, 1); ctx.fillRect(sx + 6 - i, sy + i, 2, 1); }
     }
-    if (this.free || this.busy || this.engine.top() !== this || !this.engine.input.pointerOn || pt.type !== 'mouse' || !pt.over) return;
+    if (this.free || this.busy || !this.onTop || !this.engine.input.pointerOn || pt.type !== 'mouse' || !pt.over) return;
     const c = this.pointedCell(pt);
     const what = this.pointed(c.x, c.y, c.fy);
     if (what) { const [x, y] = what.who ? [what.who.x, what.who.y] : [c.x, c.y]; mark(x, y, accent); } else if (!this.blocked(c.x, c.y, this.player)) mark(c.x, c.y, 'rgba(255,255,255,0.7)');
@@ -1382,6 +1382,8 @@ export class World {
 
   update(e) {
     if (!this.map) return;
+    // a demo playing itself (engine/pilot.js): its buttons instead of the player's pad
+    if (this.pilot) { this.pilot.update(); e = Object.create(e, { input: { value: this.pilot } }); }
     // time played, in seconds, kept in the save (the credits show it)
     this.save.time = (this.save.time || 0) + 1 / 60;
     tickClock(this);
@@ -1395,7 +1397,7 @@ export class World {
     if (this.wasFirst !== undefined && first !== this.wasFirst) this.viewChanged(first);
     this.wasFirst = first;
     this.tickActors(e);
-    const control = !this.busy && this.engine.top() === this;
+    const control = !this.busy && this.onTop;
     if (!control) this.trip = null;
     if (this.soundSpots?.length && e.frame % 4 === 0) this.mixSoundSpots();
     // a new objective, or a new map under one: can the player get there from here?
@@ -1413,7 +1415,7 @@ export class World {
     if (!this.busy && e.frame % 20 === 0 && (this.pending || (this.autoRefresh && JSON.stringify(this.save.flags) !== this.flagsSeen))) this.refresh();
     this.map.update?.(this.api, e, control);
     this.game.update?.(this.api, e, control);
-    if (this.busy || this.engine.top() !== this) { this.city.tick(e, false); return; }
+    if (this.busy || !this.onTop) { this.city.tick(e, false); return; }
     this.city.tick(e, true);
     // a big map may ask to move only what is near the camera (`sim: { radius }`, pixels);
     // an entity with `always` moves anyway (whatever chases the player, a kept vehicle)
@@ -1426,7 +1428,7 @@ export class World {
       if (r && !en.always && (Math.abs(en.x - mx) > r || Math.abs(en.y - my) > r)) continue;
       en.update?.(this.api, e, en);
     }
-    if (this.busy || this.engine.top() !== this) return;
+    if (this.busy || !this.onTop) return;
     const inp = e.input;
     const p = this.player;
     // control back on a black screen: a script ended faded out and nothing fades it in
@@ -1541,6 +1543,9 @@ export class World {
   // instead of cell by cell. Warps, triggers, spots, talk and edges work the same, on the
   // cell under the hitbox's centre.
   get free() { return (this.map.movement ?? this.game.movement) === 'free'; }
+  // the world has the screen: it is on top of the engine, or a demo's pilot plays it
+  // (engine/pilot.js) under whatever the page shows over it
+  get onTop() { return this.engine.top() === this || !!this.pilot; }
   // the map seen from the ground (engine/firstperson.js, README "First person"): 'first'
   // from the player's eyes, 'third' from behind and over them, or null from above. What
   // the map or the game says, else what the player chose, where they may.
@@ -1762,7 +1767,7 @@ export class World {
           else a.face(d);
         }
       }
-      if (this.engine.top() === this) { this.tickCrowd(e); tickLife(this); }
+      if (this.onTop) { this.tickCrowd(e); tickLife(this); }
     }
     if (this.player) tickParty(this);
     if (this.cam.follow) this.centerCamera();
@@ -2026,7 +2031,7 @@ export class World {
   drawHint(ctx, e, cx, cy, camFor = null) {
     if ((this.map.hint ?? this.game.hint) === false) return;
     const p = this.player;
-    if (!p || this.busy || this.engine.top() !== this || p.moving || p.strolling) { this.still = 0; return; }
+    if (!p || this.busy || !this.onTop || p.moving || p.strolling) { this.still = 0; return; }
     if (++this.still < 12) return;
     const t = this.target();
     if ((t.none && !diveHere(this)) || t.actor?.def.hint === false || t.spot?.hint === false || t.actor?.emote) return;
@@ -2178,7 +2183,7 @@ export class World {
       this.vfx.draw(ctx, cx, cy, 'back');
       this.city.under(ctx, cx, cy, e);
       for (const en of this.entities) {
-        if (en.removed || en.hidden || !en.draw || en.doll || (en.spec && en.image)) continue;
+        if (en.removed || en.hidden || !en.draw || en.doll || en.stand || (en.spec && en.image)) continue;
         const b = this.box(en);
         if (b.x - cx > w + 48 || b.y - cy > h + 64 || b.x + b.w - cx < -48 || b.y + b.h - cy < -16) continue;
         en.draw(ctx, Math.round(b.x - cx), Math.round(b.y - cy), e, en);
@@ -2199,7 +2204,7 @@ export class World {
     }
     const pics = (this.hdPics ||= new WeakMap());
     for (const en of this.entities) {
-      if (en.removed || en.hidden || !en.draw || !en.doll) continue;
+      if (en.removed || en.hidden || !en.draw || !(en.doll || en.stand)) continue;
       const b = this.box(en);
       let c = pics.get(en);
       if (!c) { c = canvas(64, 64); pics.set(en, c); }
@@ -2657,7 +2662,7 @@ export class StoryApi {
   get save() { return this.world.save; }
   get player() { return this.world.player; }
   get map() { return this.world.mapId; }
-  get input() { return this.engine.input; }
+  get input() { return this.world.pilot || this.engine.input; }
   get game() { return this.world.game; }
 
   is(flag) { return !!this.flags[flag]; }
@@ -2858,7 +2863,10 @@ export class StoryApi {
   // north), in `ms`. The people on the map stand where they are. A skips it. Resolves
   // when it is over, back on the map as it was.
   //   await api.flyover({ from: [4, 30], to: [20, 4], ms: 4000, height: 48 })
-  flyover({ from = null, to = null, ahead = 12, ms = 3000, height = 48, horizon = 40, angle = 0, turn = null, sky = ['#3a5a8a', '#b8d0e8'], fog = { color: '#b8d0e8', from: 0.45 }, outside = null, people = true, skip = true } = {}) {
+  flyover(opts) { return this.play(this.flyoverScene(opts)); }
+  // The same flight as a scene, not played: for whoever shows it themselves (a demo reel
+  // that draws it where the world was). It calls `done()` at the end, when it has one.
+  flyoverScene({ from = null, to = null, ahead = 12, ms = 3000, height = 48, horizon = 40, angle = 0, turn = null, sky = ['#3a5a8a', '#b8d0e8'], fog = { color: '#b8d0e8', from: 0.45 }, outside = null, people = true, skip = true } = {}) {
     const w = this.world;
     const p = w.player;
     const rad = (d) => (d * Math.PI) / 180;
@@ -2875,7 +2883,7 @@ export class StoryApi {
     const scene = {
       update(e) {
         t++;
-        if ((skip && t > 20 && (e.input.pressed('a') || e.input.pressed('start'))) || t >= frames) scene.done();
+        if ((skip && t > 20 && (e.input.pressed('a') || e.input.pressed('start'))) || t >= frames) scene.done?.();
       },
       draw(ctx) {
         const k = ease(Math.min(1, t / frames));
@@ -2891,7 +2899,7 @@ export class StoryApi {
         m7.sprites(ctx, [...standing, ...who]);
       },
     };
-    return this.play(scene);
+    return scene;
   }
 
   // Where an actor (or 'player') is on screen, for an iris to close on.

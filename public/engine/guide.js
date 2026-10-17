@@ -139,7 +139,7 @@ function drawArrow(ctx, dir, cx, cy) {
 export function drawGuide(world, ctx, e, cx, cy, project = null) {
   if (world.game.guide === false || world.map.guide === false || !guideOn()) return;
   const p = world.player;
-  if (!p || world.busy || world.engine.top() !== world) return;
+  if (!p || world.busy || !world.onTop) return;
   const g = guidePoint(world);
   if (!g) return;
   // touching it already: the "A" hint takes over
