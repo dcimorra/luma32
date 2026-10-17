@@ -17,7 +17,7 @@ import { goalOf, drawGuide, audit, guideOn, setGuide, pressFrom, rectCells } fro
 import { placeParty, tickParty, tickLife, hushLife, bark, drawBarks, bumped, routeStop } from './company.js';
 import { Effects, EASE } from './vfx.js';
 import { Mode7 } from './mode7.js';
-import { FirstPerson, headingOf, dirOf, forward, eyesOn, setEyes } from './firstperson.js';
+import { FirstPerson, headingOf, dirOf, forward, viewChoice, setViewChoice, nextView } from './firstperson.js';
 import { City } from './city.js';
 import { board, unboard, boardable, driveTick } from './vehicle.js';
 import { seek, clearLine, centreOf, shoot } from './pursuit.js';
@@ -357,6 +357,12 @@ export class Actor {
   }
 
   image() {
+    // in third person the camera is behind the player: their back, whichever way they face
+    if (this === this.world.player && this.dir !== 'up' && this.world.thirdPerson) {
+      const dir = this.dir;
+      this.dir = 'up';
+      try { return this.image(); } finally { this.dir = dir; }
+    }
     // a sprite (a tile id), or one a direction: { down, up, left, right } (down if missing)
     if (this.sprite) return this.world.tiles.image(typeof this.sprite === 'object' ? this.sprite[this.dir] || this.sprite.down : this.sprite, Math.floor(this.world.engine.frame / 12));
     if (!this.doll) return null;
@@ -1535,14 +1541,17 @@ export class World {
   // instead of cell by cell. Warps, triggers, spots, talk and edges work the same, on the
   // cell under the hitbox's centre.
   get free() { return (this.map.movement ?? this.game.movement) === 'free'; }
-  // the map seen from the player's eyes (engine/firstperson.js, README "First person"):
-  // what the map or the game says, else what the player chose, where they may
-  get firstPerson() {
-    if (!this.map) return false;
-    const view = this.map.view ?? this.game.view;
-    if (view) return view === 'first';
-    return eyesOn() && this.eyesChoice;
+  // the map seen from the ground (engine/firstperson.js, README "First person"): 'first'
+  // from the player's eyes, 'third' from behind and over them, or null from above. What
+  // the map or the game says, else what the player chose, where they may.
+  get groundView() {
+    if (!this.map) return null;
+    const view = (this.map.view ?? this.game.view) || (this.eyesChoice ? viewChoice() : null);
+    return view === 'first' || view === 'third' ? view : null;
   }
+  // either of them: the eyes' way of walking, looking and talking
+  get firstPerson() { return !!this.groundView; }
+  get thirdPerson() { return this.groundView === 'third'; }
   // whether the player may choose the eyes here: the cartridge did not say a view, did not
   // say `firstPerson: false`, and nobody is at a wheel
   get eyesChoice() { return !!this.map && !(this.map.view ?? this.game.view) && (this.map.firstPerson ?? this.game.firstPerson) !== false && !this.driving; }
@@ -3326,7 +3335,7 @@ export class StoryApi {
       ...(isWeb() ? [] : [{ id: 'view', label: t('console.menu.view'), value: () => t(isFull() ? 'console.menu.view_full' : 'console.menu.view_shell'), toggle: () => setFull(!isFull()) }]),
       ...(hdSupported() ? [{ id: 'graphics', label: t('console.menu.graphics'), value: () => t(hdOn() ? 'console.menu.graphics_modern' : 'console.menu.graphics_classic'), toggle: () => setHd(!hdOn()) }] : []),
       // the map from the player's eyes, where the cartridge leaves it to them
-      ...(this.world.eyesChoice ? [{ id: 'camera', label: t('console.menu.camera'), value: () => t(eyesOn() ? 'console.menu.camera_first' : 'console.menu.camera_top'), toggle: () => setEyes(!eyesOn()) }] : []),
+      ...(this.world.eyesChoice ? [{ id: 'camera', label: t('console.menu.camera'), value: () => t(`console.menu.camera_${viewChoice()}`), toggle: () => setViewChoice(nextView(viewChoice())) }] : []),
       { id: 'sound', label: t('console.menu.sound'), value: () => t(isMuted() ? 'console.menu.off' : 'console.menu.on'), toggle: () => setMuted(!isMuted()) },
       // real instruments or the console's own, in a game that has an orchestra
       ...(hasOrchestra() ? [{ id: 'real', label: t('console.menu.instruments'), value: () => t(realOn() ? 'console.menu.instruments_real' : 'console.menu.instruments_chip'), toggle: () => setReal(!realOn()) }] : []),

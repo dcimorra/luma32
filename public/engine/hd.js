@@ -6,7 +6,7 @@
 // real depth, a bloom, and the console's own drawing (dialogue, menus, HUD, fades) flat on top, at the screen's
 // resolution. Nothing a cartridge writes changes: a game cannot tell which look it is in.
 import { buildStatic, gatherCards, groundKey, bodyMesh, picture } from './diorama.js';
-import { forward } from './firstperson.js';
+import { forward, viewpoint, THIRD_PITCH } from './firstperson.js';
 import { canvas, TILE } from './gfx.js';
 
 const KEY = 'luma32.gfx';
@@ -362,13 +362,15 @@ export class Hd {
   // First person: the camera at the player's eyes, looking the way they face, with the
   // raycaster's width of view (engine/firstperson.js); what the sun's shadows and the
   // sharp distance are about sits a little way ahead.
+  // Third person: the same camera from behind and over the player (viewpoint), tipped
+  // down as much as the raycaster's lowered horizon.
   eyes(world, aspect) {
-    const p = world.player;
-    const b = world.box(p);
-    const h = p.heading ?? 0;
+    const v = viewpoint(world);
+    const h = v.h;
     const [fx, fz] = forward(h);
-    const eye = [b.x + b.w / 2, FP_EYE, b.y + b.h / 2];
-    const target = [eye[0] + fx * FP_FOCUS, FP_EYE, eye[2] + fz * FP_FOCUS];
+    const eye = [v.x, world.thirdPerson ? v.eye : FP_EYE, v.y];
+    const drop = world.thirdPerson ? (FP_FOCUS * THIRD_PITCH) / (120 / Math.tan(FP_FOV / 2)) : 0;
+    const target = [eye[0] + fx * FP_FOCUS, eye[1] - drop, eye[2] + fz * FP_FOCUS];
     const fovY = 2 * Math.atan(Math.tan(FP_FOV / 2) / aspect);
     const near = 2;
     const far = 4000;
@@ -428,7 +430,7 @@ export class Hd {
     }
     const c = this.aim(world, W / H);
     // the player's own body is not before their eyes
-    const cardList = [...gatherCards(world, frame, R), ...world.hdEntityCards(e)].filter((k) => !first || k.actor !== world.player);
+    const cardList = [...gatherCards(world, frame, R), ...world.hdEntityCards(e)].filter((k) => !first || world.thirdPerson || k.actor !== world.player);
     this.cardCount = upload(gl, this.cardGeo, this.cards(cardList));
 
     // what lies on the floor this frame, over the view and well past its top edge (the

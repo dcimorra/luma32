@@ -456,9 +456,14 @@ await api.look('left'); await api.look('ana', 600); await api.look(Math.PI / 4) 
 save. Heights are not shown yet (raised cells lie flat); a prop bigger than a cell is a
 card, not a block.
 
+`view: 'third'` (since 1.17) is the same with the camera a little way behind and over the
+player, tipped down, so they are seen from behind walking ahead of it; it turns as they
+turn, and comes in close where a wall behind would be in the way. Everything else is as in
+first person: the same walk, the same A, the same map.
+
 The player may choose it too (since 1.16): "Cámara" in the options, or SELECT held for a
-moment, switches any map the cartridge leaves to them between the view from above and the
-eyes, kept per device (`?fp=1` / `?fp=0` for testing). A map or a game that says a `view`
+moment, goes round the view from above, first person and third person on any map the
+cartridge leaves to them, kept per device (`?fp=1`, `?fp=3`, `?fp=0` for testing). A map or a game that says a `view`
 keeps it; `firstPerson: false` on either takes the choice away (a minigame, a chase), and
 at a wheel it is always the view from above. A tap on SELECT still reaches the game when
 it is let go, as START does.
