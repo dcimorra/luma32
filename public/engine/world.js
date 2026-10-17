@@ -486,6 +486,7 @@ export class World {
     this.cam = { x: 0, y: 0, follow: true };
     this.turnDelay = 0;
     this.log = [];          // what has been said this session, for the backlog
+    this.scenes = [];       // what a script shows while a pilot plays (show)
     this.seen = loadSeen(game);
     this.linted = new Set();
     this.memory = new Map();   // mapId -> where its people were when the player left
@@ -1384,6 +1385,9 @@ export class World {
     if (!this.map) return;
     // a demo playing itself (engine/pilot.js): its buttons instead of the player's pad
     if (this.pilot) { this.pilot.update(); e = Object.create(e, { input: { value: this.pilot } }); }
+    // a line or a choice the pilot is answering (show): the world waits under it, as under
+    // any scene on top of the engine
+    if (this.scenes.length) { this.tick(e); this.scenes[this.scenes.length - 1].update?.(e); return; }
     // time played, in seconds, kept in the save (the credits show it)
     this.save.time = (this.save.time || 0) + 1 / 60;
     tickClock(this);
@@ -1543,6 +1547,26 @@ export class World {
   // instead of cell by cell. Warps, triggers, spots, talk and edges work the same, on the
   // cell under the hitbox's centre.
   get free() { return (this.map.movement ?? this.game.movement) === 'free'; }
+  // A scene a script shows (a line, a choice, a card, a minigame): pushed on the engine,
+  // as ever. While a pilot plays the world (engine/pilot.js), under a page that has scenes
+  // of its own, the world keeps it instead: it answers it with the pilot's buttons and
+  // draws it over itself (drawScreen), and the page's scenes stay as they were.
+  show(scene) {
+    if (!this.pilot) return this.engine.push(scene);
+    return new Promise((resolve) => {
+      scene.done = (value) => {
+        const i = this.scenes.indexOf(scene);
+        if (i >= 0) this.scenes.splice(i, 1);
+        scene.onExit?.();
+        this.pilot?.flush();
+        resolve(value);
+      };
+      this.scenes.push(scene);
+      scene.onEnter?.(this.engine);
+      this.pilot.flush();
+    });
+  }
+
   // the world has the screen: it is on top of the engine, or a demo's pilot plays it
   // (engine/pilot.js) under whatever the page shows over it
   get onTop() { return this.engine.top() === this || !!this.pilot; }
@@ -2503,6 +2527,8 @@ export class World {
     // the cartridge's heads-up display: hearts, rupees, a timer
     this.map.hud?.(ctx, this.api, e);
     this.game.hud?.(ctx, this.api, e);
+    // what the pilot is answering (show)
+    for (const s of this.scenes) s.draw(ctx, e);
   }
 
   // Each spot's sound: louder as the player nears it (within `radius` cells, default 6),
@@ -2715,7 +2741,7 @@ export class StoryApi {
     for (let i = 0; i < list.length; i++) {
       const id = known ? `${key}#${i}` : null;
       this.world.remember(speaker, list[i]);
-      await this.engine.push(new Dialog(list[i], { speaker, seen: this.world.seenLine(id), ...opts }));
+      await this.world.show(new Dialog(list[i], { speaker, seen: this.world.seenLine(id), ...opts }));
       this.world.markSeen(id);
     }
   }
@@ -2834,21 +2860,21 @@ export class StoryApi {
     const str = this.text(key, opts.vars);
     this.world.remember(speaker, str);
     const d = new Dialog(str, { speaker, keep: true, mood: opts.mood });
-    await this.engine.push(d);
-    return this.engine.push(new Choice(options.map((o) => this.text(o)), { under: d, cancel: opts.cancel }));
+    await this.world.show(d);
+    return this.world.show(new Choice(options.map((o) => this.text(o)), { under: d, cancel: opts.cancel }));
   }
 
-  menu(options, opts = {}) { return this.engine.push(new Choice(options.map((o) => this.text(o)), opts)); }
+  menu(options, opts = {}) { return this.world.show(new Choice(options.map((o) => this.text(o)), opts)); }
 
   // A scrolling list (a bag, a shop, a party). items: [{ label, value?, note?, disabled? }],
   // label and note as keys or text. Resolves with the index, or -1 on B.
   list(items, opts = {}) {
     const rows = items.map((it) => ({ ...it, label: this.text(it.label), note: it.note ? this.text(it.note) : undefined }));
-    return this.engine.push(new List(rows, { ...opts, title: opts.title ? this.text(opts.title) : '' }));
+    return this.world.show(new List(rows, { ...opts, title: opts.title ? this.text(opts.title) : '' }));
   }
 
   // The backlog: everything said this session.
-  showLog() { return this.engine.push(new Log(this.world.log, t('console.menu.log'))); }
+  showLog() { return this.world.show(new Log(this.world.log, t('console.menu.log'))); }
 
   wait(ms) { return this.engine.waitMs(ms); }
   frames(n) { return this.engine.wait(n); }
@@ -3189,7 +3215,7 @@ export class StoryApi {
   // Opens a full-screen stage (backdrop + characters) over the map. See engine/stage.js.
   stage(opts = {}) {
     const st = new Stage(this.world, opts);
-    this.engine.push(st);
+    this.world.show(st);
     if (opts.music !== undefined) music(opts.music);
     return st;
   }
@@ -3300,7 +3326,7 @@ export class StoryApi {
   banner(key) { showBanner(this.engine, this.text(key)); }
 
   card(opts) {
-    return this.engine.push(new Card({ ...opts, kicker: opts.kicker && this.text(opts.kicker, opts.vars), title: opts.title && this.text(opts.title), sub: opts.sub && this.text(opts.sub) }));
+    return this.world.show(new Card({ ...opts, kicker: opts.kicker && this.text(opts.kicker, opts.vars), title: opts.title && this.text(opts.title), sub: opts.sub && this.text(opts.sub) }));
   }
 
   // Pushes any scene (a puzzle, a minigame) and resolves with its result.
@@ -3308,7 +3334,7 @@ export class StoryApi {
     if (this.engine.fx.fade > 0.99 && !scene.aboveFade) {
       this.world.lint(`black:${scene.constructor?.name}`, `a scene (${scene.constructor?.name || 'anonymous'}) was pushed while the screen is faded to black: it plays unseen. fadeIn first, or give the scene aboveFade = true.`);
     }
-    return this.engine.push(scene);
+    return this.world.show(scene);
   }
 
   // Writes the save slot. Called by the menu and by chapters at safe points.
@@ -3472,7 +3498,7 @@ export class StoryApi {
       rows.push({ text: m >= 60 ? t('console.credits.hours', { h: Math.floor(m / 60), m: m % 60 }) : t('console.credits.minutes', { m }), kind: 'name' });
     }
     if (opts.music !== undefined) music(opts.music);
-    await this.engine.push(new Credits(rows, { bg: opts.bg, speed: opts.speed, end: opts.end ? this.text(opts.end) : t('console.credits.end') }));
+    await this.world.show(new Credits(rows, { bg: opts.bg, speed: opts.speed, end: opts.end ? this.text(opts.end) : t('console.credits.end') }));
   }
 
   // Ends the cartridge's story: back to its title screen.
