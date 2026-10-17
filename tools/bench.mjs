@@ -1,10 +1,10 @@
 // Walks a cartridge's dev jumps in the modern look and looks at each from every view the
-// player may choose — from above, from the eyes, from behind (and from behind after a
-// turn and a few steps, which is where the camera has a hard time) — on contact sheets,
+// player may choose — from above, from behind (and from behind after a turn and a few
+// steps, which is where the camera has a hard time) — on contact sheets,
 // with every console error and [luma] warning under the picture it came up in. For
 // checking the engine against the lab (tools/lab, README "Testing by eye") after a change,
 // and any cartridge the same way. Not part of the site.
-//   node tools/bench.mjs <url> <game> [--match <parts of jumps' labels, comma-separated>] [--views top,first,third]
+//   node tools/bench.mjs <url> <game> [--match <parts of jumps' labels, comma-separated>] [--views top,third]
 // Sheets and a report go to $OUT (/tmp/luma-bench): <game>-<n>.png, bench.json. The exit
 // code is 1 when anything was printed under a picture.
 import { createRequire } from 'node:module';
@@ -15,9 +15,9 @@ const pw = require(process.env.PLAYWRIGHT || 'playwright-core');
 const argv = process.argv.slice(2);
 const opt = (name, dflt) => { const i = argv.indexOf(name); if (i < 0) return dflt; const v = argv[i + 1]; argv.splice(i, 2); return v; };
 const MATCH = opt('--match', '').split(',').filter(Boolean);
-const VIEWS = opt('--views', 'top,first,third').split(',');
+const VIEWS = opt('--views', 'top,third').split(',');
 const [url, id] = argv;
-if (!url || !id) { console.error('usage: node tools/bench.mjs <url> <game> [--match <label part>] [--views top,first,third]'); process.exit(2); }
+if (!url || !id) { console.error('usage: node tools/bench.mjs <url> <game> [--match <label part>] [--views top,third]'); process.exit(2); }
 const OUT = process.env.OUT || '/tmp/luma-bench';
 fs.mkdirSync(OUT, { recursive: true });
 
@@ -60,7 +60,7 @@ try {
   if (!picked.length) throw new Error(labels.length ? `no jump matches "${MATCH}"` : 'the cartridge has no dev.jumps');
 
   // the sheet is drawn in the page: a row a jump, a picture a look
-  const COLS = ['top', 'first', 'third', 'third, turned', 'third, walked'].filter((c) => VIEWS.includes(c.split(',')[0]));
+  const COLS = ['top', 'third', 'third, turned', 'third, walked'].filter((c) => VIEWS.includes(c.split(',')[0]));
   const CW = 320;
   const CH = 213;
   const ROWS = 6;
@@ -90,7 +90,7 @@ try {
   });
   const setView = (view) => page.evaluate(async (view) => {
     const w = eval('luma.engine.scenes.find((s) => s.api)');
-    const m = await import('/engine/firstperson.js');
+    const m = await import('/engine/thirdperson.js');
     if (w.eyesChoice) m.setViewChoice(w.game.id, view);
     return w.eyesChoice ? view : (w.map.view ?? w.game.view) || 'top';
   }, view);

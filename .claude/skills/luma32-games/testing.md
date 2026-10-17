@@ -10,7 +10,7 @@ node tools/shot.mjs "http://127.0.0.1:8765/?game=<id>" /tmp/out script.json
   house's games are played and judged in 3D; classic is assumed to follow. To look over
   every map of a cartridge at once: `node tools/sweep-hd.mjs http://127.0.0.1:8765 <id>`
   (contact sheets and a census of what each map uses, in `/tmp/luma-sweep`). To look at
-  every dev jump from above, from the eyes and from behind, with the errors and warnings
+  every dev jump from above and from behind, with the errors and warnings
   under each picture: `node tools/bench.mjs http://127.0.0.1:8765 <id>` (`/tmp/luma-bench`;
   after a change to the engine, run it on the lab, `tools/lab`, whose jumps are its bench).
 - **Many commands on one open page** (walking a stretch, advancing dialogue, checking

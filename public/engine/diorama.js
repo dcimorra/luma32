@@ -11,14 +11,14 @@
 // seen. Heights (README "Heights") rise as they are. Props and people stand up as cards.
 // Seen from behind the player (`third`: the camera turns with them) the same diorama is
 // built to be seen from any side: no wall is cut down, and every wall and every raised
-// cell has its north face too. From the eyes (`first`) walls are built as the raycaster
+// cell has its north face too. On a map made for the ground view (`walls`) walls are built as the raycaster
 // stands them up: every face, the picture repeated down to the floor, a ceiling.
 //
 // Every face samples one picture: the map drawn flat with its neighbours (`picture`), so a
 // wall's face is its own face tile and its top its own top tile. Coordinates are the
 // current map's, neighbours included (they sit at their offsets, as the world has them).
 import { TILE, pixels } from './gfx.js';
-import { forward } from './firstperson.js';
+import { forward } from './thirdperson.js';
 
 const LOW = 4;        // a wall between the camera and the floor, cut down to this
 const LIE = 8;        // how tall a prop lying down stands (a bed)
@@ -43,7 +43,7 @@ const isWall = (d) => !!d && !!d.solid && !d.low && !d.medium && !d.reflect && !
 // The cells the diorama covers, in tiles: the map and every neighbour across its edges,
 // and a map's `skirt` (cells) all round: past its edges the ground goes on, each cell
 // its nearest edge cell's tile, so a low camera sees land and sea, not the cut. Seen from
-// the ground (first and third person) a map without one gets six cells of it: the camera
+// the ground (third person) a map without one gets six cells of it: the camera
 // is low there, and the cut would be in every view that looks towards an edge.
 export function regionOf(world) {
   const r = { x0: 0, y0: 0, x1: world.w, y1: world.h };
@@ -53,7 +53,7 @@ export function regionOf(world) {
     r.x1 = Math.max(r.x1, n.ox + n.w);
     r.y1 = Math.max(r.y1, n.oy + n.h);
   }
-  const k = Math.max(0, Math.min(24, (world.map.skirt ?? (world.firstPerson ? 6 : 0)) | 0));
+  const k = Math.max(0, Math.min(24, (world.map.skirt ?? (world.thirdPerson ? 6 : 0)) | 0));
   r.skirt = k;
   r.x0 -= k; r.y0 -= k; r.x1 += k; r.y1 += k;
   r.w = r.x1 - r.x0;
@@ -106,7 +106,7 @@ export function picture(world, R, frame, make) {
   const ctx = c.getContext('2d');
   // under the map: the faces raised cells show (a tile's own `side`, README "Heights")
   for (const s of sides?.list || []) ctx.drawImage(world.tiles.side(s.id, frame, s.fh, world.level), s.x, s.y);
-  // first person: the tiles a wall shows instead of its own, and the ceiling
+  // a map made for the ground view: the tiles a wall shows instead of its own, and the ceiling
   for (const [id, at] of sides?.extra || []) ctx.drawImage(world.tiles.image(id, frame), at.x, at.y);
   for (let y = R.y0; y < R.y1; y++) {
     for (let x = R.x0; x < R.x1; x++) {
@@ -129,7 +129,7 @@ export function picture(world, R, frame, make) {
 
 // The static geometry: interleaved x y z u v nx ny nz, in map pixels (x east, y up, z
 // south), u v in the region's picture.
-export function buildStatic(world, R, { first = false, third = false } = {}) {
+export function buildStatic(world, R, { walls = false, third = false } = {}) {
   const PW = R.w * TILE;
   const OX = R.x0 * TILE;
   const OY = R.y0 * TILE;
@@ -139,12 +139,12 @@ export function buildStatic(world, R, { first = false, third = false } = {}) {
   const def = (x, y) => { const i = id(x, y); return i ? world.game.tiles[i] : null; };
   const elev = (x, y) => (world.raised ? world.elev(x, y) : 0);
   // a solid cell with a height is raised ground, not a wall: it stands as tall as the
-  // map says and shows its own face (README "Heights"). In first person a wall is what
-  // the raycaster (engine/firstperson.js) stands up: water and `wall: false` lie flat.
+  // map says and shows its own face (README "Heights"). On a map made for the ground view
+  // a wall is what the raycaster (engine/thirdperson.js) stands up: water and `wall: false` lie flat.
   const fpWall = (d) => !!d && !!d.solid && d.wall !== false && !d.medium && !d.low && !d.flat && !d.reflect && d.step !== 'water';
-  const wall = (x, y) => (first ? fpWall(def(x, y)) : isWall(def(x, y))) && !elev(x, y);
-  const WH = first ? world.map.wallHeight ?? world.game.wallHeight ?? TILE * 2 : 0;
-  const ceilId = first ? world.map.ceiling ?? world.game.ceiling ?? null : null;
+  const wall = (x, y) => (walls ? fpWall(def(x, y)) : isWall(def(x, y))) && !elev(x, y);
+  const WH = walls ? world.map.wallHeight ?? world.game.wallHeight ?? TILE * 2 : 0;
+  const ceilId = walls ? world.map.ceiling ?? world.game.ceiling ?? null : null;
 
   // the faces raised cells need, packed under the map in the picture: id and height
   const need = new Map();
@@ -168,10 +168,10 @@ export function buildStatic(world, R, { first = false, third = false } = {}) {
     row = Math.max(row, s.fh);
   }
   let PH = sy + row + (need.size ? 1 : 0);
-  // first person: the pictures the map itself lacks, in a strip under it: a ceiling tile,
+  // `walls`: the pictures the map itself lacks, in a strip under it: a ceiling tile,
   // and the tile a wall says it shows (`wall: 'id'`)
   const extra = new Map();
-  if (first) {
+  if (walls) {
     const ids = new Set();
     if (ceilId && world.game.tiles[ceilId]) ids.add(ceilId);
     for (const d of Object.values(world.game.tiles)) if (typeof d.wall === 'string' && world.game.tiles[d.wall]) ids.add(d.wall);
@@ -246,10 +246,10 @@ export function buildStatic(world, R, { first = false, third = false } = {}) {
   }
   const hAt = (x, y) => (inR(x, y) ? height[(y - R.y0) * R.w + x - R.x0] : 0);
   // how tall the wall at a cell stands (nothing past the diorama), for the third-person
-  // camera (engine/firstperson.js), which may look over a low one, the skirt included
+  // camera (engine/thirdperson.js), which may look over a low one, the skirt included
   world.dioramaWallH = third ? (cx, cy) => (inR(cx, cy) ? hAt(cx, cy) : Infinity) : null;
 
-  if (first) {
+  if (walls) {
     // four faces where a neighbour is not a wall, the picture repeated down to the
     // floor one cell at a time, and the top at the wall's height
     const picUv = (x, y) => {
@@ -283,7 +283,7 @@ export function buildStatic(world, R, { first = false, third = false } = {}) {
       }
     }
   }
-  for (const r of first ? [] : runs) {
+  for (const r of walls ? [] : runs) {
     const { x, r0, r1, F, H } = r;
     const x0 = x * TILE;
     const x1 = x0 + TILE;
@@ -402,7 +402,7 @@ export function buildStatic(world, R, { first = false, third = false } = {}) {
       const z1 = z0 + TILE;
       const uv = cellUv(x, y);
       quad([x0, e, z0], [x1, e, z0], [x1, e, z1], [x0, e, z1], uv[0], uv[1], uv[2], uv[3], [0, 1, 0]);
-      if (first && ceilId && extra.has(ceilId)) {
+      if (walls && ceilId && extra.has(ceilId)) {
         const at = extra.get(ceilId);
         const c = [[OX + at.x + E, OY + at.y + E], [OX + at.x + TILE - E, OY + at.y + E], [OX + at.x + TILE - E, OY + at.y + TILE - E], [OX + at.x + E, OY + at.y + TILE - E]];
         quad([x0, WH, z1], [x1, WH, z1], [x1, WH, z0], [x0, WH, z0], c[3], c[2], c[1], c[0], [0, -1, 0]);
@@ -469,13 +469,13 @@ export function gatherCards(world, frame, R) {
         let depth = p.def.depth ?? Math.max(6, Math.min(16, Math.max(fh * TILE * 0.75, p.w >= 2 && p.h === 1 ? 16 : 0)));
         let shape = 'round';
         let still = false;
-        // seen from the ground (first and third person) something big and drawn from the
+        // seen from the ground (third person) something big and drawn from the
         // front (a tent, a tree, a tower: its picture about as much on the left as on the
         // right) does not turn to the eyes: it stands as it is, as deep as it is tall in
         // cells, its rows as deep as they are wide and its picture carried round its sides
         // (bodyMesh 'solid'). Drawn in profile (a dragon, a horse, a cart) it is a body that
         // turns, as people do: deep as wide it would be a block.
-        if (world.firstPerson && (p.w >= 3 || p.h >= 3) && frontOn(img)) {
+        if (world.thirdPerson && (p.w >= 3 || p.h >= 3) && frontOn(img)) {
           depth = p.def.depth ?? Math.max(8, Math.min(img.width, Math.round(p.h * TILE * 0.8)));
           shape = 'solid';
           still = true;

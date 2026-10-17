@@ -17,7 +17,7 @@ import { goalOf, drawGuide, audit, guideOn, setGuide, pressFrom, rectCells } fro
 import { placeParty, tickParty, tickLife, hushLife, bark, drawBarks, bumped, routeStop } from './company.js';
 import { Effects, EASE } from './vfx.js';
 import { Mode7 } from './mode7.js';
-import { FirstPerson, headingOf, dirOf, forward, viewChoice, setViewChoice, nextView, thirdCamera, setThirdCamera, THIRD_STEPS } from './firstperson.js';
+import { Raycaster, headingOf, dirOf, forward, viewChoice, setViewChoice, nextView, thirdCamera, setThirdCamera, THIRD_STEPS, asView } from './thirdperson.js';
 import { City } from './city.js';
 import { board, unboard, boardable, driveTick } from './vehicle.js';
 import { seek, clearLine, centreOf, shoot } from './pursuit.js';
@@ -130,7 +130,7 @@ export class Actor {
     this.px = def.x * TILE;
     this.py = def.y * TILE;
     this.dir = def.dir || 'down';
-    this.heading = headingOf(this.dir);   // radians, for the first-person view: up is 0, right π/2
+    this.heading = headingOf(this.dir);   // radians, for the view from the ground: up is 0, right π/2
     this.visible = def.visible !== false;
     this.solid = def.solid !== false;
     this.speed = def.speed ?? 1;
@@ -187,8 +187,8 @@ export class Actor {
     const dx = other.x - this.x;
     const dy = other.y - this.y;
     this.dir = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up');
-    // in first person the player turns their eyes to them, not just a quarter
-    if (this === this.world.player && this.world.firstPerson) this.heading = Math.atan2(other.px - this.px, -(other.py - this.py));
+    // from the ground the player turns to face them, not just a quarter
+    if (this === this.world.player && this.world.thirdPerson) this.heading = Math.atan2(other.px - this.px, -(other.py - this.py));
     else this.heading = headingOf(this.dir);
   }
 
@@ -870,7 +870,7 @@ export class World {
   setTile(x, y, id) {
     if (!this.ground[y]) return;
     this.ground[y][x] = id;
-    this.groundVersion = (this.groundVersion || 0) + 1;   // the first-person floor is drawn again
+    this.groundVersion = (this.groundVersion || 0) + 1;   // the raycaster's floor is drawn again
   }
 
   // A prop entry ready to draw and query. `src` is the map's own entry, kept so a `when`
@@ -1397,9 +1397,9 @@ export class World {
     let zt = this.zoomTo;
     if (this.driving && zc && zc < 1) zt = Math.min(zt, 1 - (1 - zc) * Math.min(1, this.driving.speed / this.driving.spec.max));
     if (Math.abs(zt - this.zoomOut) > 0.002) this.zoomOut += (zt - this.zoomOut) * 0.03; else this.zoomOut = zt;
-    const first = this.firstPerson;
-    if (this.wasFirst !== undefined && first !== this.wasFirst) this.viewChanged(first);
-    this.wasFirst = first;
+    const ground = this.thirdPerson;
+    if (this.wasGround !== undefined && ground !== this.wasGround) this.viewChanged(ground);
+    this.wasGround = ground;
     this.tickActors(e);
     const control = !this.busy && this.onTop;
     if (!control) this.trip = null;
@@ -1457,9 +1457,9 @@ export class World {
     if (this.checkSight()) return;
     // ice keeps the player going, a current carries them (engine/move.js)
     if (this.slide && !this.free && slideOn(this)) return;
-    if (this.firstPerson) {
+    if (this.thirdPerson) {
       if (inp.pressed('a') && !(this.map.actionA ?? this.game.actionA) && !cooling) { this.interact(); return; }
-      this.walkFirst(e, inp, p);
+      this.walkGround(e, inp, p);
       return;
     }
     if (this.free) {
@@ -1570,31 +1570,31 @@ export class World {
   // the world has the screen: it is on top of the engine, or a demo's pilot plays it
   // (engine/pilot.js) under whatever the page shows over it
   get onTop() { return this.engine.top() === this || !!this.pilot; }
-  // the map seen from the ground (engine/firstperson.js, README "First person"): 'first'
-  // from the player's eyes, 'third' from behind and over them, or null from above. What
-  // the map or the game says, else what the player chose, where they may.
+  // the map seen from the ground (engine/thirdperson.js, README "Third person"): 'third'
+  // from behind and over the player, or null from above. What the map or the game says
+  // (a `view: 'first'` of before 1.26 is read as 'third'), else what the player chose,
+  // where they may.
   get groundView() {
     if (!this.map) return null;
     const view = (this.map.view ?? this.game.view) || (this.eyesChoice ? viewChoice(this.game.id) : null);
-    return view === 'first' || view === 'third' ? view : null;
+    return asView(view) === 'third' ? 'third' : null;
   }
-  // either of them: the eyes' way of walking, looking and talking
-  get firstPerson() { return !!this.groundView; }
+  // from the ground: the heading's way of walking, looking and talking
   get thirdPerson() { return this.groundView === 'third'; }
-  // whether the player may choose the eyes here: the cartridge did not say a view, did not
-  // say `firstPerson: false`, and nobody is at a wheel
-  get eyesChoice() { return !!this.map && !(this.map.view ?? this.game.view) && (this.map.firstPerson ?? this.game.firstPerson) !== false && !this.driving; }
-  // the view changed under the player: the eyes look where they faced, and back on the
-  // grid the feet stand on the cell they were over
-  viewChanged(first) {
+  // whether the player may choose the view here: the cartridge did not say a view, did not
+  // say `thirdPerson: false` (`firstPerson: false` before 1.26), and nobody is at a wheel
+  get eyesChoice() { return !!this.map && !(this.map.view ?? this.game.view) && (this.map.thirdPerson ?? this.game.thirdPerson ?? this.map.firstPerson ?? this.game.firstPerson) !== false && !this.driving; }
+  // the view changed under the player: from the ground they look where they faced, and
+  // back on the grid the feet stand on the cell they were over
+  viewChanged(ground) {
     const p = this.player;
     if (!p) return;
-    if (first) p.heading = headingOf(p.dir);
+    if (ground) p.heading = headingOf(p.dir);
     else if (!this.free && !p.moving) p.place(p.x, p.y);
   }
   // what the engine tells the page (engine.js): the grid is walked with the pointer, free
   // movement only with buttons (a tablet gets its pad); the corner button is START
-  get pointer() { return !this.map || (!this.free && !this.firstPerson); }
+  get pointer() { return !this.map || (!this.free && !this.thirdPerson); }
   get menuButton() { return !this.busy; }
 
   // A rectangle in map pixels: an actor's feet, or an entity's own box.
@@ -1632,7 +1632,7 @@ export class World {
     const actorsBlock = who instanceof Actor || who?.bumpsActors;
     for (const a of actorsBlock ? this.actors : []) {
       if (a === who || !a.visible || !a.solid) continue;
-      if (overlap(b, this.free || this.firstPerson ? this.box(a) : { x: a.px, y: a.py, w: TILE, h: TILE })) return true;
+      if (overlap(b, this.free || this.thirdPerson ? this.box(a) : { x: a.px, y: a.py, w: TILE, h: TILE })) return true;
     }
     for (const en of this.city.near(b)) if (en !== who && en.solid && !en.removed && overlap(b, this.box(en))) return true;
     return false;
@@ -1724,10 +1724,10 @@ export class World {
     }
   }
 
-  // First person: left and right turn, up and down walk the way the eyes look (B runs).
+  // From the ground: left and right turn, up and down walk the way the player faces (B runs).
   // The feet are the same box as free movement, so walls, props and people stop them the
   // same, and the cell under them is the player's cell for warps, triggers and edges.
-  walkFirst(e, inp, p) {
+  walkGround(e, inp, p) {
     // the pad at any angle (input.stick): across turns, along walks, both at once at a
     // slant; always at the same pace, as from above, however far the thumb pushes
     const axis = (v) => (Math.abs(v) < 0.38 ? 0 : Math.sign(v));
@@ -1755,7 +1755,7 @@ export class World {
     if (cx !== p.x || cy !== p.y) { p.x = cx; p.y = cy; this.arrived(); return; }
     if (res.hitX || res.hitY) {
       // a door in a wall opens to whoever walks into it
-      const t = this.targetFirst();
+      const t = this.targetAhead();
       const warp = this.warpAt(t.x, t.y, p.dir, true);
       if (warp) { p.strolling = false; this.run((api) => api.take(warp)); return; }
       if (e.frame - (this.lastBump || 0) > 20) {
@@ -1950,10 +1950,10 @@ export class World {
   }
 
   // What A would act on now: a person, a spot or something to examine, with its cell.
-  // First person: what the eyes point at, along the way they look, up to a cell and a
+  // From the ground: what is ahead, along the way the player faces, up to a cell and a
   // half away: the first person who answers, the first live spot, the first thing to
   // examine, else the wall or the floor there.
-  targetFirst() {
+  targetAhead() {
     const p = this.player;
     const [fx, fy] = forward(p.heading);
     const b = this.box(p);
@@ -1984,7 +1984,7 @@ export class World {
 
   target() {
     const p = this.player;
-    if (this.firstPerson) return this.targetFirst();
+    if (this.thirdPerson) return this.targetAhead();
     const [dx, dy] = DIRS[p.dir];
     const fx = p.x + dx;
     const fy = p.y + dy;
@@ -2061,10 +2061,10 @@ export class World {
     if ((t.none && !diveHere(this)) || t.actor?.def.hint === false || t.spot?.hint === false || t.actor?.emote) return;
     const bob = Math.floor(e.frame / 20) % 2;
     const th = getTheme();
-    if (this.firstPerson) {
+    if (this.thirdPerson) {
       // over the person's head where the view shows it (the raycaster's box, or the
       // modern look's projection), else at the middle of the view
-      let box = t.actor?.fpBox;
+      let box = t.actor?.rayBox;
       if (t.actor && this.engine.hdShown) {
         const s = this.engine.hdPass.project(t.actor.px + 8 + t.actor.ox, 28, t.actor.py + 12 + t.actor.oy);
         box = s ? { x: s.x - 4, y: s.y, w: 8 } : null;
@@ -2129,7 +2129,7 @@ export class World {
   // shrunk onto the screen; the HUD is drawn after, at the screen's own size.
   draw(ctx, e) {
     if (!this.map) return;
-    if (this.firstPerson) { this.drawFirst(ctx, e); this.drawScreen(ctx, e); return; }
+    if (this.thirdPerson) { this.drawGround(ctx, e); this.drawScreen(ctx, e); return; }
     const bw = this.viewW;
     const bh = this.viewH;
     if (bw !== BASE_W || bh !== BASE_H) {
@@ -2161,14 +2161,13 @@ export class World {
     // a region bigger than the GPU takes in one picture is shown classic
     const R = regionOf(this);
     if (Math.max(R.w, R.h) * TILE > (this.engine.hdPass?.maxTex ?? 4096)) return null;
-    // from the eyes (engine/hd.js, buildStatic's `first`): the walls stood up with every
-    // face, a ceiling. From behind the player on an ordinary map (`third`): the diorama,
-    // built to be seen from any side. A map made for the ground view (a `view` on it or
-    // the game, a ceiling, a `wallHeight`) keeps its own walls from behind too.
-    const view = this.groundView;
+    // from behind the player on an ordinary map (`third`): the diorama, built to be seen
+    // from any side. A map made for the ground view (a `view` on it or the game, a ceiling,
+    // a `wallHeight`) is built as the raycaster stands it (`walls`, engine/hd.js,
+    // buildStatic): its walls as tall as it says, with every face, and a ceiling.
+    const ground = this.groundView === 'third';
     const made = !!(this.map.view ?? this.game.view) || !!(this.map.ceiling ?? this.game.ceiling) || (this.map.wallHeight ?? this.game.wallHeight) !== undefined;
-    const first = view === 'first' || (view === 'third' && made);
-    return { world: this, frame: e.frame, region: R, first, third: view === 'third' && !first };
+    return { world: this, frame: e.frame, region: R, walls: ground && made, third: ground && !made };
   }
 
   // The sky of the modern look: the map's own (`sky`, colours from the top down), or, seen
@@ -2180,7 +2179,7 @@ export class World {
   hdSky(e) {
     const sky = typeof this.map.sky === 'function' ? this.map.sky(this.api, e) : this.map.sky;
     if (sky?.length) return sky;
-    if (sky === false || !this.firstPerson || this.map.parallax?.length || this.map.clock === false || (this.map.ceiling ?? this.game.ceiling)) return null;
+    if (sky === false || !this.thirdPerson || this.map.parallax?.length || this.map.clock === false || (this.map.ceiling ?? this.game.ceiling)) return null;
     const grade = this.map.grade === undefined ? clockGrade(this) : typeof this.map.grade === 'function' ? this.map.grade(this.api, e) : this.map.grade;
     const dark = this.map.dark === undefined ? clockDark(this) : typeof this.map.dark === 'function' ? this.map.dark(this.api, e) : this.map.dark;
     const night = dark?.color || '#0a1030';
@@ -2235,7 +2234,8 @@ export class World {
       const g = c.getContext('2d');
       g.clearRect(0, 0, 64, 64);
       en.draw(g, 32 - Math.round(b.w / 2), 56 - b.h, e, en);
-      out.push({ img: c, x: Math.round(b.x + b.w / 2) - 32, z: b.y + b.h - 1, y: -8, w: 64, h: 64 });
+      // `fresh`: drawn again every frame into the same canvas (hd.js sends the atlas again)
+      out.push({ img: c, x: Math.round(b.x + b.w / 2) - 32, z: b.y + b.h - 1, y: -8, w: 64, h: 64, fresh: true });
     }
     return out;
   }
@@ -2291,16 +2291,16 @@ export class World {
     this.city.marker(ctx, cx, cy, e);
   }
 
-  // The hour's light, for the views that ask (engine/firstperson.js).
+  // The hour's light, for the views that ask (engine/thirdperson.js).
   clockGradeNow() { return clockGrade(this); }
   clockDarkNow() { return clockDark(this); }
 
-  // The map from the player's eyes (engine/firstperson.js), and what the console draws
-  // flat over it: the weather, the bubbles over heads (anchored where the view shows
-  // them), the A hint and the guide's arrow.
-  drawFirst(ctx, e) {
-    const fp = (this.fp ||= new FirstPerson(this));
-    fp.draw(ctx, e);
+  // The map from behind the player (engine/thirdperson.js, the raycaster), and what the
+  // console draws flat over it: the weather, the bubbles over heads (anchored where the
+  // view shows them), the A hint and the guide's arrow.
+  drawGround(ctx, e) {
+    const ray = (this.ray ||= new Raycaster(this));
+    ray.draw(ctx, e);
     const p = this.player;
     const weather = resolveWeather(this.map.weather, this.api, e);
     const at = { x: Math.round(p.heading * 140), y: Math.round(p.py * 0.5) };
@@ -2309,14 +2309,14 @@ export class World {
     // a bubble is drawn as if at its person's feet on the classic screen: the camera
     // offset that puts that point at the head the view shows (or far away, unseen)
     const camFor = (a) => {
-      const s = fp.project(a.px + 8 + (a.ox || 0), 26, a.py + 12 + (a.oy || 0));
+      const s = ray.project(a.px + 8 + (a.ox || 0), 26, a.py + 12 + (a.oy || 0));
       if (!s || s.depth > 12 * TILE) return [1e5, 1e5];
       return [Math.round(a.px + 8 - s.x), Math.round(a.py - 9 - s.y)];
     };
     for (const a of this.actors) if (a !== p && a.emote && a.visible) this.drawEmote(ctx, a, ...camFor(a));
     drawBarks(this, ctx, 0, 0, (a) => (a === p ? [Math.round(p.px) - SCREEN_W / 2 + 8, Math.round(p.py) - SCREEN_H + 30] : camFor(a)));
     this.drawHint(ctx, e, 0, 0);
-    drawGuide(this, ctx, e, 0, 0, (x, up, z) => fp.project(x, up, z) || { x: -1e4, y: -1e4 });
+    drawGuide(this, ctx, e, 0, 0, (x, up, z) => ray.project(x, up, z) || { x: -1e4, y: -1e4 });
   }
 
   // The light of the diorama: the sun, the shade, the hour's grade and dark, and every
@@ -3220,13 +3220,13 @@ export class StoryApi {
     return st;
   }
 
-  // First person: turns the player's eyes to a direction ('left'), a person ('ana') or a
-  // heading in radians, easing over `ms`. In the other views it only faces the quarter.
+  // Third person: turns the player's heading to a direction ('left'), a person ('ana') or a
+  // heading in radians, easing over `ms`. From above it only faces the quarter.
   async look(to, ms = 400) {
     const p = this.player;
     const target = typeof to === 'number' ? to : typeof to === 'string' && this.world.actor(to) && !(to in DIRS)
       ? (() => { const a = this.world.actor(to); return Math.atan2(a.px - p.px, -(a.py - p.py)); })() : headingOf(to);
-    if (!this.world.firstPerson) { p.face(dirOf(target)); return; }
+    if (!this.world.thirdPerson) { p.face(dirOf(target)); return; }
     const from = p.heading;
     let d = target - from;
     d = ((d + Math.PI) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2) - Math.PI;
@@ -3401,7 +3401,7 @@ export class StoryApi {
     const items = [
       ...(isWeb() ? [] : [{ id: 'view', label: t('console.menu.view'), value: () => t(isFull() ? 'console.menu.view_full' : 'console.menu.view_shell'), toggle: () => setFull(!isFull()) }]),
       ...(hdSupported() ? [{ id: 'graphics', label: t('console.menu.graphics'), value: () => t(hdOn() ? 'console.menu.graphics_modern' : 'console.menu.graphics_classic'), toggle: () => setHd(!hdOn()) }] : []),
-      // the map from the player's eyes, where the cartridge leaves it to them (kept per game)
+      // the map from behind the player, where the cartridge leaves it to them (kept per game)
       ...(this.world.eyesChoice ? [{ id: 'camera', label: t('console.menu.camera'), value: () => t(`console.menu.camera_${viewChoice(game)}`), toggle: () => setViewChoice(game, nextView(viewChoice(game))) }] : []),
       // in third person, how far behind and how high the camera is: left and right, or A
       // round the steps

@@ -196,7 +196,7 @@ the same tiles, so what you paint decides what stands up and how. Draw for it:
   (a cart, a horse) it turns to the camera like a person. A puddle, a rug, a shadow is
   `flat`.
 - **Trees**: a solid trunk tile with a crown `top` stands as a trunk under a card (a crown
-  that hides whoever is behind it, and from the eyes a column of trunk); a round canopy
+  that hides whoever is behind it, and from behind a column of trunk); a round canopy
   prop stands as a body. Give the crown a jagged lower edge: a straight one is a shelf.
 - **Water, chasms, ledges** lie flat (`medium`, `reflect`, `step: 'water'`, or
   `wall: false`); from the ground they are seen into the distance, so they want a
@@ -206,7 +206,7 @@ the same tiles, so what you paint decides what stands up and how. Draw for it:
   for the ground view (`wallHeight`, `ceiling`, `wall: 'brick'` on its tiles) keeps its
   own walls from behind too.
 - **Check it with the bench**: `node tools/bench.mjs <url> <id>` (testing.md) draws every
-  dev jump from above, from the eyes and from behind, and a wall that lies, a roof that
+  dev jump from above and from behind, and a wall that lies, a roof that
   stands, a bed on end or a prop as a card shows at once.
 
 ## 7. Errors the GBA era is remembered for — don't repeat them

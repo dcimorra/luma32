@@ -2,7 +2,7 @@
 // and the full-screen effects (fades, flashes, shakes, glitches) every game shares.
 import { SCREEN_W, SCREEN_H, BASE_W, BASE_H, canvas } from './gfx.js';
 import { Hd, hdOn, hdSupported, setHd } from './hd.js';
-import { viewChoice, setViewChoice, nextView } from './firstperson.js';
+import { viewChoice, setViewChoice, nextView } from './thirdperson.js';
 
 export class Engine {
   constructor(display, input) {
@@ -10,8 +10,8 @@ export class Engine {
     this.input = input;
     // holding START switches between the classic and the modern look, anywhere
     input.onHoldStart = () => { if (hdSupported()) setHd(!hdOn()); };
-    // holding SELECT goes round the views (from above, first person, third person), where
-    // the map leaves it to the player
+    // holding SELECT goes round the views (from above, third person), where the map
+    // leaves it to the player
     input.onHoldSelect = () => {
       const w = this.scenes.find((s) => s.eyesChoice);
       if (w) setViewChoice(w.game.id, nextView(viewChoice(w.game.id)));
@@ -25,6 +25,9 @@ export class Engine {
     this.paused = false;
     this.post = [];                     // extra full-screen passes (game overlays)
     this.hdFrame = null;                // the world's picture this frame, in the modern look
+    this.hdBase = null;                 // and the scene it is of
+    this.drawRate = 60;                 // 30: the picture every other frame (the game still ticks at 60)
+    this.asleep = false;                // a page that put the console out of view: nothing ticks or draws
     this.resize();
     input.bindPointer?.(display, SCREEN_W, SCREEN_H);
     addEventListener('resize', () => this.resize());
@@ -52,6 +55,7 @@ export class Engine {
     // game does counts ticks (save.time too), so it plays the same, only N times sooner.
     const turbo = Math.min(8, Math.max(1, Number(new URLSearchParams(location.search).get('turbo')) || 1));
     const loop = (now) => {
+      if (this.asleep) { this.last = now; this.acc = 0; requestAnimationFrame(loop); return; }
       this.acc += Math.min(250, now - this.last) * turbo;
       this.last = now;
       let n = 0;
@@ -60,10 +64,20 @@ export class Engine {
         this.acc -= step;
         n++;
       }
-      if (n) this.draw();
+      if (n && (this.frame % 2 === 0 || !this.halfRate)) this.draw();
       requestAnimationFrame(loop);
     };
     requestAnimationFrame(loop);
+  }
+
+  // The picture every other frame, the game still ticking at 60: when the page asked for
+  // it (`drawRate = 30`: the landing's demos), or in the modern look while a menu or a
+  // dialogue (a scene that says `calm`, engine/ui.js) is open over the world, which is
+  // drawn in 3D under it every time; half the frames there is half the heat on a phone,
+  // and nothing anyone is steering moves.
+  get halfRate() {
+    const top = this.top();
+    return this.drawRate === 30 || (this.hdShown && !!top?.calm && top !== this.hdBase);
   }
 
   // ---------- scenes ----------
@@ -196,6 +210,7 @@ export class Engine {
     const hd = this.fx.glitch > 0 ? null : this.hd;
     const base = hd && list[0]?.drawHd && !list[0].aboveFade ? list[0] : null;
     this.hdFrame = base ? base.drawHd(this) : null;
+    this.hdBase = this.hdFrame ? base : null;
     if (this.hdFrame) ctx.clearRect(0, 0, SCREEN_W, SCREEN_H);
     else { ctx.fillStyle = '#000'; ctx.fillRect(0, 0, SCREEN_W, SCREEN_H); }
     // world-like scenes, then the fade, then UI that must stay readable over black

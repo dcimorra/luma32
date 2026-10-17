@@ -193,6 +193,7 @@ export class Dialog {
     this.top = top;
     this.keep = keep; // leave the box drawn (used under a choice)
     this.opaque = false;
+    this.calm = true;      // nothing fast happens here: the engine may draw the world under it every other frame
     this.aboveFade = true;
     this.pointer = true;
   }
@@ -334,6 +335,7 @@ export class Choice {
     this.cancel = cancel;
     this.sel = initial;
     this.opaque = false;
+    this.calm = true;      // nothing fast happens here: the engine may draw the world under it every other frame
     this.aboveFade = true;
     this.pointer = true;
     const room = under ? BOX.y - 14 : SCREEN_H - 6;
@@ -398,6 +400,7 @@ export class List {
     this.onMove = onMove;
     this.sel = Math.max(0, Math.min(items.length - 1, initial));
     this.opaque = false;
+    this.calm = true;      // nothing fast happens here: the engine may draw the world under it every other frame
     this.aboveFade = true;
     this.pointer = true;
     const hasNote = items.some((i) => i.note);
@@ -538,6 +541,7 @@ export class Menu {
     this.title = title;
     this.sel = 0;
     this.opaque = false;
+    this.calm = true;      // nothing fast happens here: the engine may draw the world under it every other frame
     this.aboveFade = true;
     this.pointer = true;
   }
@@ -646,6 +650,7 @@ export class Log {
   constructor(entries, title = '') {
     this.title = title;
     this.opaque = false;
+    this.calm = true;      // nothing fast happens here: the engine may draw the world under it every other frame
     this.aboveFade = true;
     this.pointer = true;
     this.lines = [];

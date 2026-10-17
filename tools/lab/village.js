@@ -20,7 +20,7 @@
 //   lights), a rug lying flat, a partition that makes a one-cell corridor and a dead end.
 // cellar: made for the ground view (`wallHeight`, `ceiling`, `fog`, walls that show
 //   another tile's picture, pillars, a torch on the player), reached from the big house.
-import { setViewChoice } from '../../engine/firstperson.js';
+import { setViewChoice } from '../../engine/thirdperson.js';
 
 const C = {
   ink: '#22201c', grass: '#5a9a4a', grassHi: '#74b65e', grassLo: '#3e7a34',
@@ -310,7 +310,7 @@ export const villageJumps = [
   { label: 'house, the corridor', run: go('house', 7, 6, 'down', 'third') },
   { label: 'house, the dead end', run: go('house', 7, 8, 'down', 'third') },
   { label: 'house, the alcove', run: go('house', 10, 7, 'down', 'third') },
-  { label: 'house, by the window', run: go('house', 5, 3, 'up', 'first') },
+  { label: 'house, by the window', run: go('house', 5, 3, 'up', 'third') },
   { label: 'cellar', run: go('cellar', 7, 5, 'up') },
   { label: 'cellar, from behind', run: go('cellar', 7, 5, 'up', 'third') },
 ];

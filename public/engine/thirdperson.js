@@ -1,29 +1,33 @@
-// First person: the same map seen from the player's eyes (README "First person"). A
-// third view of the world, beside the classic 3/4 view and the diorama: `view: 'first'`
-// on the game or a map. Nothing in the data changes: the ground is the floor, solid
-// tiles stand up as walls with their own picture, props and people are sprites standing
-// where they stand, `dark` is the fog of the place, every light cuts it, and a light on
-// the player with a `cone` is a torch. The world keeps its rules: cells, warps, triggers,
-// spots, scripts; only the picture and the way of walking are this file's.
+// Third person: the same map seen from the ground, from just behind and over the player
+// (README "Third person"). A second view of the world, beside the view from above:
+// `view: 'third'` on the game or a map, or the player's own choice. Nothing in the data
+// changes: the ground is the floor, solid tiles stand up as walls with their own picture,
+// props and people are sprites standing where they stand, `dark` is the fog of the place,
+// every light cuts it, and a light on the player with a `cone` is a torch. The world keeps
+// its rules: cells, warps, triggers, spots, scripts; only the picture and the way of
+// walking are this file's. (Until 1.26 there was a first-person view too, from the eyes;
+// `view: 'first'` is read as third person now.)
 //
-// A raycaster, as the GBA's first-person games were: one ray a screen column for the
-// walls, a row at a time for the floor and the ceiling, sprites sorted by distance and
-// cut by the walls in front of them. All of it on the 240×160 buffer, in pixels.
+// In the classic look, a raycaster, as the GBA's first-person games were: one ray a
+// screen column for the walls, a row at a time for the floor and the ceiling, sprites
+// sorted by distance and cut by the walls in front of them. All of it on the 240×160
+// buffer, in pixels. The modern look draws the diorama itself from the same camera (hd.js).
 import { SCREEN_W, SCREEN_H, TILE, canvas, hex, pixels } from './gfx.js';
 import { changed } from './host.js';
 
 // The player's own choice, kept per game and per device: any map the cartridge leaves to
-// them is seen from above ('top'), from the eyes ('first') or from just behind and over the
-// player ('third'); and in third person, how far behind the player's middle the camera is
-// and how high, in map pixels, five steps of each (the middle one by default). The view is
-// tipped down to keep the player framed, their feet on one row near the bottom of the
-// screen: the modern look tilts its camera by that angle (`tilt`), the raycaster cannot
-// tilt, so it lowers the horizon by as many screen pixels (`pitch`). ?fp=1 / ?fp=3 / ?fp=0
-// (testing) win over the view kept.
-export const VIEWS = ['top', 'first', 'third'];
+// them is seen from above ('top') or from just behind and over the player ('third'); and
+// in third person, how far behind the player's middle the camera is and how high, in map
+// pixels, five steps of each (the middle one by default). The view is tipped down to keep
+// the player framed, their feet on one row near the bottom of the screen: the modern look
+// tilts its camera by that angle (`tilt`), the raycaster cannot tilt, so it lowers the
+// horizon by as many screen pixels (`pitch`). ?fp=3 / ?fp=0 (testing) win over the view
+// kept. A choice kept as 'first' (before 1.26) is third person.
+export const VIEWS = ['top', 'third'];
+export const asView = (v) => (v === 'first' || v === 'third' ? 'third' : VIEWS.includes(v) ? v : null);
 export const THIRD_STEPS = { far: [64, 84, 108, 136, 170], high: [40, 50, 60, 74, 92] };
 const FEET_ROW = 146;
-const TESTING = (() => { const q = new URLSearchParams(location.search).get('fp'); return q === null ? null : { 1: 'first', 3: 'third' }[q] || 'top'; })();
+const TESTING = (() => { const q = new URLSearchParams(location.search).get('fp'); return q === null ? null : { 1: 'third', 3: 'third' }[q] || 'top'; })();
 // Kept as `luma32.<game>.camera`, which goes to the account with the saves (host.js), so a
 // device that loses its storage (Safari does) gets it back; `at` says which copy is newer.
 const kept = new Map();   // game id -> { view, far, high, at }
@@ -33,7 +37,7 @@ function prefs(game) {
   if (p) return p;
   p = { view: 'top', far: 2, high: 2 };
   try { Object.assign(p, JSON.parse(localStorage.getItem(keyOf(game)) ?? localStorage.getItem(`luma32.camera.${game}`)) || {}); } catch { /* the default */ }
-  if (!VIEWS.includes(p.view)) p.view = 'top';
+  p.view = asView(p.view) || 'top';
   for (const k of ['far', 'high']) p[k] = Math.max(0, Math.min(THIRD_STEPS[k].length - 1, p[k] | 0));
   if (TESTING) p.view = TESTING;
   kept.set(game, p);
@@ -48,7 +52,7 @@ function keep(game, change) {
   } catch { /* a comfort */ }
 }
 export const viewChoice = (game) => prefs(game).view;
-export const setViewChoice = (game, v) => keep(game, { view: VIEWS.includes(v) ? v : 'top' });
+export const setViewChoice = (game, v) => keep(game, { view: asView(v) || 'top' });
 export const nextView = (v) => VIEWS[(VIEWS.indexOf(v) + 1) % VIEWS.length];
 export const thirdCamera = (game) => prefs(game);
 export const setThirdCamera = (game, key, step) => keep(game, { [key]: Math.max(0, Math.min(THIRD_STEPS[key].length - 1, step)) });
@@ -67,7 +71,6 @@ export function dirOf(h) {
 export const forward = (h) => [Math.sin(h), -Math.cos(h)];
 
 const FOV = (66 * Math.PI) / 180;
-const EYE = 16;            // the eyes, in map pixels over the floor
 const MAX_DEPTH = 40;      // cells a ray walks at most
 const PLANE = SCREEN_W / 2 / Math.tan(FOV / 2);                    // the projection plane, in screen pixels
 const FEET_ANGLE = Math.atan((FEET_ROW - SCREEN_H / 2) / PLANE);   // the feet's row, as an angle under the view's axis
@@ -106,14 +109,13 @@ function bigAt(w, cx, cy) {
   return p.def.roof !== undefined || p.w >= 3 || p.h >= 3;
 }
 
-// Where the camera stands: the player's eyes, or in third person behind and over them.
-// x, y: map pixels on the floor; h: the heading the view looks along; eye: its height over
-// the floor; lift: the ground's own height under the player (README "Heights"), which the
-// modern look adds; back: how far behind the player it stands; tilt: how far it looks down
-// (radians) so the player's feet sit on FEET_ROW; pitch: the same as screen pixels of
-// horizon, for the raycaster.
+// Where the camera stands: behind and over the player. x, y: map pixels on the floor; h:
+// the heading the view looks along; eye: its height over the floor; lift: the ground's own
+// height under the player (README "Heights"), which the modern look adds; back: how far
+// behind the player it stands; tilt: how far it looks down (radians) so the player's feet
+// sit on FEET_ROW; pitch: the same as screen pixels of horizon, for the raycaster.
 //
-// In third person the camera follows the player's heading with a little lag, so a turn
+// The camera follows the player's heading with a little lag, so a turn
 // swings the view round instead of snapping it, and it stands as far back as the chosen
 // distance lets it: never past a wall behind (the classic look cannot see through one),
 // never inside a building. Pushed in by one, it climbs: it keeps its distance from the
@@ -127,7 +129,6 @@ export function viewpoint(w) {
   const y = b.y + b.h / 2;
   const lift = w.raised ? p.ez || 0 : 0;
   const h = p.heading ?? headingOf(p.dir);
-  if (!w.thirdPerson) return { x, y, h, eye: EYE, lift, back: 0, pitch: 0, tilt: 0 };
   const wallH = w.map.wallHeight ?? w.game.wallHeight ?? TILE * 2;
   const ceiled = !!(w.map.ceiling ?? w.game.ceiling);
   const third = thirdCamera(w.game.id);
@@ -175,7 +176,7 @@ export function viewpoint(w) {
 
 const smooth = (k) => (k <= 0 ? 0 : k >= 1 ? 1 : k * k * (3 - 2 * k));
 
-export class FirstPerson {
+export class Raycaster {
   constructor(world) {
     this.world = world;
     this.out = canvas(SCREEN_W, SCREEN_H);
@@ -188,8 +189,8 @@ export class FirstPerson {
     this.floorKey = null;
   }
 
-  // Where the camera is (viewpoint above), and the row of the horizon: lowered in third
-  // person, so the view looks down a little.
+  // Where the camera is (viewpoint above), and the row of the horizon: lowered so the
+  // view looks down a little, the player framed.
   eye() { return viewpoint(this.world); }
   horizon(e = this.eye()) { return SCREEN_H / 2 - e.pitch; }
 
@@ -422,8 +423,7 @@ export class FirstPerson {
       list.push({ img, x: (p.x + p.w / 2) * TILE, z: (p.y + 1 - dy - fh / 2) * TILE, w: img.width, h: img.height, alpha: 1 });
     }
     for (const a of w.actors) {
-      // the player's own body is not before their eyes; in third person it is, ahead
-      if ((a === w.player && !w.thirdPerson) || !a.visible || (a.alpha ?? 1) <= 0) continue;
+      if (!a.visible || (a.alpha ?? 1) <= 0) continue;
       const img = a.image();
       if (!img) continue;
       list.push({ img, x: a.px + 8 + a.ox, z: a.py + 12 + a.oy, w: img.width, h: img.height, alpha: a.alpha ?? 1, lift: (a.lift || 0) + (a.alt || 0), actor: a });
@@ -435,8 +435,8 @@ export class FirstPerson {
       sp.right = dx * rx + dz * ry;
     }
     list.sort((a, b) => b.depth - a.depth);
-    // in third person the player is drawn last: nothing standing between hides them
-    if (w.thirdPerson) list.sort((a, b) => (a.actor === w.player) - (b.actor === w.player));
+    // the player is drawn last: nothing standing between hides them
+    list.sort((a, b) => (a.actor === w.player) - (b.actor === w.player));
     const tctx = this.tmp.getContext('2d');
     const mctx = this.mask.getContext('2d');
     for (const sp of list) {
@@ -455,7 +455,7 @@ export class FirstPerson {
       // its shape, drawn beside it: what the light below is cut back to
       if (grade) { mctx.clearRect(x0, 0, x1 - x0, H); mctx.imageSmoothingEnabled = false; }
       let any = false;
-      // the player in third person is never hidden by a wall's corner between them and the camera
+      // the player is never hidden by a wall's corner between them and the camera
       const always = sp.actor === w.player;
       for (let x = x0; x < x1; x++) {
         if (zbuf[x] <= sp.depth && !always) continue;
@@ -486,7 +486,7 @@ export class FirstPerson {
       ctx.globalAlpha = sp.alpha;
       ctx.drawImage(this.tmp, x0, Math.max(0, Math.floor(top)), x1 - x0, Math.ceil(sh) + 1, x0, Math.max(0, Math.floor(top)), x1 - x0, Math.ceil(sh) + 1);
       ctx.globalAlpha = 1;
-      sp.actor && (sp.actor.fpBox = { x: left, y: top, w: sw, h: sh, depth: sp.depth });
+      sp.actor && (sp.actor.rayBox = { x: left, y: top, w: sw, h: sh, depth: sp.depth });
     }
   }
 }

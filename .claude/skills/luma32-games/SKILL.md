@@ -143,15 +143,15 @@ markers) gets none of the engine's checks and comes back with the bugs they prev
 7. **It is made and judged in the modern look, from above and from the ground.** The
    house plays its games in 3D (README "The modern look", `?hd=1`): every screenshot that
    judges art, a map or a scene is taken with `&hd=1`, and the classic look is assumed to
-   follow. The player may also see any map from behind (third person, `&fp=3`) or from
-   the eyes (`&fp=1`), so every map is built for the three views (`art.md` § 6b,
-   `world.md` "Seen from the ground"): walls as a top row over face rows that read as
+   follow. The player may also see any map from behind (third person, `&fp=3`), so
+   every map is built for both views (`art.md` § 6b, `world.md` "Seen from the
+   ground"): walls as a top row over face rows that read as
    faces, roofs that read from above, beds and tables seen from above with a `foot` as
    tall as their `size` (they lie down), buildings as boxes, everything else a prop that
    stands; a `sky` and a `skirt` where an edge is in view, `clock: false` indoors.
    `node tools/sweep-hd.mjs <url> <id>` draws every map on contact sheets from above;
-   `node tools/bench.mjs <url> <id>` draws every dev jump from above, from the eyes and
-   from behind with the errors under each picture (`testing.md`). The cast is drawn with
+   `node tools/bench.mjs <url> <id>` draws every dev jump from above and from behind
+   with the errors under each picture (`testing.md`). The cast is drawn with
    `relief` and the marks of each life (`art.md` § 6.9): from behind, a flat doll is a
    cut-out.
 

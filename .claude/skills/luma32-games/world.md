@@ -146,24 +146,25 @@ chase through the streets — not as decoration.
   street graph), the minimap and missions exist too (README "Roads and traffic" to
   "Missions"): they are for a city the player roams, rarely what a story needs.
 
-## Seen from the ground: first and third person
+## Seen from the ground: third person
 
-Every map the cartridge leaves to the player can be seen from above, from the player's
-eyes or from behind them (README "First person"): the player chooses in the options or
-with SELECT held, and the choice is kept per game. So **every map is seen from the ground
+Every map the cartridge leaves to the player can be seen from above or from behind them
+(README "Third person"): the player chooses in the options or with SELECT held, and the
+choice is kept per game. So **every map is seen from the ground
 too**, and is built for it: in the modern look the diorama stands the same tiles up, with
 the camera a few cells behind the player, turning with them, climbing when a wall or a
 building pushes it in, looking over a low wall from past the map's edge. What that asks
 of the data is in `art.md` § 6b (a wall is a top row over face rows, roofs read from
 above, props that lie, stand or are boxes, a `sky` and a `skirt` where the edge is in
-view, `clock: false` indoors). Look at every map from behind once (`&fp=3`) and from the
-eyes once (`&fp=1`) before wiring the story to it; `node tools/bench.mjs <url> <id>`
+view, `clock: false` indoors). Look at every map from behind once (`&fp=3`) before
+wiring the story to it; `node tools/bench.mjs <url> <id>`
 does it for every dev jump at once (testing.md), and the lab's `village`, `field`,
 `house` and `cellar` (`tools/lab/village.js`) show each case done right.
 
-`view: 'first'` or `view: 'third'` on the game or a map fixes the view there (a dungeon
-from the eyes, a chase from behind); `firstPerson: false` takes the choice away (a
-minigame). A map made for the ground view says `wallHeight` (two cells by default) and
+`view: 'third'` on the game or a map fixes the view there (a dungeon, a chase from
+behind); `thirdPerson: false` takes the choice away (a minigame). There is no first
+person since 1.26: a `view: 'first'` is read as third. A map made for the ground view
+says `wallHeight` (two cells by default) and
 `ceiling: 'tileId'` when it has one, its wall tiles a picture that reads standing up
 (bricks, planks, stone) or `wall: 'otherTileId'` to show another's; water or a chasm says
 `wall: false`; `fog` is how many cells to the full `dark`, a light with `cone` on the

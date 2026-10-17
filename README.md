@@ -147,7 +147,7 @@ library only points to it.
   cast the deeper modelling; a doll's own `relief: false` keeps it flat.
 - `engine/audio.js`: synthesised chiptune sequencer + effects + ambiences.
 - `engine/weather.js`, `engine/vfx.js`, `engine/gfx.js` (`Painter`, the pixel-art API).
-- `engine/firstperson.js`: the map from the player's eyes, a raycaster (`view: 'first'`).
+- `engine/thirdperson.js`: the map from behind the player, and its raycaster for the classic look (`view: 'third'`).
 - `engine/groups.js`: sagas and collections on the shelf (`groups` in `games/index.json`,
   each a folder `public/groups/<id>/` with `group.js` and `locales/es.json`).
 - `engine/report.js`: "Report a problem", from the pause menu: to the game's author (an
@@ -446,24 +446,34 @@ shown classic.
 `node tools/sweep-hd.mjs <url> [game ...]` draws every map of every cartridge in the
 modern look on contact sheets, with a census of what each map uses (`/tmp/luma-sweep`).
 
-## First person
+**What it costs a phone** (since 1.26). Every pass of the modern look runs once per pixel
+of the screen sixty times a second, so on a phone it is kept in check: the picture is drawn
+at up to 0.7 million pixels there (1.6 million elsewhere), the sun's depth is 1024×1024,
+the atlas of standing pictures is drawn and sent to the GPU only when its pictures change
+(sending its 16 MB every frame was the single biggest cost, in every view), and while a
+menu or a dialogue is open over the world the picture is drawn every other frame (the
+game still ticks at 60). A page that embeds the console may ask for the same half rate
+(`engine.drawRate = 30`, the landing's demos) or put it to sleep when its screen is out of
+view (`engine.asleep = true`: nothing ticks or draws).
 
-`view: 'first'` on the game or on a map (since 1.15) shows that map from the player's eyes,
-as the GBA's first-person games did, with everything the map already says: the ground is
-the floor, solid tiles stand up as walls with their own picture repeated down them, props
-and people are sprites standing where they stand, `dark` is the fog of the place and
-every light cuts it, `grade` is its light. Left and right turn, up and down walk the way
-the eyes look, B runs; A talks to, examines or triggers whatever the eyes point at within
-a cell and a half; walking into a door takes it. Cells, warps, triggers, spots, scripts
-and saves are exactly the same, so a house in first person sits in an ordinary game and
-the audit and the guide still know their way (the guide's arrow floats over the goal).
-In the modern look (since 1.15.1) the same map is built with every face of its walls, a
-ceiling where it says one, and seen from the eyes with the diorama's light: the sun's
-shadows, lights that pool and bloom, a torch as a beam, the dark as a fog thickening with
-the distance, people with relief turned to face the eyes, buildings as boxes.
+## Third person
+
+`view: 'third'` on the game or on a map (since 1.17) shows that map from the ground, the
+camera a little way behind and over the player, tipped down, so they are seen from behind
+walking ahead of it, with everything the map already says: the ground is the floor, solid
+tiles stand up as walls with their own picture repeated down them, props and people are
+sprites standing where they stand, `dark` is the fog of the place and every light cuts it,
+`grade` is its light. Left and right turn, up and down walk the way the player faces, B
+runs; A talks to, examines or triggers whatever is ahead within a cell and a half; walking
+into a door takes it. Cells, warps, triggers, spots, scripts and saves are exactly the
+same, so a house seen from the ground sits in an ordinary game and the audit and the guide
+still know their way (the guide's arrow floats over the goal). Until 1.26 there was a
+first-person view too, from the player's eyes; it is gone (it asked the most of a phone for
+the least), and `view: 'first'`, a camera kept as first person and `?fp=1` are all read as
+third person.
 
 ```js
-view: 'first',                       // the game, or one map
+view: 'third',                       // the game, or one map
 wallHeight: 32, ceiling: 'planks',   // walls two cells tall (map pixels); a tile overhead, else the map's `sky` or `void`
 fog: 7,                              // cells to the full `dark` (7 with a dark, 24 without)
 turnSpeed: 0.05,                     // radians a frame
@@ -473,29 +483,29 @@ sea:   { solid: true, wall: false },          // blocks the feet, lies flat (wat
 cliff: { solid: true, wall: 'cliff_face' },   // the picture its wall shows, when not its own
 // a torch: a light on the player with the beam's width in radians
 actors: [{ id: 'player', light: { r: 100, cone: 1.1, color: '#ffe0a0' } }]   // or api.player.light = {...}
-await api.look('left'); await api.look('ana', 600); await api.look(Math.PI / 4)   // turn the eyes; a quarter in the other views
+await api.look('left'); await api.look('ana', 600); await api.look(Math.PI / 4)   // turn the player's heading; a quarter from above
 ```
 
-`api.player.heading` is where the eyes point (radians, 0 north, π/2 east), kept in the
-save. In the classic look heights are not shown (raised cells lie flat) and a prop bigger
-than a cell is a card, not a block; the modern look stands both up.
+`api.player.heading` is where the player faces (radians, 0 north, π/2 east), kept in the
+save. In the classic look the map is drawn by a raycaster (`engine/thirdperson.js`), as
+the GBA's first-person games were: heights are not shown (raised cells lie flat), a prop
+bigger than a cell is a card, not a block, and the camera never stands past a wall behind
+(the raycaster cannot see through one). The modern look stands both up and is the view
+below.
 
-`view: 'third'` (since 1.17) is the same with the camera a little way behind and over the
-player, tipped down, so they are seen from behind walking ahead of it; it turns as they
-turn (following their heading with a little lag since 1.20, so a turn swings the view round
-instead of snapping it). It never stands inside a building (a prop three cells wide or
-tall, or with `roof`), and in the classic look never past a wall behind (the raycaster
-cannot see through one). Pushed in by either, it climbs (since 1.20): it keeps its distance
-from the player, from higher up, so they stay the same size on the screen and a corner
-turns the view towards one from above instead of swallowing them; it comes in at once and
-goes back out gently. In the modern look it looks over a wall lower than it (up to two rows
-under the camera's height), from past the map's edge if need be, as a room is seen over its
-near wall; and whatever still stands between it and the player thins out in a circle round
-them (in the classic look the player is drawn over it, since 1.18.3): a wall or a tree to
-almost nothing, a person at the player's heels to a half ghost, never the player. What
-stands right at the camera thins out too (since 1.20.1): a companion at the eyes in first
-person, and the player themselves when a cornered camera under a ceiling comes in over
-their shoulder.
+The camera turns as the player turns (following their heading with a little lag since
+1.20, so a turn swings the view round instead of snapping it). It never stands inside a
+building (a prop three cells wide or tall, or with `roof`). Pushed in by one, or by a wall
+behind, it climbs (since 1.20): it keeps its distance from the player, from higher up, so
+they stay the same size on the screen and a corner turns the view towards one from above
+instead of swallowing them; it comes in at once and goes back out gently. In the modern
+look it looks over a wall lower than it (up to two rows under the camera's height), from
+past the map's edge if need be, as a room is seen over its near wall; and whatever still
+stands between it and the player thins out in a circle round them (in the classic look
+the player is drawn over it, since 1.18.3): a wall or a tree to almost nothing, a person
+at the player's heels to a half ghost, never the player. What stands right at the camera
+thins out too (since 1.20.1): a companion at the camera, and the player themselves when a
+cornered camera under a ceiling comes in over their shoulder.
 
 In the modern look the map seen from behind the player is the diorama itself (since 1.20):
 walls with the faces and tops their 3/4 art draws, buildings as boxes, heights as they
@@ -503,43 +513,43 @@ stand, built to be seen from any side (no wall is cut down for the camera, and e
 and raised cell has its back face too), and the camera stands on the ground's own height
 under the player. The player is what is in focus: only the far distance softens, a little.
 A map made for the ground view (a `view` on it or the game, a `ceiling`, a `wallHeight`)
-keeps the first-person build from behind too: its walls as tall as it says, with every
-face, its ceiling. From the ground a map without a `skirt` gets six cells of one, so the
-ground goes on past its edges instead of ending in a cut (a door on the edge is not carried
-on), and a map without a `sky` gets the hour's when it is outdoors: blue by day, the dark's
-colour at night, the dusk's or the dawn's grade between (the map's own `grade` and `dark`
-where it has them). Indoors is a map that says `clock: false`, `sky: false` or has a
-ceiling; from above there is no default sky. The dark from the ground is a fog that
-thickens with the distance from the player, not from the camera behind them.
+is built instead as the raycaster stands it: its walls as tall as it says, with every
+face of their own picture, and its ceiling where it says one. From the ground a map
+without a `skirt` gets six cells of one, so the ground goes on past its edges instead of
+ending in a cut (a door on the edge is not carried on), and a map without a `sky` gets the
+hour's when it is outdoors: blue by day, the dark's colour at night, the dusk's or the
+dawn's grade between (the map's own `grade` and `dark` where they have them). Indoors is a
+map that says `clock: false`, `sky: false` or has a ceiling; from above there is no default
+sky. The dark from the ground is a fog that thickens with the distance from the player,
+not from the camera behind them.
 
-From the ground (first and third person, modern look) people, animals and small things turn
-to face the eyes, and so does what is drawn in profile (a dragon, a cart: a picture that is
-not about the same mirrored); something big drawn from the front — a prop three cells wide
-or tall, a tent, a tree, a tower — does not (since 1.19; profiles since 1.19.1): it
-stands as it is, as deep as 0.8 of its height in cells (up to its width; `depth` on the tile
-says otherwise), each row of its picture as deep as it is wide, so from the side it keeps its
-outline, and its sides carry its own picture round from front to back. Buildings (`roof`, or
-the big ones the modern look builds as boxes) never turned. Everything else is as in
-first person: the same walk, the same A, the same map. How far behind and how high the
-camera is the player sets in the options ("Distancia", "Altura", five steps each, shown
-while in third person; kept per game, on each device), and the view tips down to keep their feet on
-one row near the bottom of the screen, whatever the distance.
+From the ground (modern look) people, animals and small things turn to face the camera,
+and so does what is drawn in profile (a dragon, a cart: a picture that is not about the
+same mirrored); something big drawn from the front — a prop three cells wide or tall, a
+tent, a tree, a tower — does not (since 1.19; profiles since 1.19.1): it stands as it is,
+as deep as 0.8 of its height in cells (up to its width; `depth` on the tile says
+otherwise), each row of its picture as deep as it is wide, so from the side it keeps its
+outline, and its sides carry its own picture round from front to back. Buildings (`roof`,
+or the big ones the modern look builds as boxes) never turn. How far behind and how high
+the camera is the player sets in the options ("Distancia", "Altura", five steps each,
+shown while in third person; kept per game, on each device), and the view tips down to
+keep their feet on one row near the bottom of the screen, whatever the distance.
 
 The pad is omnidirectional (since 1.18): the touch cross gives the thumb's own angle
 besides the arm it is nearest (only the angle: the pace is always the same, as with the
 arrows), and sinks leaning that way. It is drawn as a disc
 d-pad (1.18.1): a round plate with the cross moulded on it in facets, and the rim lit where
-the thumb points. First and third person read it (across turns, along walks, at a
-slant both, at the arrows' pace), and so do free movement and the compass of a vehicle; the grid, the menus and
-everything that reads the four buttons see them as before.
+the thumb points. Third person reads it (across turns, along walks, at a slant both, at the
+arrows' pace), and so do free movement and the compass of a vehicle; the grid, the menus
+and everything that reads the four buttons see them as before.
 
 The player may choose it too (since 1.16): "Cámara" in the options, or SELECT held for a
-moment, goes round the view from above, first person and third person on any map the
-cartridge leaves to them, kept per game (`luma32.<game>.camera`, which travels with an account's
-saves since 1.19.2) (`?fp=1`, `?fp=3`, `?fp=0` for testing). A map or a game that says a `view`
-keeps it; `firstPerson: false` on either takes the choice away (a minigame, a chase), and
-at a wheel it is always the view from above. A tap on SELECT still reaches the game when
-it is let go, as START does.
+moment, goes between the view from above and third person on any map the cartridge leaves
+to them, kept per game (`luma32.<game>.camera`, which travels with an account's saves since
+1.19.2) (`?fp=3`, `?fp=0` for testing). A map or a game that says a `view` keeps it;
+`thirdPerson: false` on either (`firstPerson: false` still works) takes the choice away (a
+minigame, a chase), and at a wheel it is always the view from above. A tap on SELECT still
+reaches the game when it is let go, as START does.
 
 ## Journal and credits
 
@@ -1382,9 +1392,9 @@ puts the player there, in the view it is about. After changing the engine, link 
 (`ln -s ../../tools/lab public/games/lab`), boot `?game=lab`, then remove the link: the
 folder under `public/` is served to everyone.
 
-`node tools/bench.mjs <url> <id> [--match <label parts>] [--views top,first,third]` walks
-a cartridge's dev jumps in the modern look and looks at each from above, from the eyes and
-from behind (and from behind after a turn and after a few steps) on contact sheets, with
+`node tools/bench.mjs <url> <id> [--match <label parts>] [--views top,third]` walks
+a cartridge's dev jumps in the modern look and looks at each from above and from behind
+(and from behind after a turn and after a few steps) on contact sheets, with
 every console error and `[luma]` warning under the picture it came up in, and a line a jump
 on the console (`/tmp/luma-bench`, `OUT=` elsewhere; the exit code is 1 when anything came
 up). `node tools/bench.mjs http://127.0.0.1:8765 lab` after a change to the engine is the

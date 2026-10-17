@@ -6,7 +6,7 @@
 // real depth, a bloom, and the console's own drawing (dialogue, menus, HUD, fades) flat on top, at the screen's
 // resolution. Nothing a cartridge writes changes: a game cannot tell which look it is in.
 import { buildStatic, gatherCards, groundKey, bodyMesh, picture } from './diorama.js';
-import { forward, viewpoint } from './firstperson.js';
+import { forward, viewpoint } from './thirdperson.js';
 import { canvas, TILE } from './gfx.js';
 
 const KEY = 'luma32.gfx';
@@ -20,19 +20,21 @@ const ACROSS = 236;
 // Light travels this way: down, towards the east and the north, so shadows fall behind
 // things and the faces of walls, which look south, are lit.
 const SUN = norm([0.45, -1, -0.5]);
-const SHADOW_SIZE = 2048;
+// the sun's depth: 1024 is a map pixel every 0.6 of a texel over the span, plenty for
+// pixel art (2048 was four times the fragments of the screen itself, every frame, on a phone)
+const SHADOW_SIZE = 1024;
 const SHADOW_SPAN = 300;               // map pixels around the camera's target
 const DECAL_SIDE = 64;                 // the floor's picture reaches this far past the view
 const DECAL_TOP = 200;                 // and this far above it
-// first person: the eyes, in map pixels over the floor, and how wide they see
-const FP_EYE = 16;
-const FP_FOV = (66 * Math.PI) / 180;
-const FP_FOCUS = 100;                  // the sun's shadows and the sharp distance sit this far ahead
-// third person: how much the far distance softens past the player, and from how far
-// (times their distance from the camera) to where it is softest
+// third person: how wide the camera sees (the raycaster's width of view, engine/thirdperson.js),
+// how much the far distance softens past the player, and from how far (times their distance
+// from the camera) to where it is softest
+const GROUND_FOV = (66 * Math.PI) / 180;
 const TP_DOF = 0.55;
 const TP_DOF_RANGE = [0.7, 2.6, 0.45, 0.75];   // and nearer than the player: a companion at their heels stays sharp
 const TOP_DOF_RANGE = [0.06, 0.4, 0.1, 0.3];
+
+const COARSE = typeof matchMedia === 'function' ? matchMedia('(pointer: coarse)') : null;
 
 let supported;
 export function hdSupported() {
@@ -65,7 +67,7 @@ uniform mat4 uVP;
 uniform mat4 uLightVP;
 uniform vec3 uOffset;   // where a body stands (zero for the map and the cards)
 uniform bool uLie;      // a body seen from above (a vehicle): its picture lies on the ground
-uniform vec2 uTurn;     // first person: cos and sin of the turn a body makes to face the eyes
+uniform vec2 uTurn;     // from the ground: cos and sin of the turn a body makes to face the camera
 uniform float uPivot;   // and the middle of its width, which it turns about
 out vec2 vUv;
 out vec3 vN;
@@ -100,7 +102,7 @@ uniform bool uDecal;    // the floor's picture: blended, not cut out
 uniform vec4 uLight[${MAX_LIGHTS}];      // x y z (map pixels), radius
 uniform vec4 uLightColor[${MAX_LIGHTS}]; // rgb, strength
 uniform vec4 uLightDir[${MAX_LIGHTS}];   // a torch: the way it points (x z) and the cosine of its half angle; w 0 for a lamp
-uniform vec3 uEye;      // first person: where the eyes are
+uniform vec3 uEye;      // from the ground: where the fog is measured from (the player)
 uniform float uFogFar;  // and how far the dark reaches its full (0: the dark is everywhere, as in the classic look)
 uniform vec3 uSeeFrom;  // third person: the camera, and the player it must always see:
 uniform vec3 uSeeTo;    // whatever stands between them thins out round the line between,
@@ -214,7 +216,7 @@ uniform bool uHasBack;
 uniform vec2 uOut;
 uniform vec2 uClip;     // near, far
 uniform float uFocus;   // the distance in focus: the camera's target
-uniform float uDof;     // how much what is off the focus softens (0 in first person)
+uniform float uDof;     // how much what is off the focus softens
 uniform vec4 uDofRange; // off the focus (times it) where the softening starts and where it is full: past it (xy), before it (zw)
 uniform vec3 uHaze;     // the colour of the distance: the sky's foot, or the dark
 uniform float uMosaic;  // a fade in blocks (engine.js): their size in screen pixels, or 0
@@ -337,9 +339,13 @@ export class Hd {
     this.ok = true;
   }
 
-  // The canvas is as big as the screen it is shown on, up to about 1.6 million pixels.
+  // The canvas is as big as the screen it is shown on, up to about 1.6 million pixels; on
+  // a phone (a coarse pointer, the short side under 600 CSS pixels, as engine/shell.js
+  // tells one) up to 0.7 million: pixel art needs no more, and every pass below runs once
+  // per pixel of it, sixty times a second, on a battery.
   size(w, h) {
-    const k = Math.min(1, Math.sqrt(1.6e6 / (w * h)));
+    const phone = COARSE?.matches && Math.min(innerWidth, innerHeight) < 600;
+    const k = Math.min(1, Math.sqrt((phone ? 0.7e6 : 1.6e6) / (w * h)));
     w = Math.round(w * k);
     h = Math.round(h * k);
     if (this.canvas.width === w && this.canvas.height === h && this.colorTex) return;
@@ -361,7 +367,7 @@ export class Hd {
   // A script may turn it (world.cam3d, api.view3d: yaw, pitch, zoom), and a zoom of the
   // visual effects (api.zoom) is a dolly towards its point.
   aim(world, aspect = this.cam?.aspect ?? 1.5) {
-    if (world.firstPerson) return this.eyes(world, aspect);
+    if (world.thirdPerson) return this.behind(world, aspect);
     let tx = world.cam.x + world.viewW / 2;
     let tz = world.cam.y + world.viewH / 2;
     const v = world.cam3d || {};
@@ -394,27 +400,24 @@ export class Hd {
     return this.cam;
   }
 
-  // First person: the camera at the player's eyes, looking the way they face, with the
-  // raycaster's width of view (engine/firstperson.js); what the sun's shadows and the
-  // sharp distance are about sits a little way ahead.
-  // Third person: the same camera from behind and over the player (viewpoint), on the
-  // ground's own height under them, tipped down by the viewpoint's tilt so their feet keep
-  // their row; the player is what is in focus.
-  eyes(world, aspect) {
+  // Third person: the camera from behind and over the player (viewpoint), on the ground's
+  // own height under them, looking the way they face with the raycaster's width of view
+  // (engine/thirdperson.js), tipped down by the viewpoint's tilt so their feet keep their
+  // row; the player is what is in focus.
+  behind(world, aspect) {
     const v = viewpoint(world);
-    const third = world.thirdPerson;
     const [fx, fz] = forward(v.h);
-    const eye = [v.x, v.lift + (third ? v.eye : FP_EYE), v.y];
+    const eye = [v.x, v.lift + v.eye, v.y];
     const ct = Math.cos(v.tilt);
     const st = Math.sin(v.tilt);
-    const dist = third ? Math.max(24, Math.hypot(v.back, v.eye)) : FP_FOCUS;
+    const dist = Math.max(24, Math.hypot(v.back, v.eye));
     const target = [eye[0] + fx * ct * dist, eye[1] - st * dist, eye[2] + fz * ct * dist];
-    const fovY = 2 * Math.atan(Math.tan(FP_FOV / 2) / aspect);
+    const fovY = 2 * Math.atan(Math.tan(GROUND_FOV / 2) / aspect);
     const near = 2;
     const far = 4000;
     const view = lookAt(eye, target, [0, 1, 0]);
     const proj = perspective(fovY, aspect, near, far);
-    this.cam = { eye, target, dist, near, far, aspect, vp: mul(proj, view), first: true, third, heading: v.h };
+    this.cam = { eye, target, dist, near, far, aspect, vp: mul(proj, view), ground: true, heading: v.h };
     return this.cam;
   }
 
@@ -441,21 +444,22 @@ export class Hd {
     return { x: c.eye[0] + d[0] * t, y: c.eye[2] + d[2] * t };
   }
 
-  // frame: { world, frame, region, first, third } (world.drawHd): `first` builds the map
-  // as seen from the eyes (walls with every face, a ceiling), `third` as the diorama seen
-  // from any side; ui: the 240x160 buffer with the console's drawing.
-  render({ world, frame, region: R, first = false, third = false }, ui) {
+  // frame: { world, frame, region, walls, third } (world.drawHd): `walls` builds a map
+  // made for the ground view as the raycaster stands it (walls with every face, a
+  // ceiling), `third` an ordinary map as the diorama seen from any side; ui: the 240x160
+  // buffer with the console's drawing.
+  render({ world, frame, region: R, walls = false, third = false }, ui) {
     const gl = this.gl;
     const W = this.canvas.width;
     const H = this.canvas.height;
     const e = world.engine;
-    const ground = first || third;   // seen from the ground: the camera turns with the player
+    const ground = walls || third;   // seen from the ground: the camera turns with the player
 
     // the region's picture and its geometry, again when a tile or the animation changes
-    const key = `${groundKey(world, R)}${first ? ':first' : third ? ':third' : ''}`;
+    const key = `${groundKey(world, R)}${walls ? ':walls' : third ? ':third' : ''}`;
     if (key !== this.key) {
       this.key = key;
-      this.staticCount = upload(gl, this.staticGeo, buildStatic(world, R, { first, third }));
+      this.staticCount = upload(gl, this.staticGeo, buildStatic(world, R, { walls, third }));
       this.animF = null;
     }
     this.ground = ground;
@@ -470,8 +474,7 @@ export class Hd {
       gl.generateMipmap(gl.TEXTURE_2D);
     }
     const c = this.aim(world, W / H);
-    // the player's own body is not before their eyes
-    const cardList = [...gatherCards(world, frame, R), ...world.hdEntityCards(e)].filter((k) => !ground || world.thirdPerson || k.actor !== world.player);
+    const cardList = [...gatherCards(world, frame, R), ...world.hdEntityCards(e)];
     this.cardCount = upload(gl, this.cardGeo, this.cards(cardList));
 
     // what lies on the floor this frame, over the view and well past its top edge (the
@@ -601,9 +604,9 @@ export class Hd {
     gl.uniform2f(p.u.uClip, c.near, c.far);
     gl.uniform1f(p.u.uFocus, c.dist);
     // depth of field: round the player from above; from behind them only the far distance
-    // softens, a little; from the eyes nothing does
-    gl.uniform1f(p.u.uDof, third ? TP_DOF : first ? 0 : 1);
-    gl.uniform4fv(p.u.uDofRange, third ? TP_DOF_RANGE : TOP_DOF_RANGE);
+    // softens, a little
+    gl.uniform1f(p.u.uDof, ground ? TP_DOF : 1);
+    gl.uniform4fv(p.u.uDofRange, ground ? TP_DOF_RANGE : TOP_DOF_RANGE);
     gl.uniform3fv(p.u.uHaze, look.haze || [0, 0, 0]);
     // a fade in blocks: the picture itself breaks up here, the colour comes from the buffer
     const fx = e.fx;
@@ -629,8 +632,8 @@ export class Hd {
     gl.bindVertexArray(this.cardGeo.vao);
     gl.drawArrays(gl.TRIANGLES, 0, this.cardCount);
     // the bodies, each its own mesh and picture, kept while its frame of animation lives
-    // from the ground every body turns to face the eyes, about the middle of its width
-    const turn = this.ground && this.cam?.first ? this.cam.heading : 0;
+    // from the ground every body turns to face the camera, about the middle of its width
+    const turn = this.ground && this.cam?.ground ? this.cam.heading : 0;
     gl.uniform2f(prog.u.uTurn, Math.cos(turn), Math.sin(turn));
     for (const c of this.bodyList) {
       const b = this.body(c.img, c.depth, c.shape);
@@ -675,11 +678,21 @@ export class Hd {
     return mul(ortho(-SHADOW_SPAN, SHADOW_SPAN, -SHADOW_SPAN, SHADOW_SPAN, 100, 1100), view);
   }
 
-  // The cards of this frame packed into one picture, and their quads.
+  // The cards of this frame packed into one picture, and their quads. The same pictures in
+  // the same order pack the same way, so the picture is drawn and sent to the GPU again
+  // only when they change (a frame of animation, someone new on screen): sending its 16 MB
+  // every frame was the modern look's single biggest cost.
   cards(list) {
     const ctx = this.atlas.getContext('2d');
     const S = this.atlasSize;
-    ctx.clearRect(0, 0, S, S);
+    const ids = (this.atlasIds ||= new WeakMap());
+    let sig = '';
+    let fresh = false;
+    for (const c of list) if (!c.body) { let k = ids.get(c.img); if (k === undefined) { k = this.atlasN = (this.atlasN || 0) + 1; ids.set(c.img, k); } sig += `${k},`; fresh ||= !!c.fresh; }
+    // a `fresh` card is drawn again into the same canvas every frame (world.hdEntityCards)
+    const same = !fresh && sig === this.atlasSig;
+    this.atlasSig = sig;
+    if (!same) ctx.clearRect(0, 0, S, S);
     const placed = new Map();
     let x = 1;
     let y = 1;
@@ -694,7 +707,7 @@ export class Hd {
         if (x + c.w + 1 > S) { x = 1; y += row + 2; row = 0; }
         if (y + c.h + 1 > S) { if (!this.warnedFull) { this.warnedFull = true; console.warn('[luma] modern look: too many props on screen for one picture; some are left out'); } continue; }
         at = { x, y };
-        ctx.drawImage(c.img, x, y);
+        if (!same) ctx.drawImage(c.img, x, y);
         placed.set(c.img, at);
         x += c.w + 2;
         row = Math.max(row, c.h);
@@ -743,8 +756,8 @@ export class Hd {
         continue;
       }
       const z = c.z;
-      if (this.ground && this.cam?.first) {
-        // turned to face the eyes, about its middle
+      if (this.ground && this.cam?.ground) {
+        // turned to face the camera, about its middle
         const h = this.cam.heading;
         const rx = Math.cos(h) * (c.w / 2);
         const rz = Math.sin(h) * (c.w / 2);
@@ -756,11 +769,13 @@ export class Hd {
       const n = [0, 0.6, 0.8];
       for (const [px, py, u, v] of [[x0, y1, u0, v0], [x1, y1, u1, v0], [x1, y0, u1, v1], [x0, y1, u0, v0], [x1, y0, u1, v1], [x0, y0, u0, v1]]) out.push(px, py, z, u, v, ...n);
     }
-    const gl = this.gl;
-    gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, this.cardTex);
-    gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, this.atlas);
+    if (!same) {
+      const gl = this.gl;
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, this.cardTex);
+      gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, this.atlas);
+    }
     return new Float32Array(out);
   }
 }
