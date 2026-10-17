@@ -43,6 +43,22 @@
 // wings: a colour (the membrane; the frame a shade darker) or { color, membrane, clipped,
 //   bound }: folded behind the shoulders. wingsOpen: true spreads them (the frame grows to
 //   28×24, centred); the fly pose spreads them anyway (unless bound).
+// A face and clothes that have lived (all opt-in: a spec without them draws as it always did):
+// relief: true: deeper modelling — the collar in the chin's shadow, the far side of the
+//   body two tones deep, the face and the hands rounded off on their far side.
+// lines: true: an older face (lines under the eyes and beside the mouth, in the skin's shade).
+// weathered: true: a face that has seen weather — the cheekbones and the sides of the face
+//   in the skin's shade, and that shade deeper and ruddier.
+// scar: 'cheek' | 'brow' | 'eye' (across the eye, which is shut), in scarColor.
+// eyepatch: 'left' | 'right' (the character's own left or right).
+// belt: a colour, at the waist, with a buckle in buckle (default brass).
+// boots: a colour; the shoes and a row of shaft above them.
+// gloves: a colour, on the hands.
+// sleeves: 'rolled': the forearms bare (without a coat).
+// scarf: a colour, round the neck, an end hanging down the front.
+// apron: a colour, from the chest to the knees (under a coat, if any).
+// worn: true: patched clothes — a patch on a knee and one on an elbow, in the darker tones.
+// hat also: 'bandana' (tied round the head, the knot's tails behind), in hatColor.
 // outline: the silhouette's dark (default a cool near-black). Outlines are selective: the
 //   outer edge leans to the colour it surrounds and the lines inside the body (sleeve
 //   against torso, hair against face) are the darkest tone of their material.
@@ -376,6 +392,11 @@ const HAT = {
     up: ['', '', '', '..oo........oo..'],
     left: ['', '', '', '.oGWGGo.........', '..oGGo..........'],
   },
+  bandana: {
+    down: ['', '.....oooooo.....', '....oQQRQQQo....', '...oQQQQQQQQo...', '...oqqqqqqqqo...', '...o........o...'],
+    up: ['', '.....oooooo.....', '....oQQQQQQo....', '...oQQQQQQQQo...', '...oqqqqqqqqo...', '...o.......qo...', '...........q....'],
+    left: ['', '.....oooooo.....', '....oQQRQQQo....', '...oQQQQQQQQo...', '...oqqqqqqqqqo..', '...o........qo..', '.............q..'],
+  },
   // a cowl: the hair outside it is taken away (`hides`), the face shows in its opening
   hood: {
     hides: true,
@@ -653,7 +674,81 @@ function compose(base, layer, offset = 0) {
 const hatOf = (spec) => (spec.hood ? 'hood' : spec.hat);
 const shortRows = (rows) => [EMPTY, EMPTY, ...rows.slice(0, 15), ...rows.slice(16, 19), ...rows.slice(20)];
 
-function frameRows(dir, pose, spec, run = null) {
+// The marks of a life on the face, before the hair goes on: lines, weather, a scar, a patch
+// over one eye (shown from the side on the side it is on: `facing`).
+function faceRows(rows, dir, spec, facing) {
+  const r = rows.map((row) => row.split(''));
+  const put = (x, y, k) => { if (r[y] && r[y][x] && r[y][x] !== '.' && r[y][x] !== 'o') r[y][x] = k; };
+  const side = dir === 'left';
+  if (spec.lines) {
+    if (side) { put(4, 9, 's'); put(5, 10, 's'); } else if (dir === 'down') { put(5, 9, 's'); put(10, 9, 's'); put(6, 10, 's'); put(9, 10, 's'); }
+  }
+  if (spec.weathered) {
+    if (side) { put(5, 8, 's'); put(5, 9, 's'); } else if (dir === 'down') { put(4, 8, 's'); put(11, 8, 's'); put(5, 9, 's'); put(10, 9, 's'); }
+  }
+  if (spec.scar && dir !== 'up') {
+    const marks = {
+      cheek: side ? [[5, 8], [6, 9]] : [[10, 8], [11, 9]],
+      brow: side ? [[3, 5], [4, 6]] : [[5, 5], [6, 6]],
+      eye: side ? [[3, 5], [4, 6], [4, 9]] : [[5, 5], [6, 6], [6, 9]],
+    }[spec.scar] || [];
+    for (const [x, y] of marks) put(x, y, 'n');
+    // across the eye, the eye is shut
+    if (spec.scar === 'eye') for (const [x, y] of side ? [[4, 7], [4, 8]] : [[6, 7], [6, 8]]) if (r[y][x] === 'E') r[y][x] = 's';
+  }
+  if (spec.eyepatch && dir !== 'up') {
+    if (side) {
+      if (facing === spec.eyepatch) { for (const [x, y] of [[4, 7], [4, 8], [5, 7], [5, 8]]) put(x, y, 'E'); for (let x = 3; x <= 6; x++) put(x, 6, 'E'); }
+    } else {
+      const x0 = spec.eyepatch === 'right' ? 8 : 5;
+      for (let y = 7; y <= 8; y++) for (let x = x0; x < x0 + 3; x++) put(x, y, 'E');
+      for (let x = x0 - 1; x < x0 + 4; x++) put(x, 6, 'E');
+    }
+  }
+  return r.map((row) => row.join(''));
+}
+
+// What is worn over the body (standard layout: torso 12–17, hips 18, legs from 19):
+// `under` goes before the coat (an apron, rolled sleeves), `over` after it (a belt, a
+// scarf, boots, gloves, patches).
+function wearRows(rows, dir, spec, when) {
+  const r = rows.map((row) => row.split(''));
+  const side = dir === 'left';
+  const at = (x, y) => (r[y] && r[y][x]) || '.';
+  const set = (x, y, k) => { if (r[y] && r[y][x]) r[y][x] = k; };
+  if (when === 'under') {
+    if (spec.sleeves === 'rolled' && !spec.coat) {
+      for (let y = 15; y <= 17; y++) for (const x of side ? [5, 6] : [3, 4, 11, 12]) if ('Tt'.includes(at(x, y))) set(x, y, 'S');
+    }
+    if (spec.apron && dir !== 'up') {
+      const xs = side ? [6, 7, 8] : [5, 6, 7, 8, 9, 10];
+      for (let y = 14; y <= 17; y++) for (const x of xs) if ('TtXU'.includes(at(x, y))) set(x, y, x === xs[xs.length - 1] ? '9' : '8');
+      for (let y = 19; y <= 20; y++) for (const x of xs) if ('Bb'.includes(at(x, y))) set(x, y, y === 20 || x === xs[xs.length - 1] ? '9' : '8');
+    }
+    return r.map((row) => row.join(''));
+  }
+  if (spec.boots) {
+    for (let y = 19; y < r.length; y++) for (let x = 0; x < 16; x++) {
+      if (at(x, y) === 'F') { set(x, y, '3'); if ('Bb'.includes(at(x, y - 1))) set(x, y - 1, '3'); }
+    }
+  }
+  if (spec.gloves) for (let y = 13; y < r.length; y++) for (let x = 0; x < 16; x++) if (at(x, y) === 'S') set(x, y, '7');
+  if (spec.belt) {
+    for (let x = 0; x < 16; x++) if ('Bb'.includes(at(x, 18)) || (spec.coat && 'Cc'.includes(at(x, 18)))) set(x, 18, '1');
+    if (!side) set(8, 18, 'a');
+  }
+  if (spec.scarf) {
+    for (const x of side ? [6, 7, 8, 9] : [5, 6, 7, 8, 9, 10]) if ('TtUXCcV'.includes(at(x, 12))) set(x, 12, '5');
+    if (dir !== 'up') { const x = side ? 6 : 9; if (at(x, 13) !== '.') set(x, 13, '5'); if (at(x, 14) !== '.') set(x, 14, '6'); }
+  }
+  if (spec.worn) {
+    for (const [x, y] of side ? [[6, 20], [6, 21], [7, 21]] : [[5, 20], [6, 20], [5, 21]]) if (at(x, y) === 'B') set(x, y, 'b');
+    for (const [x, y] of side ? [[5, 15], [5, 16]] : [[11, 15], [12, 15], [12, 16]]) if (at(x, y) === 'T') set(x, y, 't');
+  }
+  return r.map((row) => row.join(''));
+}
+
+function frameRows(dir, pose, spec, run = null, facing = dir) {
   const head = dir === 'down' ? HEAD_DOWN : dir === 'up' ? HEAD_UP : HEAD_LEFT;
   const body = dir === 'down' ? BODY_DOWN : dir === 'up' ? BODY_UP : run === null && pose === 1 ? BODY_LEFT_A : run === null && pose === 2 ? BODY_LEFT_B : BODY_LEFT;
   let legs = dir === 'left' ? (pose ? LEGS_SIDE_A : LEGS_SIDE) : pose === 1 ? LEGS_FRONT_A : pose === 2 ? LEGS_FRONT_B : LEGS_FRONT;
@@ -665,8 +760,10 @@ function frameRows(dir, pose, spec, run = null) {
     const y = 12 + 4;
     rows[y] = rows[y].replace(/T/g, 'K').replace(/t/g, 'k');
   }
+  if (spec.lines || spec.weathered || spec.scar || spec.eyepatch) rows = faceRows(rows, dir, spec, facing);
   const beard = BEARD[spec.beard];
   if (beard && beard[dir]) rows = compose(rows, Array.from(beard[dir], (r) => r || ''));
+  if (spec.sleeves || spec.apron) rows = wearRows(rows, dir, spec, 'under');
   const bare = rows;
   const hair = HAIR[spec.hairStyle || 'short'];
   if (hair) rows = compose(rows, hair[dir]);
@@ -696,6 +793,7 @@ function frameRows(dir, pose, spec, run = null) {
   // under a coat, the skirt shows below its tails
   if (skirt) rows = compose(rows, spec.coat ? ['', '', '', ...skirt.slice(3)] : skirt, 18);
   if (spec.belly && dir === 'left') rows = bellyRows(rows);
+  if (spec.boots || spec.gloves || spec.belt || spec.scarf || spec.worn) rows = wearRows(rows, dir, spec, 'over');
   if (spec.pack) rows = compose(rows, PACK[dir], 12);
   const gl = GLASSES[spec.glasses];
   if (gl) {
@@ -817,20 +915,31 @@ export function palette(spec) {
     const d = spec.beardColor || (spec.beard === 'stubble' ? mix(skin, hair, 0.45) : hair);
     Object.assign(pal, { D: d, d: dark(d, 0.25) });
   }
+  if (spec.weathered) pal.s = mix(skin, '#8a3828', 0.32);
+  if (spec.scar) pal.n = spec.scarColor || mix(skin, '#7a2a30', 0.45);
+  if (spec.belt) Object.assign(pal, { 1: spec.belt, 2: dark(spec.belt, 0.3), a: spec.buckle || '#c8a040' });
+  if (spec.boots) Object.assign(pal, { 3: spec.boots, 4: dark(spec.boots, 0.3) });
+  if (spec.scarf) Object.assign(pal, { 5: spec.scarf, 6: dark(spec.scarf, 0.3) });
+  if (spec.gloves) pal[7] = spec.gloves;
+  if (spec.apron) Object.assign(pal, { 8: spec.apron, 9: dark(spec.apron, 0.25) });
   return pal;
 }
 
 // Each material's darker tone, already in the palette: inner lines and the far edge use
 // it, so selective outlining adds no colour (a GBA sprite has 15).
-const DARK = { H: 'h', T: 't', C: 'c', Q: 'q', B: 'b', K: 'k', S: 's', U: 't', D: 'd', Y: 'y', M: 'm', J: 'j', u: 'v', Z: 'z', p: 'r', f: 'e' };
+const DARK = { H: 'h', T: 't', C: 'c', Q: 'q', B: 'b', K: 'k', S: 's', U: 't', D: 'd', Y: 'y', M: 'm', J: 'j', u: 'v', Z: 'z', p: 'r', f: 'e', 1: '2', 3: '4', 5: '6', 8: '9' };
 // Materials whose top-left edge catches the light (one extra tone each).
 const LIT = { H: 'I', T: 'V', C: 'P', Q: 'R', M: 'N', J: 'A' };
 
 // Resolves every pixel to a palette key: selective outlines and top-left light. The
 // right-facing frame is the left one mirrored whole, light included, as GBA games did.
-function shadeRows(rows, pal) {
+// `relief` (spec.relief) models deeper: the collar under the chin in shadow, the far side
+// of a broad shape two tones deep, the face and the hands rounded off on their far side.
+function shadeRows(rows, pal, relief = false) {
   const at = (x, y) => (rows[y] && rows[y][x]) || '.';
   const lum = (k) => { const n = parseInt(pal[k].slice(1), 16); return 0.3 * (n >> 16) + 0.59 * ((n >> 8) & 255) + 0.11 * (n & 255); };
+  const edge = (k) => k === '.' || k === 'o';
+  const span = (x, y) => { let a = x; let b = x; while (!edge(at(a - 1, y))) a--; while (!edge(at(b + 1, y))) b++; return b - a + 1; };
   return rows.map((row, y) => Array.from(row, (ch, x) => {
     if (!pal[ch]) return null;
     const near = [at(x, y - 1), at(x + 1, y), at(x, y + 1), at(x - 1, y)];
@@ -841,18 +950,24 @@ function shadeRows(rows, pal) {
       return darks.length ? darks.reduce((a, b) => (lum(b) < lum(a) ? b : a)) : 'o';
     }
     const [up, right, , left] = near;
+    if (relief) {
+      const dk = DARK[ch] && pal[DARK[ch]] ? DARK[ch] : null;
+      if (dk && ch !== 'S' && up === 'o' && at(x, y - 2) !== '.' && at(x, y - 2) !== 'o') return dk;
+      if (dk && ch !== 'S' && right !== 'o' && right !== '.' && at(x + 2, y) === 'o' && left !== 'o' && span(x, y) >= 6) return dk;
+      if (ch === 'S' && right === 'o' && left !== 'o' && up !== 'o' && up !== '.') return 's';
+    }
     if (LIT[ch] && pal[LIT[ch]] && (up === 'o' || up === '.') && left !== '.' && right !== 'o') return LIT[ch];
     if (DARK[ch] && ch !== 'S' && right === 'o' && left !== 'o' && pal[DARK[ch]]) return DARK[ch];
     return ch;
   }));
 }
 
-function render(rows, pal, flip, width = null) {
+function render(rows, pal, flip, width = null, relief = false) {
   // 16 wide, or 28 with spread wings (a pose may write a pixel past the edge: clipped)
   const w = width || (rows.some((r) => r.length >= DOLL_W + 2 * WING_PAD) ? DOLL_W + 2 * WING_PAD : DOLL_W);
   const c = canvas(w, Math.max(DOLL_H, rows.length));
   const ctx = c.getContext('2d');
-  shadeRows(rows, pal).forEach((row, j) => {
+  shadeRows(rows, pal, relief).forEach((row, j) => {
     row.forEach((key, i) => {
       if (!key) return;
       ctx.fillStyle = pal[key];
@@ -1024,13 +1139,14 @@ function creatureDoll(spec) {
 export function doll(spec) {
   if (spec.creature) return creatureDoll(spec);
   const pal = palette(spec);
+  const R = !!spec.relief;
   const frames = {};
-  for (const dir of ['down', 'up', 'left']) frames[dir] = [0, 1, 2].map((pose) => render(frameRows(dir, pose, spec), pal, false));
-  frames.right = [0, 1, 2].map((pose) => render(frameRows('left', pose, spec), pal, true));
+  for (const dir of ['down', 'up', 'left']) frames[dir] = [0, 1, 2].map((pose) => render(frameRows(dir, pose, spec), pal, false, null, R));
+  frames.right = [0, 1, 2].map((pose) => render(frameRows('left', pose, spec, null, 'right'), pal, true, null, R));
   // running: [stride, in the air, other stride] per direction
   const run = {};
-  for (const dir of ['down', 'up', 'left']) run[dir] = [0, 1, 2].map((k) => render(frameRows(dir, 1, spec, k), pal, false));
-  run.right = [0, 1, 2].map((k) => render(frameRows('left', 1, spec, k), pal, true));
+  for (const dir of ['down', 'up', 'left']) run[dir] = [0, 1, 2].map((k) => render(frameRows(dir, 1, spec, k), pal, false, null, R));
+  run.right = [0, 1, 2].map((k) => render(frameRows('left', 1, spec, k, 'right'), pal, true, null, R));
   const poses = {};
   for (const name of POSES) {
     poses[name] = {};
@@ -1039,7 +1155,7 @@ export function doll(spec) {
       poses.lie.down = poses.lie.left;
       poses.lie.up = poses.lie.left;
       // asleep: lying with the eyes shut
-      const shut = render(poseRows('blink', 'down', spec), pal, false);
+      const shut = render(poseRows('blink', 'down', spec), pal, false, null, R);
       poses.sleep = { left: lying(shut, false), right: lying(shut, true) };
       poses.sleep.down = poses.sleep.left;
       poses.sleep.up = poses.sleep.left;
@@ -1049,10 +1165,10 @@ export function doll(spec) {
     }
     for (const dir of ['down', 'up', 'left']) {
       const rows = poseRows(name, dir, spec);
-      if (rows) poses[name][dir] = render(rows, pal, false);
+      if (rows) poses[name][dir] = render(rows, pal, false, null, R);
     }
     const side = poseRows(name, 'left', spec);
-    if (side) poses[name].right = render(side, pal, true);
+    if (side) poses[name].right = render(side, pal, true, null, R);
   }
   return { w: frames.down[0].width, h: frames.down[0].height, frames, run, poses, spec };
 }

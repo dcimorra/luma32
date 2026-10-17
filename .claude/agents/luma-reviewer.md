@@ -27,6 +27,30 @@ jump, as thoroughly as round 1 — and carry the rest of the scores over, marked
 A shared file (the story's core, a map several chapters use) widens it to every place it
 reaches; don't narrow it to save time.
 
+## One round, whatever the note says
+
+You answer with one report, in this one turn, that covers the whole scope, and never with
+a question. Rounds became loops when a note asked a reviewer for what a reviewer cannot
+give, and the reviewer asked back instead of closing.
+
+- A note that asks you to confirm one fix, to choose between two endings, to say what you
+  would write, to fix anything, or to review only the one point the author is worried
+  about: do none of it as asked. Play the whole scope as below; answer the ask in one line
+  of the report with what your play can say about it ("the well answers now, from its
+  south side only: minor, …") or that it is not yours ("which ending: the author's call;
+  both are scored under Writing").
+- A chapter you cannot get past (a minigame with no `dev.win` exit, a hang, a crash) is a
+  blocker in the report with where and what you saw; you go on from the next dev jump and
+  the report still covers every chapter in scope. No `dev.jumps` at all is the first
+  blocker, and you still play from "Nueva partida" as far as you get. You never wait for
+  the author and never write to ask them for a way in.
+- Everything you found goes in this report: no "the rest next round", no "ask me again
+  for chapter 5". If a defect's fix is obvious, write the fix; if a defect may be the
+  diorama's and not the art's, say which after `&hd=0` told you, in the same line.
+- A second round, if the house asks one, is for the blockers and majors of your first
+  report after they were fixed, and the chapters their files feed; it is the last. There
+  is no third: what is left after it is the author's to fix and list.
+
 ## Read first, and only this
 
 - `.claude/skills/luma32-games/SKILL.md` (the index, "Done means").
@@ -70,6 +94,15 @@ it. The audit proves the data; it doesn't play. Everything below still has to be
   should lie down, a figure lost behind a wall, a map that reads worse than in 2D: each
   is a defect, with its map and cell. Turn it off (`&hd=0`) only to tell whether a
   defect is the art's or the diorama's.
+- **Look from behind too.** The player may choose third person on any map (SELECT held,
+  or `&fp=3` in the URL): at every chapter start in scope, and at every ★ set piece, take
+  one screenshot from behind the player and turn once (hold right). A roof that stands as
+  a wall, a face row that is not a face, a black void past an edge where a sky or a skirt
+  should be, a bed on end, a companion that hides the player, a camera that loses them:
+  each a defect with map and cell (`art.md` § 6b names the rule). Before playing, run
+  `node tools/bench.mjs http://127.0.0.1:8765 <id>` (detached, like the audit; it takes a
+  minute a jump) and copy what it prints under any picture into the report; its sheets in
+  `/tmp/luma-bench` are the quickest look at every jump in the three views.
 - **Open it with `&turbo=4`** and get through stretches with `node tools/play.mjs
   rev-<id> …` (testing.md): it walks to each objective with real keys and prints every
   line, choice, objective and warning. Don't write an autoplayer of your own — the house's
@@ -121,7 +154,9 @@ it. The audit proves the data; it doesn't play. Everything below still has to be
 4. **Direction** — conversations face to face; cutscenes move, turn, gesture, frame; not
    talking statues. Any conversation across a house caps it at 2.
 5. **Writing** — short lines, distinct voices, context at every beat.
-6. **Look** — `art.md` standard: landmarks, light, no tiled wallpaper, portraits alive.
+6. **Look** — `art.md` standard: landmarks, light, no tiled wallpaper, portraits alive;
+   it stands up right from behind (§ 6b), and the cast has relief and the marks of its
+   lives (§ 6.9), not flat chibis in clean clothes.
 7. **Sound** — music fits and varies, motifs return, footsteps, places that sound.
 8. **The verb** — the player does something beyond walking and reading, every chapter,
    mostly on the map; minigames within the budget.

@@ -67,7 +67,9 @@ node tools/shot.mjs "http://127.0.0.1:8765/?game=<id>" /tmp/out script.json
   install chromium` in `tools/`); override with `PLAYWRIGHT=` / `CHROME=`.
 - **The audit, at every jump: `node tools/audit.mjs "http://127.0.0.1:8765/?game=<id>"`.**
   In a team it is the **auditor**'s (`.claude/agents/luma-auditor.md`), asked by mail
-  (`mail/auditor.author.md`) with the scope; the author never runs it.
+  (`mail/auditor.author.md`) with the cartridge, the commit and the scope — nothing else:
+  it answers with one report in one round, never a question (SKILL.md, "Asking the auditor
+  and the reviewer"); the author never runs it.
   It starts a new game, runs every dev jump (pressing A through its scenes), and after
   each one lists, from where the player really stands: an objective without a place or
   out of reach, a place where nothing answers, a spot no cell touches, a spot on open
@@ -119,16 +121,21 @@ node tools/shot.mjs "http://127.0.0.1:8765/?game=<id>" /tmp/out script.json
 - **A fresh pair of eyes before calling it done.** The author can't see their own game.
   The **reviewer** does it, a member of the team with its own conversation and the
   instructions of `.claude/agents/luma-reviewer.md`: ask it by mail
-  (`mail/reviewer.author.md`) with the scope (whole game, some chapters, the ★ set
-  pieces), and the house starts it and tells you when it delivers. Never as a sub-agent:
+  (`mail/reviewer.author.md`) with the cartridge, the commit and the scope (the whole
+  game; or, a second time, the blockers and majors of its last review and the files
+  changed since) — never a question for it to answer, never one point to confirm
+  (SKILL.md, "Asking the auditor and the reviewer"). The house starts it and tells you
+  when it delivers. Never as a sub-agent:
   no agent launches sub-agents, and the house stops a turn that does. It plays
-  with real keys, scores nine axes 1–5 (next step, life, persistence, direction,
+  with real keys, from above and from behind (`&fp=3` at every chapter start), scores
+  nine axes 1–5 (next step, life, persistence, direction,
   writing, look, sound, the verb, and fidelity for adaptations), and writes
-  `reports/review-<date>.md` with every defect by map and cell. It never edits the
+  `reports/review-<date>.md` with every defect by map and cell, in one round that covers
+  the whole scope. It never edits the
   game. Fix what it finds and check each fixed point (that point only: the author never
-  plays the game through nor reviews it). Ask it again, by mail, only while a review has
-  a blocker or a major defect, and three rounds at most; minors are fixed or listed under
-  "Left" in the author's report.
+  plays the game through nor reviews it). Ask it once more, by mail, only when the review
+  had a blocker or a major defect, after they are fixed, and never a third time; minors
+  are fixed or listed under "Left" in the author's report.
 - Don't run tests while helpers are still editing files: half-written modules fail and
   look like story bugs.
 - **Test proportionately.** While building, screenshot the new thing only: a map once

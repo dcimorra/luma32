@@ -128,7 +128,8 @@ library only points to it.
 - `engine/world.js`: maps, actors, collisions, camera, and `StoryApi` (what scripts call).
 - `engine/ui.js`: dialogue boxes, choices, menus, chapter cards, location banners.
 - `engine/font.js`, `engine/glyphs.js`: the bitmap font (accents composed, `¿¡ñ` included).
-- `engine/doll.js`, `engine/creature.js`: people and animals (16×24, 4 directions × 3
+- `engine/doll.js` (its header lists every option a cast may use, down to the marks of a
+  life: relief, lines, weather, scars, belts, boots, worn clothes, since 1.21), `engine/creature.js`: people and animals (16×24, 4 directions × 3
   poses) generated from a spec.
 - `engine/audio.js`: synthesised chiptune sequencer + effects + ambiences.
 - `engine/weather.js`, `engine/vfx.js`, `engine/gfx.js` (`Painter`, the pixel-art API).

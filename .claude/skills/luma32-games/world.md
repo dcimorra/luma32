@@ -150,12 +150,30 @@ chase through the streets — not as decoration.
   street graph), the minimap and missions exist too (README "Roads and traffic" to
   "Missions"): they are for a city the player roams, rarely what a story needs.
 
-## First person
+## Seen from the ground: first and third person
 
-`view: 'first'` on the game or a map shows it from the player's eyes (README "First
-person"): walls are the solid tiles, repeated down to `wallHeight`; people and props are
-sprites; `dark` is fog and every light cuts it; a light with `cone` on the player is a
-torch. The data is the same map, so build and audit it as any other, then look at it in
-first person: a wall tile needs a picture that reads standing up (bricks, planks, stone),
-and water or a chasm says `wall: false`. Horror lives here: a short `fog`, one torch,
-sounds at spots with `reverb`, and `api.look` to turn the player's eyes to what matters.
+Every map the cartridge leaves to the player can be seen from above, from the player's
+eyes or from behind them (README "First person"): the player chooses in the options or
+with SELECT held, and the choice is kept per game. So **every map is seen from the ground
+too**, and is built for it: in the modern look the diorama stands the same tiles up, with
+the camera a few cells behind the player, turning with them, climbing when a wall or a
+building pushes it in, looking over a low wall from past the map's edge. What that asks
+of the data is in `art.md` § 6b (a wall is a top row over face rows, roofs read from
+above, props that lie, stand or are boxes, a `sky` and a `skirt` where the edge is in
+view, `clock: false` indoors). Look at every map from behind once (`&fp=3`) and from the
+eyes once (`&fp=1`) before wiring the story to it; `node tools/bench.mjs <url> <id>`
+does it for every dev jump at once (testing.md), and the lab's `village`, `field`,
+`house` and `cellar` (`tools/lab/village.js`) show each case done right.
+
+`view: 'first'` or `view: 'third'` on the game or a map fixes the view there (a dungeon
+from the eyes, a chase from behind); `firstPerson: false` takes the choice away (a
+minigame). A map made for the ground view says `wallHeight` (two cells by default) and
+`ceiling: 'tileId'` when it has one, its wall tiles a picture that reads standing up
+(bricks, planks, stone) or `wall: 'otherTileId'` to show another's; water or a chasm says
+`wall: false`; `fog` is how many cells to the full `dark`, a light with `cone` on the
+player is a torch. Horror lives here: a short `fog`, one torch, sounds at spots with
+`reverb`, and `api.look` to turn the player's eyes to what matters. From behind, a map
+like that keeps its walls two cells tall; an ordinary 3/4 map shows its façades and
+roofs as the art draws them. A companion at the player's heels is drawn as a half ghost
+when it stands between the camera and the player, and fades out when it stands at the
+eyes: that is the engine's; don't move companions aside in the data for it.

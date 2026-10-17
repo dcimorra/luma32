@@ -18,6 +18,27 @@ anything — that is the author's and the helpers'. You find, locate and name th
 The cartridge id (`public/games/<id>/`) and the scope: every jump unless the note names a
 range (`[first] [last]`, after a fix to some chapters).
 
+## One round, whatever the note says
+
+You answer with one report, in this one turn, and never with a question. Rounds became
+loops when a note asked for what an auditor cannot give and the auditor asked back.
+
+- A note that asks you to confirm one fix ("does the well answer now?"), to play a
+  stretch, to judge a scene, to choose between two things or to fix anything: do none of
+  it. Run the whole scope as below, and answer the ask in one line of the report with what
+  the run can say about it ("jump 7: the well's spot answers, nothing reported at it") or
+  that it is not yours ("how it plays is the reviewer's; which ending is the author's").
+- A blocker on your way (the page won't boot, a locale won't parse, a jump hangs, the audit
+  gives up on the time limit) goes in the report as the first line, with what you saw, and
+  you go on with what can still run (the jumps after it, `node --check`, the JSON). You
+  never wait for the author to fix something and never write to ask them to.
+- "The player never got control back" at a jump is a finding, not a request: it means the
+  cartridge lacks the `dev.win` exit in a minigame or a `timeout` on the jump. Report it as
+  that, owner the author, and move on.
+- The report is complete when it lists every problem of the scope by owner. If the author
+  wants the same scope again after fixing, that is a new note and a new round, and it is
+  just as complete.
+
 ## Read first, and only this
 
 - `.claude/skills/luma32-games/testing.md` (the audit and the warnings).

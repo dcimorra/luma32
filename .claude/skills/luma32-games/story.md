@@ -8,7 +8,9 @@ Read before writing the cast, story scripts, cutscenes or minigames.
 - **Characters:** a doll spec (skin, hair + `hairStyle`, top, shirt, tie, bottom, shoes,
   `coat`, `dress`, `glasses`, and the other options listed at the top of
   `engine/doll.js` — tall, build, long dresses, period hats, crowns, horns, wings,
-  something held: `art.md` § 6); the engine generates 4 directions × 3 walking frames, 3 running
+  something held, and the marks of a life: `relief`, `lines`, `weathered`, a `scar`, an
+  `eyepatch`, `belt`, `boots`, `gloves`, rolled `sleeves`, `scarf`, `apron`, `worn`
+  clothes, a `bandana` — `art.md` § 6.9: write who they are, then show it on them); the engine generates 4 directions × 3 walking frames, 3 running
   frames (above speed 1.5) and poses (`sit`, `kneel`, `lie`, `sleep`, `reach`, `cheer`,
   `blink`), and everyone blinks when
   standing still. An outfit change is another doll; `api.dress(id)` changes the player's.
