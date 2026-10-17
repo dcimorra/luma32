@@ -50,6 +50,16 @@ folders) is refused unless the path says which. A repository or a zip is unpacke
 on (scripts, JSON, images, fonts, audio). A folder is linked, not copied, so what you edit
 there is what plays. `?game=<id>` in the address skips the shelf.
 
+The console does the same by itself (since 1.23): SELECT on the shelf opens the manager,
+where every cartridge and group is one list. Up and down walk it; A on a cartridge plays
+it, shows its sheet (its label big, what it says of itself, its saves, where it came from),
+moves it (up and down, A to leave it there), puts it in a group (any group, or a new saga or
+collection named on the spot) or takes it off the console; A on a group moves it, nests it,
+renames it or undoes it. The strip on top installs a game (a GitHub repository, or a zip
+from the device) and sorts the whole shelf A to Z. With `server/serve.mjs` the changes go
+to `games/index.json` through its `/api` (`server/library.mjs`, what `add-game.mjs` runs
+too); any other static server shows the shelf as a plain file, and SELECT says so.
+
 A game is code: add only games from people you trust.
 
 ## Making a game
@@ -121,6 +131,9 @@ library only points to it.
   page that holds accounts (see "Embedding").
 - `engine/boot.js`: power on → logo → shelf → cartridge. `engine/cart.js`: a cartridge's
   title screen, then new game / continue.
+- `engine/library.js`: the library (every cartridge, the tree of groups the shelf shows,
+  the search) and its manager (SELECT on the shelf: sort, group, look at, install, remove).
+  `engine/prompt.js`: the dialog that asks for words (a group's name, where a game is).
 - `engine/engine.js`: frame buffer, fixed 60 Hz loop, scene stack, fades/flash/shake/glitch.
   The 240×160 picture reaches the window at a whole multiple when it can; at any other
   size (since 1.14) it is blown up sharp to the next whole multiple and shrunk smoothly to
@@ -154,15 +167,22 @@ and answers its questions by `postMessage` (`{ luma: 1, id, method, args }`, ans
 
 | Method | Asks for |
 | --- | --- |
-| `hello` | `{ account, locked, shelf: { games: [{ key, id, src, group, kind, source, support }], groups }, token, wanted, saves }` |
+| `hello` | `{ account, locked, shelf: { games: [{ key, id, src, group, kind, source, support }], groups }, token, wanted, saves, manage }` |
 | `saves` | to store `{ entries: { key: { value, at } } }` (save slots and lines read) |
 | `account` | to open the page's account dialog; answered when it closes |
+| `arrange` | `{ games: [{ key, group }], groups: [{ id, kind, parent, title, tagline, art, cover }] }`: the shelf as the player left it in the manager |
+| `install` | `{ source }` (a GitHub repository or its URL) or `{ zip, name }` (the bytes of a zip); answered with the new game's entry, as `hello` lists them |
+| `remove` | `{ key }`: the game is to leave the account's shelf |
 | `playing` | `{ game }`: the cartridge on screen, or null |
 | `theme` | `{ color }`: the colour around the console |
 | `report` | to send a problem report about the console |
 
 The page may ask the console `flush` (send what is pending) and `forget` (drop this
 account's saves from the device). Without an answer to `hello` the console runs local.
+`manage: true` in `hello` says the page answers `arrange`, `install` and `remove`: SELECT
+on the shelf then opens the console's own manager (library.js) instead of the account
+dialog, which the manager offers as a button. A page that does not keeps SELECT as it
+was.
 
 ## A cartridge
 

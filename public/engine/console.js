@@ -5,10 +5,11 @@ import { drawText, drawBig, measure, measureBig } from './font.js';
 import { frame, getTheme, centerX, List, pointRows, clicked, pressKey } from './ui.js';
 import { tone, sfx, music, audioContext } from './audio.js';
 import { t, withCatalog } from './i18n.js';
-import { account, openAccount, isOpen, offlineLocked } from './host.js';
+import { account, openAccount, isOpen, offlineLocked, canManage } from './host.js';
 import { drawGroup, drawSearch } from './groups.js';
 import { openSearch, searching } from './search.js';
 import { isWeb, hint } from './shell.js';
+import { Manager, drawRoom } from './library.js';
 
 const blink = (f, rate = 30) => Math.floor(f / rate) % 2 === 0;
 
@@ -91,15 +92,24 @@ function chime() {
 // ---------- the cartridge shelf ----------
 
 export class Shelf {
-  // items: the shelf's tree, in order: cartridges { id, game } and groups { group: true,
-  // id, kind, art, items, count }. `last`: the cartridge played last, selected where it is
-  // (inside its groups). `find(q)`: the cartridges those words find, for the search.
-  constructor(items, last = null, find = () => []) {
-    this.find = find;
+  // lib: the Library (library.js): `items`, the shelf's tree in order — cartridges { id,
+  // game } and groups { group: true, id, kind, art, items, count } — and `find(q)`, the
+  // cartridges those words find, for the search. `last`: the cartridge played last,
+  // selected where it is (inside its groups).
+  constructor(lib, last = null) {
+    this.lib = lib;
     this.f = 0;
     this.inserting = -1;
     this.pointer = true;
-    // where we are: a stack of levels, the shelf at the bottom
+    this.managing = false;
+    this.open(last);
+  }
+
+  get find() { return this.lib.find; }
+
+  // Where we are: a stack of levels, the shelf at the bottom, opened down to `last`.
+  open(last) {
+    const { items } = this.lib;
     this.stack = [{ items: items.length ? [{ search: true, id: '' }, ...items] : [], sel: 1 }];
     const path = (list, chain) => {
       for (const it of list) {
@@ -115,6 +125,19 @@ export class Shelf {
     }
     if (!chain.length) this.stack[0].sel = items.length ? 1 : 0;
     this.pos = this.level.sel;
+  }
+
+  // SELECT: the manager (library.js), where the games are sorted, grouped, installed and
+  // taken off; then the shelf is built again as it was left. Hosted by a page that does
+  // not take those changes, the account dialog, as before.
+  async manage(e) {
+    if (!canManage()) { openAccount(); return; }
+    this.managing = true;
+    const cur = this.items[this.sel];
+    const r = await e.push(new Manager(this.lib, cur?.search ? null : cur));
+    this.managing = false;
+    if (r?.play) { this.open(r.play); this.inserting = 0; return; }
+    this.open(cur && !cur.search && !cur.group ? cur.id : null);
   }
 
   get level() { return this.stack[this.stack.length - 1]; }
@@ -154,7 +177,7 @@ export class Shelf {
     if (p.back) return 'b';
     if (p.wheel) return p.wheel < 0 ? 'left' : 'right';
     if (!p.over) return null;
-    if (p.y < 18) return this.stack.length > 1 ? 'b' : p.x > SCREEN_W / 2 && !account()?.local ? 'select' : null;
+    if (p.y < 18) return this.stack.length > 1 ? 'b' : p.x > SCREEN_W / 2 && (canManage() || !account()?.local) ? 'select' : null;
     if (p.y >= 122) return 'a';
     for (let i = 0; i < this.items.length; i++) {
       const x = Math.round(SCREEN_W / 2 - 34 + (i - this.pos) * 84);
@@ -173,7 +196,7 @@ export class Shelf {
   update(e) {
     this.f++;
     const n = this.items.length;
-    if (isOpen() || searching()) return;
+    if (isOpen() || searching() || this.managing) return;
     const inp = e.input;
     const tap = clicked(inp);
     if (offlineLocked()) {
@@ -193,7 +216,7 @@ export class Shelf {
     const pt = this.pointed(inp);
     if ((inp.pressed('left') || pt === 'left') && n > 1) { this.sel = (this.sel + n - 1) % n; sfx('cursor'); }
     if ((inp.pressed('right') || pt === 'right') && n > 1) { this.sel = (this.sel + 1) % n; sfx('cursor'); }
-    if (inp.pressed('select') || pt === 'select') { sfx('confirm'); openAccount(); return; }
+    if (inp.pressed('select') || pt === 'select') { sfx('confirm'); this.manage(e); return; }
     if ((inp.pressed('b') || pt === 'b') && this.stack.length > 1) { this.pop(); return; }
     if ((inp.pressed('a') || inp.pressed('start') || pt === 'a') && n) {
       const it = this.items[this.sel];
@@ -206,15 +229,7 @@ export class Shelf {
   draw(ctx) {
     const f = this.f;
     const { group, query } = this.level;
-    // a dark room with a slowly drifting grid
-    ctx.fillStyle = '#121026';
-    ctx.fillRect(0, 0, SCREEN_W, SCREEN_H);
-    ctx.fillStyle = '#1c1940';
-    const off = Math.floor(f / 3) % 16;
-    for (let x = -16 + off; x < SCREEN_W; x += 16) ctx.fillRect(x, 0, 1, SCREEN_H);
-    for (let y = -16 + off; y < SCREEN_H; y += 16) ctx.fillRect(0, y, SCREEN_W, 1);
-    ctx.fillStyle = '#0c0a1c';
-    ctx.fillRect(0, 0, SCREEN_W, 18);
+    drawRoom(ctx, f);
     // the head says where we are: the shelf, a group (and the groups above it), a search
     const who = account()?.email;
     // a local checkout (plain files): nobody logs in, there is no account to open
@@ -222,8 +237,8 @@ export class Shelf {
     if (this.stack.length === 1) {
       const head = t('console.shelf.title');
       drawText(ctx, head, 8, 6, '#e8e6ff');
-      // who is playing, or how to log in; SELECT opens the account either way
-      let label = local ? t('console.name') : who || t('console.shelf.account');
+      // who is playing, or how to log in; SELECT opens the manager (or the account)
+      let label = local ? t(canManage() ? 'console.shelf.manage' : 'console.name') : who || t('console.shelf.account');
       while (who && measure(label) > SCREEN_W - 24 - measure(head) && label.length > 4) label = `${label.slice(0, -2)}…`;
       drawText(ctx, label, SCREEN_W - 8 - measure(label), 6, who || local ? '#5fd0ff' : '#8a86c0');
     } else {
@@ -266,10 +281,10 @@ export class Shelf {
       const tag = line('tagline');
       drawText(ctx, tag, centerX(tag), 140, '#a8a4d8');
       if (blink(f)) {
-        // every third blink, the way back out (or to the account, which a local console lacks)
-        const third = Math.floor(f / 60) % 3 === 2 && (this.stack.length > 1 || !local);
+        // every third blink, the way back out (or to the manager, or the account)
+        const third = Math.floor(f / 60) % 3 === 2 && (this.stack.length > 1 || !local || canManage());
         const say = t(hint(cur.search ? 'console.shelf.search_hint' : cur.group ? 'console.shelf.open_group'
-          : third ? (this.stack.length > 1 ? 'console.shelf.back' : 'console.shelf.account_hint') : 'console.shelf.insert'));
+          : third ? (this.stack.length > 1 ? 'console.shelf.back' : canManage() ? 'console.shelf.manage_hint' : 'console.shelf.account_hint') : 'console.shelf.insert'));
         drawText(ctx, say, centerX(say), 151, '#5fd0ff');
       }
       if (this.items.length > 1) {

@@ -156,15 +156,20 @@ export async function init() {
     hello = await Promise.race([call('hello'), new Promise((resolve) => setTimeout(resolve, HELLO_WAIT, null))]).catch(() => null);
   }
   if (!hello) {
-    // local: the folder's own shelf, nobody logged in, saves only here
+    // local: the folder's own shelf, nobody logged in, saves only here. server/serve.mjs
+    // also answers for the shelf's manager (the console then sorts, groups and installs
+    // games by itself); any other static server gives the shelf as a plain file.
     me = { email: null, local: true };
-    const list = await (await fetch('games/index.json', { cache: 'no-cache' })).json();
-    const games = (list.games || []).map((g) => ({ key: g.id, id: g.id, base: new URL(g.src || `games/${g.id}/`, location.href).href, group: g.group || null, listed: true }));
-    return { games, groups: list.groups || [], wanted };
+    let list = await fetch('api/library', { cache: 'no-cache' }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+    if (list?.manage) manageable = true;
+    else list = await (await fetch('games/index.json', { cache: 'no-cache' })).json();
+    shelfData = { games: (list.games || []).map((g) => ({ ...g, key: g.id, group: g.group || null })), groups: list.groups || [] };
+    return { games: shelfData.games.map(localEntry), groups: shelfData.groups, wanted };
   }
   hosted = true;
   me = hello.account;
   locked = !!hello.locked;
+  manageable = !!hello.manage;
   // the token becomes this origin's cookie, which every game file is asked for with
   if (hello.token) {
     try {
@@ -183,8 +188,64 @@ export async function init() {
     addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') push(); });
   } else if (localStorage.getItem(OWNER)) forget();
   const shelf = locked ? { games: [], groups: [] } : hello.shelf || { games: [], groups: [] };
-  const games = shelf.games.map((g) => ({ ...g, base: new URL(g.src, location.href).href }));
-  return { games, groups: shelf.groups || [], wanted: hello.wanted || wanted };
+  shelfData = { games: shelf.games.map((g) => ({ ...g, group: g.group || null })), groups: shelf.groups || [] };
+  return { games: shelfData.games.map(hostedEntry), groups: shelfData.groups, wanted: hello.wanted || wanted };
+}
+
+const localEntry = (g) => ({ ...g, base: new URL(g.src || `games/${g.id}/`, location.href).href, listed: true });
+const hostedEntry = (g) => ({ ...g, base: new URL(g.src, location.href).href });
+
+// ---------- the shelf's manager (engine/library.js) ----------
+
+// The console sorts, groups, installs and removes games by itself when whoever holds the
+// shelf takes the changes: server/serve.mjs in a local checkout (its /api), a page that
+// says `manage: true` in `hello` and answers `arrange`, `install` and `remove`.
+let shelfData = { games: [], groups: [] };
+let manageable = false;
+export const canManage = () => manageable;
+// The shelf as whoever holds it has it: { games: [{ key, id, group, … }], groups }.
+export const library = () => shelfData;
+
+async function local(method, url, data, type = 'application/json') {
+  const res = await fetch(new URL(url, location.href), { method, headers: data === undefined ? {} : { 'Content-Type': type }, body: data === undefined ? undefined : type === 'application/json' ? JSON.stringify(data) : data });
+  const value = await res.json().catch(() => ({}));
+  if (!res.ok) throw Object.assign(new Error(value.error || `HTTP ${res.status}`), { code: value.error || 'failed', games: value.games });
+  return value;
+}
+
+// A new order and new groups: games [{ key, group }] in the order of the shelf, groups
+// [{ id, kind, parent, title, tagline, art, cover }].
+export async function arrange({ games, groups }) {
+  if (!manageable) throw Object.assign(new Error('local'), { code: 'local' });
+  if (hosted) await call('arrange', { games, groups });
+  else await local('PUT', 'api/library', { games, groups });
+  const byKey = new Map(shelfData.games.map((g) => [g.key, g]));
+  const seen = new Set();
+  const next = [];
+  for (const g of games) { const was = byKey.get(g.key); if (was && !seen.has(g.key)) { seen.add(g.key); next.push({ ...was, group: g.group || null }); } }
+  for (const g of shelfData.games) if (!seen.has(g.key)) next.push(g);
+  shelfData = { games: next, groups: groups.map((g) => ({ ...g })) };
+}
+
+// Installs a game: { source } (a GitHub repository or its URL) or { zip, name } (the
+// bytes of a zip). Resolves with the new game's entry, as `init` lists them.
+export async function install(what) {
+  if (!manageable) throw Object.assign(new Error('local'), { code: 'local' });
+  let g;
+  if (hosted) g = await call('install', what);
+  else if (what.zip) g = await local('POST', 'api/install', what.zip, 'application/zip');
+  else g = await local('POST', 'api/install', { source: what.source });
+  g = { ...g, key: g.key || g.id, group: g.group || null };
+  shelfData.games = [...shelfData.games.filter((x) => x.key !== g.key), g];
+  return hosted ? hostedEntry(g) : localEntry(g);
+}
+
+// Takes a game off the shelf (its saves stay on this device).
+export async function remove(key) {
+  if (!manageable) throw Object.assign(new Error('local'), { code: 'local' });
+  if (hosted) await call('remove', { key });
+  else await local('DELETE', `api/games/${encodeURIComponent(key)}`);
+  shelfData.games = shelfData.games.filter((g) => g.key !== key);
 }
 
 // ---------- what the console asks ----------
