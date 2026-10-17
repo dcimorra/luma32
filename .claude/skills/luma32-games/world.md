@@ -14,7 +14,13 @@ helper. Art itself is `art.md`; who lives on the maps is `life.md`.
   only at some point of it.
 - **Open worlds:** join maps edge to edge with `connections` (mirror them on both maps)
   so the world feels continuous; keep warps for doors and interiors. Maps can be as big
-  as needed. Build the game's rules on `canEnter`, `onStep`, `onBump`, `update`, `grade`.
+  as needed on screen, but one map's memory is bounded (about 1.3 million cells in some
+  95 MB, README "Streets as a graph") and the engine does not load by sectors: a city
+  bigger than that is one large map per district, joined by their edges. An interior is
+  a map behind a door, its exit warp landing back on the same door: the warp's
+  transition is the only "load" the player sees. A sandbox is asked about before it is
+  planned (`genres.md`, "Open world"). Build the game's rules on `canEnter`, `onStep`,
+  `onBump`, `update`, `grade`.
 - **One world, one story on it.** Places are defined once; the story adds its people
   and scripts to them as it goes. Don't fork a map per moment of the story; gate what's
   on it with flags — `when` on actors and props, `music` (and `ambience`, `weather`) as a

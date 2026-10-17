@@ -27,6 +27,7 @@ export class Engine {
     this.hdFrame = null;                // the world's picture this frame, in the modern look
     this.hdBase = null;                 // and the scene it is of
     this.drawRate = 60;                 // 30: the picture every other frame (the game still ticks at 60)
+    this.drawnAt = -1;                  // the frame last drawn
     this.asleep = false;                // a page that put the console out of view: nothing ticks or draws
     this.resize();
     input.bindPointer?.(display, SCREEN_W, SCREEN_H);
@@ -64,7 +65,9 @@ export class Engine {
         this.acc -= step;
         n++;
       }
-      if (n && (this.frame % 2 === 0 || !this.halfRate)) this.draw();
+      // at half rate a picture waits for two ticks since the last (not for an even frame:
+      // a browser that ticks twice a pass would keep one parity for ever)
+      if (n && (!this.halfRate || this.frame - this.drawnAt >= 2)) { this.draw(); this.drawnAt = this.frame; }
       requestAnimationFrame(loop);
     };
     requestAnimationFrame(loop);

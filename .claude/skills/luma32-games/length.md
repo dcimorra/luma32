@@ -30,7 +30,9 @@ lasts comes from what the player **does**, not from what they read.
 - **No more than about three minutes of only reading in a row** (`feel.md`, "Craft").
   A chapter that is twelve minutes of text and three of walking is the failure above.
 - A longer work (a long novel, a whole season, a saga's volume) scales the same way: more
-  chapters of the same shape, never longer cutscenes.
+  chapters of the same shape, never longer cutscenes. Several volumes in one open world
+  are one volume per commission, each a whole thread of this length (`genres.md`, "Open
+  world").
 
 ## Where the time comes from in a story
 
@@ -63,7 +65,9 @@ None of these make a game longer; they make it slower, and players notice:
 - slower walking, longer empty walks, the same path back and forth with nothing new on it;
 - more boxes per line, the same thing said twice, cutscenes stretched with pauses;
 - repeating the same task, grinding, a minigame played again to pad a chapter;
-- hiding the next step, a vague objective, failure that sends the player far back.
+- hiding the next step, a vague objective, failure that sends the player far back;
+- a bigger map, more streets, more people on them: an open world with nothing new to do
+  is distance, not length (`genres.md`, "Open world").
 
 If a chapter is short, give it more to **do** (a played stretch, a side quest, a place
 that comes back), not more to read or farther to walk.

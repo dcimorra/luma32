@@ -9,6 +9,11 @@ When the game retells an existing work, fidelity is the quality bar (`SKILL.md`,
   and when, what a reader would never forgive missing, and the gaps it couldn't confirm
   (`⚠`). The bible is written from it, not from memory; its gaps go to the commissioner
   as questions, never filled with something plausible.
+- **Which telling.** A work with more than one (the novels and their series, a film
+  and its remake) is adapted from the one the brief names; if it names none, ask before
+  the analyst starts, and never mix what only the other has. A saga built as one open
+  world is one volume per commission, with a saga sheet from the analyst first
+  (`genres.md`, "Open world").
 - **The bible, chapter by chapter.** One file, written before the beat list: for every
   chapter of the source, its scenes in order — where, who is there, what happens,
   every conversation (who speaks, what each one says and reveals, in summary), what it

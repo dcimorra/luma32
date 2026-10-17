@@ -24,6 +24,11 @@ What is wrong today at the top, with where; then one section per helper that has
 (`team.md`, "Splitting the work"). Each section says what changes and what stays: keep
 what works. A person approves it before anything is changed.
 
+**A new story on a world that exists** (the next volume of a saga built as one open
+world, `genres.md`, "Open world") is an improvement: `IMPROVE.md` adds the story with its
+own progress counter, the places it opens (built as shells before, or new), its people and
+their schedules, and says what of the world the earlier stories keep.
+
 ## Saves keep loading
 
 Players have saves in the middle of the story. A change that breaks them loses their game.

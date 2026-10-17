@@ -1,6 +1,6 @@
 ---
 name: luma32-games
-description: How to build a game (a "cartridge") for the LUMA 32 engine — the GBA-style browser console — where a story happens: maps to walk, people to talk to, scenes, minigames, music. Use when asked to create a new game, port a story into the engine, improve, fix or review an existing cartridge, add maps, characters, minigames, songs, story scenes or a cover to a cartridge, or test a game in the browser.
+description: How to build a game (a "cartridge") for the LUMA 32 engine — the GBA-style browser console — where a story happens: maps to walk, people to talk to, scenes, minigames, music — or an open world / sandbox: a city or a region to roam freely ("mundo abierto", "sandbox", GTA-like, no loading screens, a whole saga in one world). Use when asked to create a new game, port a story into the engine, improve, fix or review an existing cartridge, add maps, characters, minigames, songs, story scenes or a cover to a cartridge, or test a game in the browser.
 ---
 
 # Building LUMA 32 cartridges
@@ -24,7 +24,7 @@ these rules, not from another game.
 | `improving.md` | the cartridge already exists and people play it: improving or repairing it |
 | `classics.md` | before the beat list and the world contract: what the best GBA games did, and the bar a game here is held to |
 | `length.md` | before the beat list and the pitch: how long a game lasts (90–120 min for a whole story), and where that time comes from |
-| `genres.md` | before the beat list: what the engine offers for the genre, what makes it good |
+| `genres.md` | before the beat list: what the engine offers for the genre, what makes it good; **before the plan**, when the brief asks for an open world or a sandbox: how to recognise it, the questions to ask, how the work is phased |
 | `feel.md` | before the beat list and before the play-through: what the player notices, and craft (the verb, set pieces, rhythm, minigames) |
 | `adapting.md` | the game retells a book or another work: the bible, fidelity, the fidelity review |
 | `world.md` | drawing maps, doors, the world map; water, sky, cliffs and the abilities that cross them; writing a world contract |
@@ -65,7 +65,8 @@ What every story needs, whatever its shape:
   from the save. A single progress flag or counter that grows as the story advances is
   usually the clearest way to keep it linear. **Number its stages with gaps** (10, 20,
   30…): a beat added later fits between two others; renumbering breaks every save that
-  players already have.
+  players already have. A world where several stories happen keeps one counter per
+  story (`genres.md`, "Open world").
 - **The world reacts to it.** People appear, move and say different things as it
   advances (`actors[].when`, talk functions that read flags); doors open
   (`api.setTile`); light and music change (`grade`, `music`).
@@ -159,9 +160,14 @@ markers) gets none of the engine's checks and comes back with the bugs they prev
 
 An existing cartridge is improved, not rebuilt: `improving.md`.
 
-0. **Ask about the world map** when the genre calls for it (`world.md`):
-   before anything else, as a question to whoever commissioned the game. Don't decide it
-   alone and don't skip it silently.
+0. **Ask what the genre needs**, before anything else, as questions to whoever
+   commissioned the game: the world map when the game has several places (`world.md`,
+   "The world map"); and, when the brief reads as an **open world or a sandbox** — a
+   city or a region to roam, "mundo abierto", "sandbox", GTA or a game like it named,
+   "sin pantallas de carga", routines and a society that goes on, several stories or a
+   whole saga in one world — the questions and the scope rule of `genres.md`, "Open
+   world", in one note with a recommendation for each. Don't decide them alone and don't
+   skip them silently: each one answered later costs a round or the game.
 1. **The story first, on paper: `BIBLE.md`.** The story's facts and a beat list in order:
    where each beat happens, who is there, what the player does, what it changes, **the
    line that tells the player what comes next, and the objective with its place** — plus
