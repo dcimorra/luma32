@@ -898,7 +898,7 @@ export class World {
 
   // The ground is drawn tile by tile from the visible area each frame, so a map can be any
   // size. Kept for scripts that edit `ground` directly and then call it.
-  buildGround() {}
+  buildGround() { this.groundVersion = (this.groundVersion || 0) + 1; }
 
   // ---------- heights (README "Heights") ----------
 
@@ -1127,27 +1127,70 @@ export class World {
     return false;
   }
 
+  // A breadth-first search over the cells the map and its neighbours cover, in the order
+  // of DIRS, so the way found is the same as ever. Kept in typed arrays marked by a count
+  // of searches instead of cleared: someone walking a long street plans again at every
+  // step, and with keys as strings in a Map a search across a big map took tens of ms.
   findPath(actor, gx, gy) {
-    const key = (x, y) => `${x},${y}`;
-    const prev = new Map([[key(actor.x, actor.y), null]]);
-    const q = [[actor.x, actor.y]];
-    while (q.length) {
-      const [x, y] = q.shift();
+    let x0 = 0;
+    let y0 = 0;
+    let x1 = this.w;
+    let y1 = this.h;
+    for (const n of this.neighbours || []) {
+      x0 = Math.min(x0, n.ox); y0 = Math.min(y0, n.oy);
+      x1 = Math.max(x1, n.ox + n.w); y1 = Math.max(y1, n.oy + n.h);
+    }
+    // and a cell round it all, where a goal past the edge may lie, and wherever the start
+    // and the goal are
+    x0 = Math.min(x0, actor.x, gx) - 1; y0 = Math.min(y0, actor.y, gy) - 1;
+    x1 = Math.max(x1, actor.x + 1, gx + 1) + 1; y1 = Math.max(y1, actor.y + 1, gy + 1) + 1;
+    const W = x1 - x0;
+    const size = W * (y1 - y0);
+    const inside = (x, y) => x >= x0 && y >= y0 && x < x1 && y < y1;
+    let st = this.pathState;
+    if (!st || st.seen.length < size) {
+      st = this.pathState = { seen: new Uint32Array(size), wall: new Uint32Array(size), from: new Int32Array(size), dir: new Uint8Array(size), queue: new Int32Array(size), mark: 0 };
+    }
+    // a new mark for this search; on the rare wrap round, clear
+    if (++st.mark >= 0xffffffff) { st.seen.fill(0); st.wall.fill(0); st.mark = 1; }
+    const { seen, wall, from, dir: way, queue } = st;
+    const mark = st.mark;
+    const names = Object.keys(DIRS);
+    const steps = Object.values(DIRS);
+    // a cell found blocked stays blocked for this search unless heights make it depend on
+    // the side it is entered from
+    const keep = !this.raised;
+    const start = (actor.y - y0) * W + (actor.x - x0);
+    seen[start] = mark;
+    from[start] = -1;
+    let head = 0;
+    let tail = 0;
+    queue[tail++] = start;
+    while (head < tail) {
+      const i = queue[head++];
+      const x = (i % W) + x0;
+      const y = Math.floor(i / W) + y0;
       if (x === gx && y === gy) {
         const path = [];
-        let k = key(x, y);
-        while (prev.get(k)) { const p = prev.get(k); path.unshift(p.dir); k = p.from; }
-        return path;
+        for (let k = i; from[k] >= 0; k = from[k]) path.push(names[way[k]]);
+        return path.reverse();
       }
-      for (const [dir, [dx, dy]] of Object.entries(DIRS)) {
-        const nx = x + dx;
-        const ny = y + dy;
-        const k = key(nx, ny);
-        if (prev.has(k)) continue;
-        if (!(nx === gx && ny === gy) && this.blocked(nx, ny, actor, null, [x, y])) continue;
-        if (nx === gx && ny === gy && this.blocked(nx, ny, actor, null, [x, y]) && (this.actorAt(nx, ny, actor) || !this.climbs(x, y, nx, ny))) continue;
-        prev.set(k, { from: key(x, y), dir });
-        q.push([nx, ny]);
+      for (let d = 0; d < 4; d++) {
+        const nx = x + steps[d][0];
+        const ny = y + steps[d][1];
+        // past that nothing is walkable (blocked says so) and no goal lies
+        if (!inside(nx, ny)) continue;
+        const k = (ny - y0) * W + (nx - x0);
+        if (seen[k] === mark) continue;
+        const goal = nx === gx && ny === gy;
+        if (!goal) {
+          if (keep && wall[k] === mark) continue;
+          if (this.blocked(nx, ny, actor, null, [x, y])) { if (keep) wall[k] = mark; continue; }
+        } else if (this.blocked(nx, ny, actor, null, [x, y]) && (this.actorAt(nx, ny, actor) || !this.climbs(x, y, nx, ny))) continue;
+        seen[k] = mark;
+        from[k] = i;
+        way[k] = d;
+        queue[tail++] = k;
       }
     }
     return null;

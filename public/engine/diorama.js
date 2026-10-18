@@ -84,7 +84,14 @@ function source(world, R, x, y) {
 export const tileOf = (world, R, x, y) => { const [sx, sy] = source(world, R, x, y); return world.tileAt(sx, sy); };
 
 // The ground's fingerprint: rebuild when a tile changes (a door opens) or the map does.
+// Taken again only when something that can change the ground has (the map, its
+// neighbours, its heights, a tile swapped by setTile or a script's buildGround): on a big
+// region with its neighbours (a city's districts joined edge to edge) going over every
+// cell each frame cost more than the whole frame has.
 export function groundKey(world, R) {
+  const c = world.dioramaKey;
+  const stamp = `${world.mapId}:${R.x0},${R.y0},${R.w}x${R.h}:${world.groundVersion || 0}:${world.level || 0}`;
+  if (c && c.stamp === stamp && c.ground === world.ground && c.heights === world.heights && c.neighbours === world.neighbours) return c.key;
   let h = 0;
   const ids = (world.dioramaIds ||= new Map());
   for (let y = R.y0; y < R.y1; y++) {
@@ -96,32 +103,54 @@ export function groundKey(world, R) {
       if (world.raised) h = (Math.imul(h, 7) + world.heightAt(x, y)) | 0;
     }
   }
-  return `${world.mapId}:${R.x0},${R.y0},${R.w}x${R.h}:${h}`;
+  const key = `${world.mapId}:${R.x0},${R.y0},${R.w}x${R.h}:${h}`;
+  world.dioramaKey = { stamp, ground: world.ground, heights: world.heights, neighbours: world.neighbours, key };
+  return key;
+}
+
+// Whether anything on the region's picture moves: a ground tile or a prop lying on it with
+// frames of its own. Kept with the ground's fingerprint.
+export function animates(world, R, key) {
+  if (world.dioramaMoves?.key === key) return world.dioramaMoves.on;
+  const moves = (id) => !!id && (world.game.tiles[id]?.frames || 0) > 1;
+  let on = [world.props, ...(world.neighbours || []).map((n) => n.props)].some((list) => list.some((p) => p.def.flat && moves(p.t)));
+  for (let y = R.y0; y < R.y1 && !on; y++) for (let x = R.x0; x < R.x1 && !on; x++) on = moves(tileOf(world, R, x, y));
+  world.dioramaMoves = { key, on };
+  return on;
 }
 
 // The region drawn flat: ground tiles, then the props that lie on it (rugs, puddles).
-export function picture(world, R, frame, make) {
+// `win` (cells of the region, x0 y0 x1 y1): only that window, in a picture of its own
+// size, for a frame of animation round the camera (engine/hd.js); the faces packed under
+// the map are left as they are.
+export function picture(world, R, frame, make, win = null) {
   const sides = world.dioramaSides;
-  const c = make(R.w * TILE, sides?.ph ?? R.h * TILE);
+  const W = win || { x0: R.x0, y0: R.y0, x1: R.x1, y1: R.y1 };
+  const c = win ? make((W.x1 - W.x0) * TILE, (W.y1 - W.y0) * TILE) : make(R.w * TILE, sides?.ph ?? R.h * TILE);
   const ctx = c.getContext('2d');
-  // under the map: the faces raised cells show (a tile's own `side`, README "Heights")
-  for (const s of sides?.list || []) ctx.drawImage(world.tiles.side(s.id, frame, s.fh, world.level), s.x, s.y);
-  // a map made for the ground view: the tiles a wall shows instead of its own, and the ceiling
-  for (const [id, at] of sides?.extra || []) ctx.drawImage(world.tiles.image(id, frame), at.x, at.y);
-  for (let y = R.y0; y < R.y1; y++) {
-    for (let x = R.x0; x < R.x1; x++) {
+  if (win) ctx.clearRect(0, 0, c.width, c.height);
+  else {
+    // under the map: the faces raised cells show (a tile's own `side`, README "Heights")
+    for (const s of sides?.list || []) ctx.drawImage(world.tiles.side(s.id, frame, s.fh, world.level), s.x, s.y);
+    // a map made for the ground view: the tiles a wall shows instead of its own, and the ceiling
+    for (const [id, at] of sides?.extra || []) ctx.drawImage(world.tiles.image(id, frame), at.x, at.y);
+  }
+  for (let y = W.y0; y < W.y1; y++) {
+    for (let x = W.x0; x < W.x1; x++) {
       const [sx, sy] = source(world, R, x, y);
       const id = world.tileAt(sx, sy);
       if (!id) continue;
       const d = world.game.tiles[id];
-      ctx.drawImage(world.tiles.image(id, frame, d.auto ? world.edgeMask(sx, sy, d.auto === true ? id : d.auto) : 0), (x - R.x0) * TILE, (y - R.y0) * TILE);
+      ctx.drawImage(world.tiles.image(id, frame, d.auto ? world.edgeMask(sx, sy, d.auto === true ? id : d.auto) : 0), (x - W.x0) * TILE, (y - W.y0) * TILE);
     }
   }
   for (const [list, ox, oy] of [[world.props, 0, 0], ...(world.neighbours || []).map((n) => [n.props, n.ox, n.oy])]) {
     for (const p of list) {
       if (p.hidden || !p.def.flat) continue;
       const img = world.tiles.image(p.t, frame + (p.phase || 0));
-      ctx.drawImage(img, (p.x + ox - R.x0) * TILE, (p.y + oy + 1 - R.y0) * TILE - img.height);
+      // a window: only what reaches into it
+      if (win && ((p.x + ox) * TILE + img.width <= W.x0 * TILE || p.x + ox >= W.x1 || (p.y + oy + 1) * TILE - img.height >= W.y1 * TILE || p.y + oy + 1 <= W.y0)) continue;
+      ctx.drawImage(img, (p.x + ox - W.x0) * TILE, (p.y + oy + 1 - W.y0) * TILE - img.height);
     }
   }
   return c;
@@ -489,13 +518,21 @@ export function gatherCards(world, frame, R) {
   // a tile's top layer stands at its cell's south edge: it hides the one in the cell, not
   // the head of whoever is in front
   if (world.hasTops ??= Object.values(world.game.tiles).some((d) => d.top)) {
-    for (let y = R.y0; y < R.y1; y++) {
-      for (let x = R.x0; x < R.x1; x++) {
-        const id = world.tileAt(x, y);
-        if (!id || !world.game.tiles[id].top) continue;
-        const img = world.tiles.top(id, animF);
-        out.push({ img, x: x * TILE, z: (y + 1) * TILE - 4.5, y: elev(x, y), w: img.width, h: img.height, body: true, depth: 8 });
+    // the cells with a top, found again only when the ground changes (groundKey)
+    const key = groundKey(world, R);
+    if (world.dioramaTops?.key !== key) {
+      const cells = [];
+      for (let y = R.y0; y < R.y1; y++) {
+        for (let x = R.x0; x < R.x1; x++) {
+          const id = world.tileAt(x, y);
+          if (id && world.game.tiles[id].top) cells.push([x, y, id]);
+        }
       }
+      world.dioramaTops = { key, cells };
+    }
+    for (const [x, y, id] of world.dioramaTops.cells) {
+      const img = world.tiles.top(id, animF);
+      out.push({ img, x: x * TILE, z: (y + 1) * TILE - 4.5, y: elev(x, y), w: img.width, h: img.height, body: true, depth: 8 });
     }
   }
   const body = (a, x, y, ez = 0) => {

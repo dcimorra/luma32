@@ -5,7 +5,7 @@
 // perspective camera (or one straight over the map, as the classic screen frames it): a sun that casts shadows, the map's lights, depth of field from the
 // real depth, a bloom, and the console's own drawing (dialogue, menus, HUD, fades) flat on top, at the screen's
 // resolution. Nothing a cartridge writes changes: a game cannot tell which look it is in.
-import { buildStatic, gatherCards, groundKey, bodyMesh, picture } from './diorama.js';
+import { buildStatic, gatherCards, groundKey, animates, bodyMesh, picture } from './diorama.js';
 import { forward, viewpoint } from './thirdperson.js';
 import { canvas, TILE } from './gfx.js';
 
@@ -26,6 +26,12 @@ const SHADOW_SIZE = 1024;
 const SHADOW_SPAN = 300;               // map pixels around the camera's target
 const DECAL_SIDE = 64;                 // the floor's picture reaches this far past the view
 const DECAL_TOP = 200;                 // and this far above it
+// The region's picture is drawn whole for each frame of animation up to this many cells
+// (128 x 128: a 2048-pixel square); past it only the cells the camera sees are: from
+// above, where the screen's corners fall on the ground; from the ground, this many cells
+// all round the player
+const WHOLE_PICTURE = 128 * 128;
+const ANIM_GROUND = 40;
 // third person: how wide the camera sees (the raycaster's width of view, engine/thirdperson.js),
 // how much the far distance softens past the player, and from how far (times their distance
 // from the camera) to where it is softest
@@ -462,6 +468,31 @@ export class Hd {
     return this.cam;
   }
 
+  // The cells of the region the camera sees the ground in (hd.render: a frame of
+  // animation), a little past the screen's edges, or null.
+  seenCells(world, R, ground) {
+    let x0;
+    let y0;
+    let x1;
+    let y1;
+    const corners = ground ? [] : [[0, 0], [240, 0], [0, 160], [240, 160]].map(([sx, sy]) => this.pick(sx, sy));
+    if (corners.length && corners.every(Boolean)) {
+      // raised ground and what stands on it reach a little past where the corners fall
+      const m = 2 + Math.ceil((world.maxElev || 0) / TILE);
+      x0 = Math.floor(Math.min(...corners.map((p) => p.x)) / TILE) - m;
+      x1 = Math.ceil(Math.max(...corners.map((p) => p.x)) / TILE) + m;
+      y0 = Math.floor(Math.min(...corners.map((p) => p.y)) / TILE) - m;
+      y1 = Math.ceil(Math.max(...corners.map((p) => p.y)) / TILE) + m + 4;
+    } else {
+      const pl = world.player;
+      const cx = Math.floor((pl ? pl.px + TILE / 2 : world.cam.x + world.viewW / 2) / TILE);
+      const cy = Math.floor((pl ? pl.py + TILE / 2 : world.cam.y + world.viewH / 2) / TILE);
+      x0 = cx - ANIM_GROUND; x1 = cx + ANIM_GROUND; y0 = cy - ANIM_GROUND; y1 = cy + ANIM_GROUND;
+    }
+    const win = { x0: Math.max(R.x0, x0), y0: Math.max(R.y0, y0), x1: Math.min(R.x1, x1), y1: Math.min(R.y1, y1) };
+    return win.x1 > win.x0 && win.y1 > win.y0 ? win : null;
+  }
+
   // Where a point of the map (map pixels, y up) is on the 240x160 screen.
   project(x, y, z) {
     const m = this.cam.vp;
@@ -510,17 +541,36 @@ export class Hd {
       this.animF = null;
     }
     this.ground = ground;
+    const c = this.aim(world, W / H);
     const animF = Math.floor(frame / (world.map.animRate || 20));
-    if (animF !== this.animF || world.props !== this.propsSeen) {
+    const propsNow = world.props !== this.propsSeen || world.props.length !== this.propsN;
+    if (this.animF === null || propsNow || (animF !== this.animF && R.w * R.h <= WHOLE_PICTURE)) {
       this.animF = animF;
       this.propsSeen = world.props;
+      this.propsN = world.props.length;
       gl.activeTexture(gl.TEXTURE0);
       gl.bindTexture(gl.TEXTURE_2D, this.mapTex);
       gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, picture(world, R, animF, canvas));
       gl.generateMipmap(gl.TEXTURE_2D);
+    } else if (animF !== this.animF) {
+      // a big region (a map with its neighbours): a frame of animation is drawn again only
+      // where the camera sees the ground and sent into the picture there; the rest keeps
+      // its frame, as do the smaller pictures the distance samples. The whole picture was
+      // tens of megabytes drawn and sent three times a second.
+      this.animF = animF;
+      const win = animates(world, R, `${key}:${world.props.length}`) && this.seenCells(world, R, ground);
+      if (win) {
+        const make = (w, h) => {
+          if (this.animPic?.width !== w || this.animPic?.height !== h) this.animPic = canvas(w, h);
+          return this.animPic;
+        };
+        gl.activeTexture(gl.TEXTURE0);
+        gl.bindTexture(gl.TEXTURE_2D, this.mapTex);
+        gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
+        gl.texSubImage2D(gl.TEXTURE_2D, 0, (win.x0 - R.x0) * TILE, (win.y0 - R.y0) * TILE, gl.RGBA, gl.UNSIGNED_BYTE, picture(world, R, animF, make, win));
+      }
     }
-    const c = this.aim(world, W / H);
     const cardList = [...gatherCards(world, frame, R), ...world.hdEntityCards(e)];
     this.cardCount = upload(gl, this.cardGeo, this.cards(cardList));
 
@@ -565,7 +615,7 @@ export class Hd {
     gl.useProgram(this.shadowProg.p);
     gl.uniformMatrix4fv(this.shadowProg.u.uVP, false, lightVP);
     gl.uniformMatrix4fv(this.shadowProg.u.uLightVP, false, lightVP);
-    this.drawAll(this.shadowProg);
+    this.drawAll(this.shadowProg, planes(lightVP));
 
     // 2. the scene
     gl.bindFramebuffer(gl.FRAMEBUFFER, this.fb);
@@ -610,7 +660,7 @@ export class Hd {
     if (see) gl.uniform3fv(s.u.uSeeTo, at);
     gl.uniform1f(s.u.uSee, see ? 26 : 0);
     this.near = ground ? 28 : 0;
-    this.drawAll(s);
+    this.drawAll(s, planes(c.vp));
     // the floor's picture, blended over it
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
@@ -665,7 +715,10 @@ export class Hd {
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   }
 
-  drawAll(prog) {
+  // `seen`: the planes of what this pass sees (planes()); a body wholly outside them is
+  // not drawn. A map with its neighbours stands hundreds of them, each its own mesh of
+  // thousands of points, most of them far off the screen and out of the sun's square.
+  drawAll(prog, seen = null) {
     const gl = this.gl;
     gl.uniform1i(prog.u.uTex, 0);
     if (prog.u.uThin) gl.uniform1f(prog.u.uThin, 0.85);
@@ -684,6 +737,7 @@ export class Hd {
     const turn = this.ground && this.cam?.ground ? this.cam.heading : 0;
     gl.uniform2f(prog.u.uTurn, Math.cos(turn), Math.sin(turn));
     for (const c of this.bodyList) {
+      if (seen && !inside(seen, c)) continue;
       const b = this.body(c.img, c.depth, c.shape);
       gl.uniform3f(prog.u.uOffset, c.x, c.y, c.lie ? c.z + c.h : c.z);
       gl.uniform1i(prog.u.uLie, c.lie ? 1 : 0);
@@ -902,6 +956,37 @@ function rgb(c) {
 }
 
 // ---------- a little linear algebra (column-major, as GL reads it) ----------
+
+// The six planes of a view (left, right, bottom, top, near, far) from its matrix, each
+// normalised (a b c d: a point is in front when a x + b y + c z + d >= 0).
+function planes(m) {
+  const row = (r) => [m[r], m[4 + r], m[8 + r], m[12 + r]];
+  const w = row(3);
+  const out = [];
+  for (const r of [0, 1, 2]) {
+    const a = row(r);
+    for (const s of [1, -1]) {
+      const p = [w[0] + s * a[0], w[1] + s * a[1], w[2] + s * a[2], w[3] + s * a[3]];
+      const l = Math.hypot(p[0], p[1], p[2]) || 1;
+      out.push(p.map((v) => v / l));
+    }
+  }
+  return out;
+}
+
+// Whether a body (a card of gatherCards) may reach into a view: a ball round all it can
+// take up, turned to the camera or lying down, against each plane.
+function inside(seen, c) {
+  // lying down (SCENE_VS, uLie) its picture runs back from z by its height, its depth
+  // stands up a little over y
+  const d = c.depth || 8;
+  const z = c.lie ? c.z + c.h / 2 : c.z;
+  const x = c.x + c.w / 2;
+  const y = c.lie ? c.y + 5 : c.y + c.h / 2;
+  const r = (c.w + c.h + d * 1.4) / 2 + 8;
+  for (const p of seen) if (p[0] * x + p[1] * y + p[2] * z + p[3] < -r) return false;
+  return true;
+}
 
 function norm(v) { const l = Math.hypot(...v) || 1; return v.map((x) => x / l); }
 function sub(a, b) { return [a[0] - b[0], a[1] - b[1], a[2] - b[2]]; }
