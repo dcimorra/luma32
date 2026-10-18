@@ -342,6 +342,15 @@
       "sheet_hint": "A: jugar · B: volver",
       "sheet_hint_click": "Clic: jugar · Clic derecho o ◀: volver",
       "sheet_hint_tap": "Toca: jugar · ◀: volver"
+    },
+    "life": {
+      "make_way": [
+        "¡Uy, perdona! Te dejo pasar.",
+        "Disculpa, estaba en medio.",
+        "Pasa, pasa.",
+        "¡Huy! Perdón, ya me aparto.",
+        "Te estaba cortando el paso, perdona."
+      ]
     }
   }
 }

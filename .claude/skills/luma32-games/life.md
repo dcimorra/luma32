@@ -60,6 +60,12 @@ not scripts:
 - **They notice the player.** A shopkeeper `look`s up when you come near and `greet`s
   you once a visit; a guard turns to watch; someone bumped into turns round, and may say
   so (`bump`). Not everyone: a few per map, the ones whose job is people.
+- **They make way.** Anyone the player walks into for a moment steps aside with a line
+  of the console's ("Disculpa, estaba en medio."); a place with its own manner gives its
+  own (`makeWay: 'key'` on the game, the map or the person, a list of lines in the
+  catalogue). Whoever must bar the way — the guard at the gate, the butler who won't
+  let you upstairs yet — gets `makeWay: false`, or they would step aside and open the
+  story's lock by themselves.
 - **A remark in passing**: `api.bark` from the story for what doesn't need to stop the
   player — a friend calling "¡Por aquí!" from the door the objective points to, a
   neighbour's comment as you cross the stairs.

@@ -243,6 +243,7 @@ migrate is reported in the console and not offered, never loaded half-understood
              move: 'wander'|'turn', radius, turn: false, turnBack: true,
              route: { path: [[x, y], [x, y, { face, pose, gesture, emote, bark, pause }], ...], back, pause, once },
              chat: { with: 'id', lines: ['key', 'note', ...], every, near }, look: 3, greet: 'key', bump: 'key',
+             makeWay: false | 'key',
              light, hint: false, remember: false, pose: 'sit', can: ['swim'], mode: 'fly' }],
   crowd: [{ id, doll, path: [[x, y], ...], every: ms, first: ms, talk, when }],  // passers-by
   warps: [{ x, y, to, at: [x, y], face, dir?, when?, run?: async (api) => {} }],
@@ -307,6 +308,16 @@ People live with each other and with the place, also data on the actor:
   player walks into them. Anyone bumped into turns round, unless busy at something.
 - `api.bark(id, key)` is the same balloon from a script: a shout across the square, a
   remark while the player walks on.
+- **Making way** (since 1.28): someone the player keeps walking into for half a second, or
+  who stands on the way a tap or a click asked for, steps aside to a free cell near by, off
+  the player's way, and says so over their head; once the player has gone by they walk
+  back to where they stood (someone on a route takes it up from where they are). The line
+  is their `makeWay: 'key'` (an emotion, or a key whose value is a list: one at random),
+  else the map's or the game's `makeWay: 'key'`, else the console's own
+  (`console.life.make_way`). `makeWay: false` on them, the map or the game and they hold
+  their ground: **give it to whoever bars a way on purpose** (the guard who won't let you
+  by until the story does). Nobody seated, lying or asleep gets up for it, and nothing of
+  it happens while a script runs.
 
 **Companions**: `game.party` — a list, or a function of the api — of people who go where
 the player goes: `party: (api) => [{ id: 'nieves', doll: 'nieves', talk, when }]`. On

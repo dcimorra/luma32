@@ -14,7 +14,7 @@ import { resolveWeather, drawWeather, drawDark, gatherLights } from './weather.j
 import { hdSupported, hdOn, setHd, hdOverhead, setHdOverhead } from './hd.js';
 import { regionOf, stairLift } from './diorama.js';
 import { goalOf, drawGuide, audit, guideOn, setGuide, pressFrom, rectCells } from './guide.js';
-import { placeParty, tickParty, tickLife, hushLife, bark, drawBarks, bumped, routeStop } from './company.js';
+import { placeParty, tickParty, tickLife, hushLife, bark, drawBarks, bumped, routeStop, canMakeWay, makeWay, pushInto, tickWay } from './company.js';
 import { Effects, EASE } from './vfx.js';
 import { Mode7 } from './mode7.js';
 import { Raycaster, headingOf, dirOf, forward, viewChoice, setViewChoice, nextView, thirdCamera, setThirdCamera, THIRD_STEPS, asView } from './thirdperson.js';
@@ -1044,6 +1044,7 @@ export class World {
   // non-solid people (a dog, a ghost) only let the player through when they are the
   // player's companions, who step aside along the player's trail.
   bodyAt(x, y, who) {
+    if (this.ghosts && who === this.player) return null;
     const a = this.actorAt(x, y, who, true);
     if (!a) return null;
     if (a.solid) return a;
@@ -1281,8 +1282,35 @@ export class World {
       return null;
     }
     const path = this.findPath(p, g.x, g.y);
-    if (!path?.length) { this.trip = null; return null; }
-    return path[0];
+    if (path?.length) { g.held = null; return path[0]; }
+    // nobody's way but for someone standing in it: walk on to them, and they make way
+    // (company.js, makeWay); the walk waits a while for them, then gives up
+    const way = this.pathThrough(p, g.x, g.y);
+    if (way?.length) {
+      const [dx, dy] = DIRS[way[0]];
+      const who = this.actorAt(p.x + dx, p.y + dy, p, true);
+      if (!who) return way[0];
+      const f = this.engine.frame;
+      g.held ??= f;
+      if (canMakeWay(this, who) || who.errand) {
+        if (f - g.held < 150) {
+          p.face(way[0]);
+          const cells = [];
+          let [x, y] = [p.x, p.y];
+          for (const d of way) { x += DIRS[d][0]; y += DIRS[d][1]; cells.push([x, y]); }
+          makeWay(this, who, way[0], cells);
+          return null;
+        }
+      }
+    }
+    this.trip = null;
+    return null;
+  }
+
+  // The player's way to a cell as if nobody stood in it (tripStep).
+  pathThrough(p, x, y) {
+    this.ghosts = true;
+    try { return this.findPath(p, x, y); } finally { this.ghosts = false; }
   }
 
   // Under the mouse, the cell a click would go to: in the accent colour where A answers.
@@ -1537,7 +1565,9 @@ export class World {
     } else {
       p.face(dir);
       if (this.hook('onBump', { x: nx, y: ny, dir, tile: this.tileAt(nx, ny) })) return;
-      bumped(this, this.actorAt(nx, ny, p));
+      const other = this.actorAt(nx, ny, p);
+      bumped(this, other);
+      if (other) pushInto(this, other, dir);
       if (e.frame - (this.lastBump || 0) > 20) { sfx('bump'); this.lastBump = e.frame; }
     }
   }
@@ -1760,6 +1790,8 @@ export class World {
       const ny = p.y + dy;
       const warp = this.warpAt(nx, ny, p.dir, true);
       if (warp) { p.strolling = false; this.run((api) => api.take(warp)); return; }
+      const other = this.actorAt(nx, ny, p);
+      if (other) pushInto(this, other, p.dir);
       if (e.frame - (this.lastBump || 0) > 20) {
         this.lastBump = e.frame;
         if (!this.hook('onBump', { x: nx, y: ny, dir: p.dir, tile: this.tileAt(nx, ny) })) sfx('bump');
@@ -1801,6 +1833,8 @@ export class World {
       const t = this.targetAhead();
       const warp = this.warpAt(t.x, t.y, p.dir, true);
       if (warp) { p.strolling = false; this.run((api) => api.take(warp)); return; }
+      const other = this.actorAt(t.x, t.y, p);
+      if (other) pushInto(this, other, p.dir);
       if (e.frame - (this.lastBump || 0) > 20) {
         this.lastBump = e.frame;
         if (!this.hook('onBump', { x: t.x, y: t.y, dir: p.dir, tile: this.tileAt(t.x, t.y) })) sfx('bump');
@@ -1820,7 +1854,7 @@ export class World {
     // and go. All of it holds still while a script runs.
     if (!this.busy) {
       for (const a of this.actors) {
-        if (a === this.player || a.moving || !a.visible || a.errand) continue;
+        if (a === this.player || a.moving || !a.visible || a.errand || a.aside > e.frame) continue;
         if (a.def.route) { this.tickRoute(a, e); continue; }
         if (!a.def.move) continue;
         if (--a.idle > 0) continue;
@@ -1834,7 +1868,7 @@ export class World {
           else a.face(d);
         }
       }
-      if (this.onTop) { this.tickCrowd(e); tickLife(this); }
+      if (this.onTop) { this.tickCrowd(e); tickLife(this); tickWay(this); }
     }
     if (this.player) tickParty(this);
     if (this.cam.follow) this.centerCamera();

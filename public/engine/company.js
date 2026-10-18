@@ -1,12 +1,14 @@
 // People with each other and with the place: companions who walk behind the player,
 // short lines said over a head without stopping the game (barks), two neighbours who
 // chat between themselves, people who look up when the player comes near or greet them,
-// someone bumped into who turns round, and route stops where someone does something
+// someone bumped into who turns round, someone in the player's way who steps aside, and
+// route stops where someone does something
 // (sits on the bench, reaches into the stall). All of it is data on the map or the game
 // (README "Life on a map"); the engine plays it while nobody runs a script.
 import { SCREEN_W } from './gfx.js';
 import { drawText, measure, wrap } from './font.js';
 import { frame, getTheme } from './ui.js';
+import { has, tv } from './i18n.js';
 
 const DIRS = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
 const OPPOSITE = { up: 'down', down: 'up', left: 'right', right: 'left' };
@@ -218,6 +220,105 @@ export function bumped(world, a) {
   a.bumpedAt = f;
   if (a.def.turn !== false && !a.act && !a.moving) a.faceActor(world.player);
   if (a.def.bump) express(world, a, a.def.bump);
+}
+
+// ---------- making way ----------
+
+// Someone the player keeps walking into (half a second), or who stands on the way a tap
+// asked for, steps aside to a free cell near by, off the player's way, and says so: their
+// `makeWay: 'key'` (an emotion, or a key whose value is a list: one at random), else the
+// map's or the game's, else the console's own. `makeWay: false` on them, the map or the
+// game: they hold their ground (a guard who bars a door until the story lets you by).
+// Away from where they stood, once the player has gone by they walk back to it; someone
+// on a route takes it up again from where they are.
+const PUSH = ms(500);
+const ASIDE = ms(2500);
+
+export function canMakeWay(world, a) {
+  if (!a || a === world.player || a.party || !a.visible || a.moving || a.errand || a.leaving !== undefined) return false;
+  if (a.act === 'sit' || a.act === 'sleep' || a.act === 'lie') return false;
+  return a.def.makeWay !== false && world.map.makeWay !== false && world.game.makeWay !== false;
+}
+
+// `dir`: the way the player is going; `way`: the cells they mean to cross ([x, y] pairs),
+// by default straight on from where they stand.
+export function makeWay(world, a, dir, way = null) {
+  if (!canMakeWay(world, a)) return false;
+  const f = world.engine.frame;
+  if (f - (a.asideAt ?? -1e9) < ASIDE) return false;
+  const p = world.player;
+  const [dx, dy] = DIRS[dir] || [0, 0];
+  const key = (x, y) => `${x},${y}`;
+  const avoid = new Set([key(p.x, p.y)]);
+  if (way) for (const [x, y] of way) avoid.add(key(x, y));
+  else for (let k = 1; k <= 8; k++) avoid.add(key(p.x + dx * k, p.y + dy * k));
+  avoid.add(key(a.x, a.y));
+  // the nearest free cell off the way, a few steps at most; across the way first
+  const seen = new Set([key(a.x, a.y)]);
+  let ring = [[a.x, a.y]];
+  let to = null;
+  for (let d = 1; d <= 4 && !to && ring.length; d++) {
+    const next = [];
+    for (const [x, y] of ring) {
+      for (const [ex, ey] of Object.values(DIRS)) {
+        const nx = x + ex;
+        const ny = y + ey;
+        const k = key(nx, ny);
+        if (seen.has(k)) continue;
+        seen.add(k);
+        if (world.blocked(nx, ny, a) || world.actorAt(nx, ny, a, true)) continue;
+        next.push([nx, ny]);
+        if (avoid.has(k)) continue;
+        // not further on the player's way than they stood
+        const ahead = (nx - a.x) * dx + (ny - a.y) * dy > 0 ? 1 : 0;
+        if (!to || ahead < to.ahead) to = { x: nx, y: ny, ahead };
+      }
+    }
+    ring = next;
+  }
+  if (!to) return false;
+  a.asideAt = f;
+  a.aside = f + ASIDE;
+  // the way they faced before they turned to look at the player (tickLife)
+  if (!a.def.route && !a.wayBack) a.wayBack = { x: a.x, y: a.y, dir: a.lookFrom || a.dir, act: a.act };
+  sayMakeWay(world, a);
+  world.errand(a, to.x, to.y, () => { if (p) a.faceActor(p); });
+  return true;
+}
+
+function sayMakeWay(world, a) {
+  const own = [a.def.makeWay, world.map.makeWay, world.game.makeWay].find((v) => typeof v === 'string');
+  const k = own || 'console.life.make_way';
+  const v = !EMOTE_NAMES.has(k) && has(k) ? tv(k) : null;
+  if (Array.isArray(v) && v.length) {
+    bark(world, a, String(v[Math.floor(Math.random() * v.length)]));
+    if (a.bark) a.bark.life = true;
+  } else express(world, a, k);
+}
+
+// The player held on into `a` this frame (going `dir`): after a moment they make way.
+export function pushInto(world, a, dir) {
+  const f = world.engine.frame;
+  const push = world.pushing;
+  if (!push || push.a !== a || f - push.last > 3) { world.pushing = { a, from: f, last: f }; return; }
+  push.last = f;
+  if (f - push.from >= PUSH && makeWay(world, a, dir)) world.pushing = null;
+}
+
+// Per frame, while nobody runs a script: whoever stepped aside and is not on a route walks
+// back to where they stood once the player is not by it and it is free.
+export function tickWay(world) {
+  const f = world.engine.frame;
+  const p = world.player;
+  for (const a of world.actors) {
+    const b = a.wayBack;
+    if (!b || a.moving || a.errand || f < (a.aside || 0)) continue;
+    if (a.x === b.x && a.y === b.y) { a.wayBack = null; continue; }
+    if (p && Math.abs(p.x - b.x) + Math.abs(p.y - b.y) < 2) continue;
+    if (world.actorAt(b.x, b.y, a, true)) { a.aside = f + ms(1000); continue; }
+    a.aside = f + ms(1500);
+    world.errand(a, b.x, b.y, () => { a.face(b.dir); a.setPose(b.act); a.wayBack = null; });
+  }
 }
 
 // A route point may say what is done there: [x, y, { face, pose, gesture, emote, bark,
