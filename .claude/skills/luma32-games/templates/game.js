@@ -168,6 +168,8 @@ export default {
   cover,
   // conversations are directed: speakers turn to each other, the camera finds them
   direct: true,
+  // what people say when they step out of the player's way: this game's own lines (life.md)
+  makeWay: 'life.make_way',
   // SELECT: what the story wants from the player right now
   async onSelect(api) {
     await api.say(null, api.save.objective || 'obj.none', { style: 'box' });

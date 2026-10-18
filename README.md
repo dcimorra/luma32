@@ -314,7 +314,8 @@ People live with each other and with the place, also data on the actor:
   back to where they stood (someone on a route takes it up from where they are). The line
   is their `makeWay: 'key'` (an emotion, or a key whose value is a list: one at random),
   else the map's or the game's `makeWay: 'key'`, else the console's own
-  (`console.life.make_way`). `makeWay: false` on them, the map or the game and they hold
+  (`console.life.make_way`): a plain fallback, every game gives its own (the skill's
+  `life.md`). `makeWay: false` on them, the map or the game and they hold
   their ground: **give it to whoever bars a way on purpose** (the guard who won't let you
   by until the story does). Nobody seated, lying or asleep gets up for it, and nothing of
   it happens while a script runs.

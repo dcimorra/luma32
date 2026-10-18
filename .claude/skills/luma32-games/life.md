@@ -60,12 +60,17 @@ not scripts:
 - **They notice the player.** A shopkeeper `look`s up when you come near and `greet`s
   you once a visit; a guard turns to watch; someone bumped into turns round, and may say
   so (`bump`). Not everyone: a few per map, the ones whose job is people.
-- **They make way.** Anyone the player walks into for a moment steps aside with a line
-  of the console's ("Disculpa, estaba en medio."); a place with its own manner gives its
-  own (`makeWay: 'key'` on the game, the map or the person, a list of lines in the
-  catalogue). Whoever must bar the way — the guard at the gate, the butler who won't
-  let you upstairs yet — gets `makeWay: false`, or they would step aside and open the
-  story's lock by themselves.
+- **They make way, in the game's own words.** Anyone the player walks into for a moment
+  steps aside and says a line over their head (README, "Making way" under the life of a map). The console has a
+  plain list of its own ("Disculpa, estaba en medio."), but it is only a fallback: **every
+  game gives its own**, as a list in its catalogue (five or six lines, one is picked at
+  random) named on the game: `makeWay: 'life.make_way'`. They are said by the people of
+  this world, in its era and manner: a footman in Regency London begs milord's pardon,
+  a market woman grumbles but moves, a soldier steps aside without a word but a `'sweat'`.
+  A map whose people speak otherwise (a court, a port, a ship's crew) gives its own list
+  on the map, and someone with a manner of their own on the person. Whoever must bar the
+  way — the guard at the gate, the butler who won't let you upstairs yet — gets
+  `makeWay: false`, or they would step aside and open the story's lock by themselves.
 - **A remark in passing**: `api.bark` from the story for what doesn't need to stop the
   player — a friend calling "¡Por aquí!" from the door the objective points to, a
   neighbour's comment as you cross the stairs.

@@ -45,5 +45,14 @@
     "well": "Busca la llave en el pozo de piedra, a la derecha de Ana.",
     "gate": "Abre la puerta de la valla del norte.",
     "shore": "Sigue el camino hacia el este hasta la orilla."
+  },
+  "life": {
+    "make_way": [
+      "¡Ay, perdona, que estaba en medio!",
+      "Pasa, pasa, que no muerdo.",
+      "Uy, perdón. Ya me quito.",
+      "¿Llevas prisa? Anda, pasa.",
+      "Perdona, que me he quedado pasmado."
+    ]
   }
 }

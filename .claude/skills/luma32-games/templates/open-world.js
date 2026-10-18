@@ -156,6 +156,8 @@ export default {
   cover,
   // conversations are directed: speakers turn to each other, the camera finds them
   direct: true,
+  // what people say when they step out of the player's way: this game's own lines (life.md)
+  makeWay: 'life.make_way',
   // the water is a door, not a wall: the first bump says so (world.md, "Getting about")
   onBump(api, q) {
     if (q.tile !== 'water' || api.can('swim') || api.is('water_said')) return;

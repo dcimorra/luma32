@@ -25,6 +25,9 @@ Each line points to the file whose rule it checks; the reviewer scores against i
       (`life.md`, "People with each other"); companions are the engine's `party`.
 - [ ] Every map with people passes the in-and-out test (`life.md`); every outdoor map
       and big interior has someone coming and going.
+- [ ] People make way in the game's own words: `makeWay: '<key>'` on the game with a list
+      of lines in its catalogue (maps whose people speak otherwise, their own), and
+      `makeWay: false` on whoever bars a way on purpose (`life.md`).
 - [ ] Every person answers A; every spot answers from touching distance and shows the
       "A" hint (`feel.md`).
 - [ ] Every beat opens with context and the next step is findable (`feel.md`).
