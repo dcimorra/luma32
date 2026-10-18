@@ -464,7 +464,9 @@ horizon, 40 by default) and brings it closer, easing; `api.view3d()` puts it bac
 `api.zoom` is a dolly towards its point. In the classic look these only wait. A tile's `top` (a tree's crown, tall grass) stands as a card, and a
 solid tile with a `top` is never a wall. A scene that covers the world (a minigame,
 Mode 7), a frame with a glitch, and a map bigger than the GPU's largest picture are
-shown classic.
+shown classic. On a phone or a tablet the picture of a map with its neighbours stops at
+4096 x 4096 pixels (iOS takes no bigger canvas): past it the map is built alone, its
+neighbours left out.
 
 `node tools/sweep-hd.mjs <url> [game ...]` draws every map of every cartridge in the
 modern look on contact sheets, with a census of what each map uses (`/tmp/luma-sweep`).

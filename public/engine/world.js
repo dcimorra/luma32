@@ -2235,8 +2235,10 @@ export class World {
   // the map itself; the engine draws the HUD apart.
   drawHd(e) {
     if (!this.map) return null;
-    // a region bigger than the GPU takes in one picture is shown classic
-    const R = regionOf(this);
+    // a region bigger than the device takes in one picture is the map alone, its
+    // neighbours left out (the map's own edges are cut); bigger still, it is shown classic
+    let R = regionOf(this);
+    if (R.w * R.h * TILE * TILE > (this.engine.hdPass?.maxPicture ?? Infinity)) R = regionOf(this, { alone: true });
     if (Math.max(R.w, R.h) * TILE > (this.engine.hdPass?.maxTex ?? 4096)) return null;
     // from behind the player on an ordinary map (`third`): the diorama, built to be seen
     // from any side. A map made for the ground view (a `view` on it or the game, a ceiling,

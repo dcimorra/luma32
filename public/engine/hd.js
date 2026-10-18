@@ -350,6 +350,10 @@ export class Hd {
     this.back = canvas(240, 160);
     this.backTex = texture(gl, gl.LINEAR, gl.LINEAR);
     this.maxTex = gl.getParameter(gl.MAX_TEXTURE_SIZE);
+    // the most pixels the region's picture may have: on a phone or a tablet, 4096 x 4096.
+    // iOS refuses a bigger canvas (16,777,216 pixels) and the tab goes down with it; a city's
+    // districts joined edge to edge (6240 x 4480) passed maxTex and closed the game there
+    this.maxPicture = COARSE?.matches ? 4096 * 4096 : Infinity;
     this.bodies = new WeakMap();
     this.bodyList = [];
     this.atlas = document.createElement('canvas');

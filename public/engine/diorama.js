@@ -45,9 +45,10 @@ const isWall = (d) => !!d && !!d.solid && !d.low && !d.medium && !d.reflect && !
 // its nearest edge cell's tile, so a low camera sees land and sea, not the cut. Seen from
 // the ground (third person) a map without one gets six cells of it: the camera
 // is low there, and the cut would be in every view that looks towards an edge.
-export function regionOf(world) {
-  const r = { x0: 0, y0: 0, x1: world.w, y1: world.h };
-  for (const n of world.neighbours || []) {
+// `alone`: the map without its neighbours, when all of them would not fit (world.drawHd).
+export function regionOf(world, { alone = false } = {}) {
+  const r = { x0: 0, y0: 0, x1: world.w, y1: world.h, alone };
+  for (const n of alone ? [] : world.neighbours || []) {
     r.x0 = Math.min(r.x0, n.ox);
     r.y0 = Math.min(r.y0, n.oy);
     r.x1 = Math.max(r.x1, n.ox + n.w);
@@ -144,7 +145,7 @@ export function picture(world, R, frame, make, win = null) {
       ctx.drawImage(world.tiles.image(id, frame, d.auto ? world.edgeMask(sx, sy, d.auto === true ? id : d.auto) : 0), (x - W.x0) * TILE, (y - W.y0) * TILE);
     }
   }
-  for (const [list, ox, oy] of [[world.props, 0, 0], ...(world.neighbours || []).map((n) => [n.props, n.ox, n.oy])]) {
+  for (const [list, ox, oy] of [[world.props, 0, 0], ...(R.alone ? [] : world.neighbours || []).map((n) => [n.props, n.ox, n.oy])]) {
     for (const p of list) {
       if (p.hidden || !p.def.flat) continue;
       const img = world.tiles.image(p.t, frame + (p.phase || 0));
@@ -514,7 +515,7 @@ export function gatherCards(world, frame, R) {
     }
   };
   props(world.props, 0, 0);
-  for (const n of world.neighbours || []) props(n.props, n.ox, n.oy);
+  for (const n of R.alone ? [] : world.neighbours || []) props(n.props, n.ox, n.oy);
   // a tile's top layer stands at its cell's south edge: it hides the one in the cell, not
   // the head of whoever is in front
   if (world.hasTops ??= Object.values(world.game.tiles).some((d) => d.top)) {
@@ -544,7 +545,7 @@ export function gatherCards(world, frame, R) {
     if (!a.visible || (a.alpha ?? 1) <= 0) continue;
     body(a, Math.round(a.px) + (a.ox || 0), Math.round(a.py) + (a.oy || 0), world.raised ? a.ez : 0);
   }
-  for (const n of world.neighbours || []) for (const a of n.actors) body(a, (a.x + n.ox) * TILE, (a.y + n.oy) * TILE);
+  for (const n of R.alone ? [] : world.neighbours || []) for (const a of n.actors) body(a, (a.x + n.ox) * TILE, (a.y + n.oy) * TILE);
   return out;
 }
 
