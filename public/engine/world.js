@@ -11,7 +11,7 @@ import { Stage } from './stage.js';
 import { changed } from './host.js';
 import { reportProblem } from './report.js';
 import { resolveWeather, drawWeather, drawDark, gatherLights } from './weather.js';
-import { hdSupported, hdOn, setHd } from './hd.js';
+import { hdSupported, hdOn, setHd, hdOverhead, setHdOverhead } from './hd.js';
 import { regionOf, stairLift } from './diorama.js';
 import { goalOf, drawGuide, audit, guideOn, setGuide, pressFrom, rectCells } from './guide.js';
 import { placeParty, tickParty, tickLife, hushLife, bark, drawBarks, bumped, routeStop } from './company.js';
@@ -3401,6 +3401,8 @@ export class StoryApi {
     const items = [
       ...(isWeb() ? [] : [{ id: 'view', label: t('console.menu.view'), value: () => t(isFull() ? 'console.menu.view_full' : 'console.menu.view_shell'), toggle: () => setFull(!isFull()) }]),
       ...(hdSupported() ? [{ id: 'graphics', label: t('console.menu.graphics'), value: () => t(hdOn() ? 'console.menu.graphics_modern' : 'console.menu.graphics_classic'), toggle: () => setHd(!hdOn()) }] : []),
+      // the modern look from above: leaning, or straight over the map as the classic screen (kept per device)
+      ...(hdSupported() && hdOn() && !this.world.thirdPerson ? [{ id: 'angle', label: t('console.menu.angle'), value: () => t(hdOverhead() ? 'console.menu.angle_overhead' : 'console.menu.angle_tilted'), toggle: () => setHdOverhead(!hdOverhead()) }] : []),
       // the map from behind the player, where the cartridge leaves it to them (kept per game)
       ...(this.world.eyesChoice ? [{ id: 'camera', label: t('console.menu.camera'), value: () => t(`console.menu.camera_${viewChoice(game)}`), toggle: () => setViewChoice(game, nextView(viewChoice(game))) }] : []),
       // in third person, how far behind and how high the camera is: left and right, or A

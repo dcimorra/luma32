@@ -383,6 +383,18 @@ always was) and MODERNOS (since 1.10; kept per device, offered only where WebGL 
 the same game shown as a diorama in three dimensions. `?hd=1` / `?hd=0` force either
 look for testing. Still a prototype: judge it on a map before relying on it.
 
+"Ángulo" (since 1.27, shown with MODERNOS and the view from above; kept per device) says
+where the camera stands over the map: INCLINADO (the default: leaning, in perspective, as
+below) or CENITAL, straight over it as the classic screen frames it. The cenital camera is
+orthographic at 45 degrees, squeezed down the screen by as much as it leans, so a step
+north on the ground and a step up a wall are each a pixel up the screen, as 3/4 art draws
+them: the ground lies exactly where the classic look puts it (a touch picks the same cell),
+every wall's face covers the rows its picture takes, and people, props and buildings stand
+where their sprites stand, with the sun's shadows, the map's lights, the bloom and the
+hour's grade of the modern look. Nothing is far, so there is no depth of field. A script's
+`api.view3d` with a `yaw` or a `pitch` is a film shot and turns to perspective while it
+lasts; a `zoom` stays overhead. `?hdtop=1` / `?hdtop=0` force either for testing.
+
 `engine/diorama.js` builds the map from what it already says. The ground lies flat. A
 solid cell with walkable ground right below it is a wall's face (the 3/4 art draws it
 from the front), and the solid cells above it are the wall's top: a run of solid cells

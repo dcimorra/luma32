@@ -2,7 +2,7 @@
 // same pixel art and the same rules, shown as a diorama in three dimensions.
 // engine/diorama.js builds the map from what it already says (ground, walls with their
 // faces stood up, heights, props and people as cards); this draws it with WebGL 2 under a
-// perspective camera: a sun that casts shadows, the map's lights, depth of field from the
+// perspective camera (or one straight over the map, as the classic screen frames it): a sun that casts shadows, the map's lights, depth of field from the
 // real depth, a bloom, and the console's own drawing (dialogue, menus, HUD, fades) flat on top, at the screen's
 // resolution. Nothing a cartridge writes changes: a game cannot tell which look it is in.
 import { buildStatic, gatherCards, groundKey, bodyMesh, picture } from './diorama.js';
@@ -55,6 +55,21 @@ export const hdOn = () => on;
 export function setHd(v, { keep = true } = {}) {
   on = !!v;
   if (keep) try { localStorage.setItem(KEY, on ? 'modern' : 'classic'); } catch { /* a comfort */ }
+}
+
+// The view from above, straight over the map (since 1.27): the classic screen's own
+// framing, the ground flat and every face as its 3/4 art draws it, with the modern look's
+// light. Else leaning, in perspective. Kept per device; ?hdtop=1 / ?hdtop=0 for testing.
+const ANGLE_KEY = 'luma32.gfx.angle';
+let overhead = (() => {
+  const q = new URLSearchParams(location.search).get('hdtop');
+  if (q !== null) return q === '1';
+  try { return localStorage.getItem(ANGLE_KEY) === 'overhead'; } catch { return false; }
+})();
+export const hdOverhead = () => overhead;
+export function setHdOverhead(v) {
+  overhead = !!v;
+  try { localStorage.setItem(ANGLE_KEY, overhead ? 'overhead' : 'tilted'); } catch { /* a comfort */ }
 }
 
 // ---------- shaders ----------
@@ -215,6 +230,7 @@ uniform sampler2D uBack;
 uniform bool uHasBack;
 uniform vec2 uOut;
 uniform vec2 uClip;     // near, far
+uniform bool uOrtho;    // the camera straight over the map: its depth is linear
 uniform float uFocus;   // the distance in focus: the camera's target
 uniform float uDof;     // how much what is off the focus softens
 uniform vec4 uDofRange; // off the focus (times it) where the softening starts and where it is full: past it (xy), before it (zw)
@@ -223,6 +239,7 @@ uniform float uMosaic;  // a fade in blocks (engine.js): their size in screen pi
 out vec4 outColor;
 
 float dist(vec2 uv) {
+  if (uOrtho) return uClip.x + texture(uDepth, uv).r * (uClip.y - uClip.x);
   float z = texture(uDepth, uv).r * 2.0 - 1.0;
   return 2.0 * uClip.x * uClip.y / (uClip.y + uClip.x - z * (uClip.y - uClip.x));
 }
@@ -379,7 +396,31 @@ export class Hd {
       if (p) { tx += (p.x - tx) * k; tz += (p.y + 8 - tz) * k; }
       zoom *= fx.zoom;
     }
+    // straight over the map, unless a script is shooting the diorama as a film (api.view3d)
+    const film = (v.yaw ?? 0) !== 0 || (v.pitch ?? PITCH_DEG) !== PITCH_DEG;
+    if (overhead && !film) return this.over(tx, tz, aspect, world.viewW / 2 / Math.max(0.2, zoom));
     return this.camera(tx, tz, aspect, { yaw: v.yaw ?? 0, pitch: v.pitch ?? PITCH_DEG, zoom });
+  }
+
+  // The view from above: an orthographic camera at 45 degrees, squeezed down the screen by
+  // as much as it leans, so a step north on the ground and a step up a wall are each a
+  // pixel up the screen, as the 3/4 art draws them. The ground lies as in the classic look
+  // (the point it looks at is the middle of the classic screen) and a wall's face, stood up
+  // at its south edge, covers the rows its picture takes (diorama.js pushes the tops back
+  // over them). `across`: half the width it takes in, in map pixels.
+  over(tx, tz, aspect, across) {
+    const k = Math.SQRT1_2;
+    const dist = 370;                  // what the hollows and the haze are measured against
+    const target = [tx, 0, tz];
+    const eye = [tx, dist * k, tz + dist * k];
+    const hw = across;
+    const hh = (across / aspect) * k;
+    const near = 20;
+    const far = dist * 3;
+    const view = lookAt(eye, target, [0, 1, 0]);
+    const proj = ortho(-hw, hw, -hh, hh, near, far);
+    this.cam = { eye, target, dist, near, far, aspect, vp: mul(proj, view), ortho: [hw, hh] };
+    return this.cam;
   }
 
   // The camera looking at a point of the map (map pixels, the ground under the player),
@@ -438,6 +479,12 @@ export class Hd {
     const ty = Math.tan(FOV_Y / 2);
     const nx = (sx / 240) * 2 - 1;
     const ny = 1 - (sy / 160) * 2;
+    if (c.ortho) {
+      // every ray the same way, from its own point of the screen
+      const o = add(c.eye, add(scale(r, nx * c.ortho[0]), scale(u, ny * c.ortho[1])));
+      const t = -o[1] / f[1];
+      return { x: o[0] + f[0] * t, y: o[2] + f[2] * t };
+    }
     const d = add(f, add(scale(r, nx * ty * c.aspect), scale(u, ny * ty)));
     if (d[1] >= 0) return null;
     const t = -c.eye[1] / d[1];
@@ -602,10 +649,11 @@ export class Hd {
     gl.uniform1i(p.u.uHasBack, this.hasBack ? 1 : 0);
     gl.uniform2f(p.u.uOut, W, H);
     gl.uniform2f(p.u.uClip, c.near, c.far);
+    gl.uniform1i(p.u.uOrtho, c.ortho ? 1 : 0);
     gl.uniform1f(p.u.uFocus, c.dist);
     // depth of field: round the player from above; from behind them only the far distance
     // softens, a little
-    gl.uniform1f(p.u.uDof, ground ? TP_DOF : 1);
+    gl.uniform1f(p.u.uDof, ground ? TP_DOF : c.ortho ? 0 : 1);
     gl.uniform4fv(p.u.uDofRange, ground ? TP_DOF_RANGE : TOP_DOF_RANGE);
     gl.uniform3fv(p.u.uHaze, look.haze || [0, 0, 0]);
     // a fade in blocks: the picture itself breaks up here, the colour comes from the buffer
