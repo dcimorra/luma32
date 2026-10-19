@@ -65,12 +65,13 @@ export function setHd(v, { keep = true } = {}) {
 
 // The view from above, straight over the map (since 1.27): the classic screen's own
 // framing, the ground flat and every face as its 3/4 art draws it, with the modern look's
-// light. Else leaning, in perspective. Kept per device; ?hdtop=1 / ?hdtop=0 for testing.
+// light, and the default (since 1.28.1). Else leaning, in perspective. Kept per device;
+// ?hdtop=1 / ?hdtop=0 for testing.
 const ANGLE_KEY = 'luma32.gfx.angle';
 let overhead = (() => {
   const q = new URLSearchParams(location.search).get('hdtop');
   if (q !== null) return q === '1';
-  try { return localStorage.getItem(ANGLE_KEY) === 'overhead'; } catch { return false; }
+  try { return localStorage.getItem(ANGLE_KEY) !== 'tilted'; } catch { return true; }
 })();
 export const hdOverhead = () => overhead;
 export function setHdOverhead(v) {

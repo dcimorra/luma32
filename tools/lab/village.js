@@ -17,7 +17,10 @@
 //   over two face rows, side walls of top tiles, a south wall of one top row with the
 //   door in it (cut low from above; a wall from behind), a window — furniture that lies
 //   down (a bed, a table), stands (a shelf, a chair, a chest to examine, a stove that
-//   lights), a rug lying flat, a partition that makes a one-cell corridor and a dead end.
+//   lights), a rug lying flat, a clock hung on a wall cell (inside the wall's block: the
+//   modern look hangs it on the wall's face), someone asleep in the bed (tucked in along
+//   it, laid flat on it in the modern look), a partition that makes a one-cell corridor
+//   and a dead end.
 // cellar: made for the ground view (`wallHeight`, `ceiling`, `fog`, walls that show
 //   another tile's picture, pillars, a torch on the player), reached from the big house.
 import { setViewChoice } from '../../engine/thirdperson.js';
@@ -123,6 +126,8 @@ export const villageTiles = {
   chair: { draw(p) { p.rect(3, 2, 10, 2, C.wood); p.rect(3, 4, 2, 8, C.wood); p.rect(11, 4, 2, 8, C.wood); p.rect(3, 9, 10, 4, C.woodHi); p.rect(4, 13, 2, 3, C.woodLo); p.rect(10, 13, 2, 3, C.woodLo); } },
   chest: { examine: 'house.chest', draw(p) { p.rect(2, 5, 12, 10, C.woodLo); p.rect(3, 6, 10, 8, C.wood); p.rect(2, 4, 12, 3, C.woodHi); p.rect(7, 9, 2, 3, C.iron); } },
   stove: { examine: 'house.stove', light: { r: 36, color: '#ff9040', flicker: 1, dy: -4 }, frames: 2, draw(p, f) { p.rect(1, 2, 14, 14, C.iron); p.rect(3, 6, 10, 6, C.ink); p.rect(5, 8 - f, 6, 3 + f, C.flame); p.rect(6, 0, 4, 3, C.iron); } },
+  // hung on a wall cell: not solid of itself (`foot: [0, 0]`), the wall is
+  clock: { foot: [0, 0], draw(p) { p.ellipse(8, 7, 7, 7, C.woodLo); p.ellipse(8, 7, 5, 5, '#f4ecd8'); p.px(8, 3, C.ink); p.px(8, 11, C.ink); p.px(4, 7, C.ink); p.px(12, 7, C.ink); p.line(8, 7, 8, 4, C.ink); p.line(8, 7, 11, 8, C.ink); p.rect(7, 14, 2, 2, C.woodLo); } },
   rug: { flat: true, size: [3, 2], draw(p) { p.rect(0, 0, 48, 32, C.cloth); p.rect(3, 3, 42, 26, C.clothHi); p.rect(6, 6, 36, 20, C.cloth); p.rect(16, 10, 16, 12, '#e8d8a0'); } },
   lantern: { light: { r: 44, color: '#ffd090', flicker: 1 }, examine: 'cellar.lantern', draw(p) { p.rect(6, 0, 4, 2, C.iron); p.rect(4, 2, 8, 10, C.iron); p.rect(5, 3, 6, 8, C.flame); p.rect(5, 12, 6, 2, C.iron); } },
   crate: { draw(p) { p.rect(1, 1, 14, 14, C.woodLo); p.rect(2, 2, 12, 12, C.wood); p.line(2, 2, 13, 13, C.woodHi); p.line(13, 2, 2, 13, C.woodHi); } },
@@ -266,10 +271,12 @@ export const villageMaps = {
     props: [
       { t: 'bed', x: 1, y: 4 }, { t: 'table', x: 3, y: 7 }, { t: 'chair', x: 2, y: 7 }, { t: 'shelf', x: 8, y: 3 }, { t: 'chest', x: 10, y: 5 },
       { t: 'stove', x: 4, y: 3 }, { t: 'rug', x: 1, y: 10 }, { t: 'crate', x: 10, y: 9 },
+      { t: 'clock', x: 7, y: 2 },   // on the north wall's lower face row
     ],
     actors: [
       { id: 'ana', doll: 'ana', x: 5, y: 7, dir: 'left', pose: 'sit', talk: async (api) => api.say('ana', 'house.ana') },
       { id: 'bo', doll: 'bo', x: 9, y: 7, dir: 'up', talk: async (api) => api.say('bo', 'house.bo') },
+      { id: 'sleeper', doll: 'walker', x: 2, y: 4, dir: 'left', pose: 'sleep' },   // in the bed: tucked in along it
     ],
   },
   cellar: {

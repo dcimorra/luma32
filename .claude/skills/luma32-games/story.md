@@ -55,9 +55,10 @@ the attention is, silences are timed.
 - **Bodies act.** People sit at the table, kneel by the wounded, lie in the infirmary bed,
   sleep, hand something over (`reach`), raise their arms in joy or surrender (`cheer`):
   `setPose`. `lie`/`sleep` on the floor lies across (head to the left); on a bed drawn
-  upright (a prop taller than wide) the engine tucks them in along it by itself: head on
-  the pillow near the top, the body under the bed's covers, whatever cell of the bed they
-  stand on. Never a horizontal body across an upright bed: draw the bed upright and let
+  upright (its id names a bed and it is two rows or more tall, or it is taller than wide,
+  or its tile says `bed: true`; README "Tiles and props") the engine tucks them in along
+  it by itself: head on the pillow near the top, the body under the bed's covers, whatever
+  cell of the bed they stand on. Never a horizontal body across an upright bed: draw the bed upright and let
   the engine do it, and look at the screenshot. They nod, shake their head, hop with joy, shiver with cold or fear, bow
   (`gesture`). Two people hug: face each other, `reach`, and `nudge` them a few pixels
   together. A moment the book describes with a body is shown with one.

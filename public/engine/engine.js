@@ -182,12 +182,19 @@ export class Engine {
   }
 
   // The screen as the player sees it, for a problem report.
-  snapshot() {
+  // The modern look's picture is a photograph to PNG: a bright one at 480 x 320 passed the
+  // 300 KB a problem report may carry (server/reports.mjs), so it gets smaller until it fits.
+  snapshot(max = 290 * 1024) {
     if (this.hdShown) {
-      const c = canvas(480, 320);
-      c.getContext('2d').imageSmoothingEnabled = true;
-      c.getContext('2d').drawImage(this.hdPass.canvas, 0, 0, 480, 320);
-      return c.toDataURL('image/png');
+      let url = '';
+      for (const [w, h] of [[480, 320], [360, 240], [240, 160]]) {
+        const c = canvas(w, h);
+        c.getContext('2d').imageSmoothingEnabled = true;
+        c.getContext('2d').drawImage(this.hdPass.canvas, 0, 0, w, h);
+        url = c.toDataURL('image/png');
+        if (url.length <= max) break;
+      }
+      return url;
     }
     return this.buffer.toDataURL('image/png');
   }

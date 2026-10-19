@@ -275,6 +275,11 @@ export function buildStatic(world, R, { walls = false, third = false } = {}) {
     for (let y = r.r0; y <= r.r1; y++) height[(y - R.y0) * R.w + r.x - R.x0] = r.H;
   }
   const hAt = (x, y) => (inR(x, y) ? height[(y - R.y0) * R.w + x - R.x0] : 0);
+  // every wall cell's run: where its face stands (the row its run ends on) and how tall,
+  // for what hangs on a wall (gatherCards)
+  const hung = new Map();
+  for (const r of runs) for (let y = r.r0; y <= r.r1; y++) hung.set(`${r.x},${y}`, { r1: r.r1, H: walls ? WH : r.H });
+  world.dioramaWalls = { cells: hung, uniform: walls };
   // how tall the wall at a cell stands (nothing past the diorama), for the third-person
   // camera (engine/thirdperson.js), which may look over a low one, the skirt included
   world.dioramaWallH = third ? (cx, cy) => (inR(cx, cy) ? hAt(cx, cy) : Infinity) : null;
@@ -465,6 +470,17 @@ export function buildStatic(world, R, { walls = false, third = false } = {}) {
   return new Float32Array(out);
 }
 
+// How a prop (not a flat one) stands in the diorama: a 'box' (a building, or what a tile
+// says is one with `roof`), 'lie' (drawn from above, its whole picture the ground it
+// stands on: a bed, a table seen from the top — a low block with its picture on top), or
+// 'stand' (a card with a body: a carriage, a tree, a shelf).
+export function shapeOf(p) {
+  const [, fh = 1, , dy = 0] = p.foot || [];
+  const big = fh >= p.h && !dy && (p.w >= 4 || p.h >= 4);
+  if (p.def.roof !== undefined || big) return 'box';
+  return p.h >= 2 && fh >= p.h && !dy ? 'lie' : 'stand';
+}
+
 // What stands up this frame: props, the tops of tiles (a tree's crown, tall grass), people
 // and the entities that are people too (passers-by), as cards facing the camera.
 // { img, x (left), z (where it stands), y (how far up), w, h, lie?, body? }
@@ -472,6 +488,7 @@ export function gatherCards(world, frame, R) {
   const out = [];
   const animF = Math.floor(frame / (world.map.animRate || 20));
   const elev = (x, y) => (world.raised ? world.elev(x, y) : 0);
+  const walls = world.dioramaWalls;
   const props = (list, ox, oy) => {
     for (const p of list) {
       if (p.hidden || p.def.flat) continue;
@@ -480,18 +497,27 @@ export function gatherCards(world, frame, R) {
       const x = (p.x + ox) * TILE;
       const z = (p.y + oy + 1) * TILE;
       const y = elev(p.x + ox, p.y + oy);
-      // drawn from above (its whole picture is the ground it stands on: a bed, a table
-      // seen from the top): it lies down, a low block with its picture on top
-      const [, fh = 1, , dy = 0] = p.foot || [];
+      const [, fh = 1] = p.foot || [];
       const d = p.def;
-      // a building (or what a tile says is one: `roof`, the rows of its picture that are
-      // its roof, seen from above): a box, its roof on top and its façade standing in front
-      const big = fh >= p.h && !dy && (p.w >= 4 || p.h >= 4);
-      if (d.roof !== undefined || big) {
+      const shape = shapeOf(p);
+      if (shape === 'box') {
         const roof = Math.max(0, Math.min(img.height - 4, d.roof ?? Math.round(Math.max(12, Math.min(48, img.height * 0.24)))));
         const depth = d.depth ?? Math.max(TILE, Math.min(fh * TILE, Math.round(roof * 1.6)));
         out.push({ img, box: true, roof, depth, x, z, y, w: img.width, h: img.height });
-      } else if (p.h >= 2 && fh >= p.h && !dy) out.push({ img, lie: LIE, x, z, y, w: img.width, h: img.height });
+      } else if (shape === 'lie') out.push({ img, lie: LIE, x, z, y, w: img.width, h: img.height });
+      // on a wall cell (a clock, a picture, a mirror, a wind chime under the porch's
+      // beam): it hangs on the wall. Its cell is inside the wall's block, so it is put
+      // just in front of the block's face and raised by the rows between its cell and
+      // the face's row, where the 3/4 art shows it: straight from above it lands on the
+      // very pixels the classic look draws it on.
+      else if (walls?.cells.has(`${p.x + ox},${p.y + oy}`)) {
+        const w = walls.cells.get(`${p.x + ox},${p.y + oy}`);
+        const depth = d.depth ?? 4;
+        // a map made for the ground view (`walls`): every wall is one height, and
+        // nothing of the art's rows is on it; hung as high as it allows
+        const lift = walls.uniform ? Math.min((w.r1 - p.y - oy) * TILE, Math.max(0, w.H - img.height)) : (w.r1 - p.y - oy) * TILE;
+        out.push({ img, x, z: (w.r1 + 1) * TILE + depth / 2 + 0.5, y: y + lift, w: img.width, h: img.height, body: true, depth, shape: 'round', still: true });
+      }
       // standing (a carriage, a tree, a shelf): a body as deep as the ground it takes, to
       // a point; the centre a little behind the cell's edge so its front stays in it
       else {
@@ -536,9 +562,33 @@ export function gatherCards(world, frame, R) {
       out.push({ img, x: x * TILE, z: (y + 1) * TILE - 4.5, y: elev(x, y), w: img.width, h: img.height, body: true, depth: 8 });
     }
   }
+  // the prop under a cell that lies down as a block (a bed, a table drawn from above)
+  const blockUnder = (a) => (a.site || a.world).props.find((p) => !p.hidden && !p.def.flat && shapeOf(p) === 'lie' && a.x >= p.x && a.x < p.x + p.w && a.y <= p.y && a.y > p.y - p.h) || null;
   const body = (a, x, y, ez = 0) => {
     const img = a.image();
     if (!img) return;
+    const how = a.lying?.(img);
+    if (how) {
+      // lying down: on the back on the floor (a faint, a dead dog) or tucked in along a bed
+      // drawn upright (Actor.image, world.drawItems). The picture is laid flat, as a
+      // vehicle's is, where the classic look draws it: the head on the pillow near the top
+      // of the bed, else where the frame goes.
+      const bed = how === 'bed' ? a.uprightBed() : null;
+      const under = bed && shapeOf(bed) === 'lie' ? bed : blockUnder(a);
+      if (bed && shapeOf(bed) !== 'lie') {
+        // the bed stands as a card (its foot is not the whole of it): the sleeper stands
+        // too, just in front of it, the head where the pillow is
+        const south = y - (a.y - bed.y) * TILE + TILE;
+        out.push({ img, x: x + (TILE - img.width) / 2, z: south - 4, y: ez + Math.max(0, bed.h * TILE - 8 - img.height), w: img.width, h: img.height, body: true, actor: a, still: true });
+        return;
+      }
+      const zt = bed ? y - (a.y - (bed.y - bed.h + 1)) * TILE + 8 : y + TILE - img.height - 1;
+      // on a bed's block: half under its covers (a lying body rises 5 over where it is
+      // put, SCENE_VS in engine/hd.js); on the floor, on it
+      const lift = under ? LIE - 5 : stairLift(world, x + 8, y + 12);
+      out.push({ img, x: x + (TILE - img.width) / 2, z: zt, y: ez + lift, w: img.width, h: img.height, body: true, lie: true, actor: a });
+      return;
+    }
     out.push({ img, x: x + (TILE - img.width) / 2, z: y + 11, y: ez + stairLift(world, x + 8, y + 12), w: img.width, h: img.height, body: true, actor: a });
   };
   for (const a of world.actors) {

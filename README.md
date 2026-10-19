@@ -396,8 +396,8 @@ the same game shown as a diorama in three dimensions. `?hd=1` / `?hd=0` force ei
 look for testing. Still a prototype: judge it on a map before relying on it.
 
 "Ángulo" (since 1.27, shown with MODERNOS and the view from above; kept per device) says
-where the camera stands over the map: INCLINADO (the default: leaning, in perspective, as
-below) or CENITAL, straight over it as the classic screen frames it. The cenital camera is
+where the camera stands over the map: CENITAL (the default since 1.28.1), straight over it
+as the classic screen frames it, or INCLINADO, leaning, in perspective, as below. The cenital camera is
 orthographic at 45 degrees, squeezed down the screen by as much as it leans, so a step
 north on the ground and a step up a wall are each a pixel up the screen, as 3/4 art draws
 them: the ground lies exactly where the classic look puts it (a touch picks the same cell),
@@ -423,13 +423,19 @@ quarter of the picture) are its roof, seen from above, and the rest its façade,
 standing. A tile may say it outright: `roof` (pixels of its picture that are roof; it
 makes any prop a box) and `depth` (how deep the box or body is, in pixels). Wide, low
 props (a parked car, a bench) get a thicker body. Standing props (a
-carriage, a tree, a shelf) get a body as deep as the ground they take, up to a tile.
+carriage, a tree, a shelf) get a body as deep as the ground they take, up to a tile. A
+prop on a wall cell (a clock, a picture, a mirror, the chimes under a porch's beam; since
+1.28.2) hangs on the wall: its cell is inside the wall's block, so it is put just in front
+of the block's face and raised by the rows between its cell and the face's row, where the
+3/4 art shows it; straight from above it lands on the very pixels the classic look draws it on.
 Stairs going up rise as real steps, and whoever is on them climbs: a tile whose id says
 stairs (`stair`, `escal`) and not down (`down`, `_dn`, `baj`) climbs north, as 3/4 art
 draws a flight; a tile's own `stairs` says it outright — `'up'`, `'east'` or `'west'` (a
 flight seen from the side), or `false` to keep it flat. People and animals get a
 body: every pixel of their frame a little block, thickest in the middle of the figure
-and thin at its outline, so they have relief from the front and the back too. Every face samples one picture,
+and thin at its outline, so they have relief from the front and the back too. Whoever
+lies down (`lie`, `sleep`) is laid flat, as a vehicle is: on the floor, or on a bed drawn
+upright with the head on the pillow, half under its covers (since 1.28.2). Every face samples one picture,
 the map drawn flat (`World.mapImage`).
 
 `engine/hd.js` draws it under a perspective camera that looks where the classic camera
@@ -785,6 +791,10 @@ the game turns it off),
 neighbours are the same group — `EDGE` bits in `engine/gfx.js` — and `p.edge(mask, { color,
 width, inner, round })` paints a rim along the sides and corners that border other ground),
 `light` (props: see "Light and weather"),
+`bed` (props: `true`, a bed drawn upright, its headboard at the top, so whoever lies on it
+is tucked in along it, head on the pillow; `false`, a bed seen from the side or a bench,
+lain across; without it, a prop whose id names a bed — bed, cama, cot, bunk, litera, catre,
+lecho, futon — and is two rows or more tall, or one taller than wide, is upright),
 `top(p, frame)` (a second 16×16 layer painted over whoever stands on the tile — y-sorted, so it never covers someone in the cell below: tall grass,
 the edge of a roof).
 A prop entry on a map may carry its own `examine` (this desk, not every desk) and `foot`.
@@ -1409,8 +1419,8 @@ a stream along the edge, a sprite actor with a picture a direction (a horse), a 
 between the houses, and a connection east to a field with its own `sky`, `skirt` and far
 layer and a terrace with stairs that climb east; a house inside (`clock: false`: a wall of
 a top row over two face rows, side walls of tops, a south wall of one row with the door, a
-window, furniture that lies, stands and lies flat, a partition that leaves a one-cell
-corridor with a dead end, an alcove); and a cellar made for the ground view (`wallHeight`,
+window, furniture that lies, stands and lies flat, a clock hung on a wall cell, someone
+asleep in the bed, a partition that leaves a one-cell corridor with a dead end, an alcove); and a cellar made for the ground view (`wallHeight`,
 `ceiling`, `fog`, walls that show another tile's picture, pillars, a torch on the player).
 Each place where the camera has a hard time (the player's back to a wall, the gap, the
 map's edge, under the crown, the corridor, the dead end, the terrace) is a dev jump that

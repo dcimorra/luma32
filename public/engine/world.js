@@ -120,6 +120,18 @@ function hashSeed(s) {
 
 // ---------- actors ----------
 
+// A bed drawn upright (its headboard at the top, as 3/4 art draws nearly every bed): whoever
+// lies on it is tucked in along it, not across it (Actor.uprightBed). Its tile's `bed` says
+// so outright (`true`; `false` never: a bed seen from the side, a bench); else its id names
+// a bed (bed, cama, cot, bunk, litera, catre, lecho, futon) and its picture is two rows or
+// more; else it is taller than wide.
+const BED_ID = /bed|cama|\bcot\b|bunk|litera|catre|lecho|futon/i;
+export function isUprightBed(p) {
+  const b = p.def?.bed;
+  if (b !== undefined) return b === true || b === 'up';
+  return p.h > p.w || (p.h >= 2 && BED_ID.test(p.t));
+}
+
 export class Actor {
   constructor(def, world) {
     this.id = def.id;
@@ -399,15 +411,29 @@ export class Actor {
     return this.doll.frames[this.dir][this.pose()];
   }
 
-  // The prop drawn over this cell when it is taller than wide (a bed seen from the foot),
-  // or null. Kept per cell: asked every frame while someone lies down.
+  // The bed drawn upright (the headboard at the top, as 3/4 art draws nearly every bed)
+  // over this cell, or null: whoever lies here is tucked in along it, not across it
+  // (isUprightBed). Kept per cell: asked every frame while someone lies down.
   uprightBed() {
-    const key = `${this.x},${this.y},${this.world.props.length}`;
+    const props = (this.site || this.world).props;
+    const key = `${this.x},${this.y},${props.length}`;
     if (this.bedKey !== key) {
       this.bedKey = key;
-      this.bedProp = this.world.props.find((p) => p.h > p.w && this.x >= p.x && this.x < p.x + p.w && this.y <= p.y && this.y > p.y - p.h) || null;
+      this.bedProp = props.find((p) => !p.hidden && isUprightBed(p) && this.x >= p.x && this.x < p.x + p.w && this.y <= p.y && this.y > p.y - p.h) || null;
     }
     return this.bedProp;
+  }
+
+  // How this frame of theirs lies, if it does: 'bed' (tucked in along a bed drawn upright:
+  // lieBed, sleepBed), 'flat' (on the back, on the floor or across a bed: lie, sleep), or
+  // null (standing, sitting, kneeling). The modern look lays a lying picture flat.
+  lying(img) {
+    if (this.act !== 'lie' && this.act !== 'sleep') return null;
+    const poses = this.doll?.poses;
+    if (!poses) return null;
+    if (img === poses.lieBed || img === poses.sleepBed) return 'bed';
+    const frames = poses[this.act];
+    return frames && Object.values(frames).includes(img) ? 'flat' : null;
   }
 
   // A pose beyond walking (see engine/doll.js): 'sit', 'kneel', 'lie', 'sleep', 'reach',
@@ -642,6 +668,7 @@ export class World {
       n.dir = c.dir;
       n.actors = (n.def.actors || []).filter((a) => !a.when || a.when(this.api)).map((a) => {
         const actor = new Actor(a, this);
+        actor.site = n;   // the map they are on: its props are theirs (uprightBed)
         this.recall(c.map, actor);
         return actor;
       });

@@ -984,8 +984,9 @@ function render(rows, pal, flip, width = null, relief = false) {
 //   sit     on a chair or a bench, seen from any side (the body drops three pixels)
 //   kneel   on one knee (down and the sides)
 //   lie     on the back, head to the left (24×16, for a bed or the floor); sleep: eyes shut.
-//           On a bed drawn upright the world uses lieBed/sleepBed instead: head on the
-//           pillow, the body under the covers (see Actor.image in engine/world.js)
+//           On a bed drawn upright (its headboard at the top: isUprightBed in
+//           engine/world.js) the world uses lieBed/sleepBed instead: head on the pillow,
+//           the body under the covers (see Actor.image in engine/world.js)
 //   reach   arms forward: to give, to take, to hug (sides and down)
 //   cheer   arms up: joy, surprise, surrender (down and up)
 //   fly     arms spread like wings (down and up), the near arm ahead (sides): flying, diving
