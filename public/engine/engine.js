@@ -134,7 +134,9 @@ export class Engine {
   // screen pixels, default the centre), 'wipe' (a curtain from the left), 'mosaic' (the
   // picture breaks into blocks that grow until the colour takes over, as the GBA's mosaic
   // register did) or 'blinds' (bands closing from the top). The way in uses the kind of
-  // the way out unless told otherwise.
+  // the way out unless told otherwise. A function is a cartridge's own transition,
+  // drawn every frame of the fade: kind(ctx, f, { in, at, color, frame }), f from 0 (clear)
+  // to 1 (covered); `in` is true on the way back.
   fadeOut(frames = 20, color = '#000000', kind = 'fade', at = null) {
     Object.assign(this.fx, { fadeColor: color, fadeKind: kind || 'fade', fadeAt: at, fadingIn: false });
     return this.tween('fade', 1, frames);
@@ -255,6 +257,12 @@ export class Engine {
     if (f <= 0) return;
     const ctx = this.ctx;
     ctx.fillStyle = this.fx.fadeColor;
+    if (typeof this.fx.fadeKind === 'function') {
+      ctx.save();
+      this.fx.fadeKind(ctx, f, { in: this.fx.fadingIn, at: this.fx.fadeAt || { x: SCREEN_W / 2, y: SCREEN_H / 2 }, color: this.fx.fadeColor, frame: this.frame });
+      ctx.restore();
+      return;
+    }
     if (this.fx.fadeKind === 'iris' && f < 1) {
       const at = this.fx.fadeAt || { x: SCREEN_W / 2, y: SCREEN_H / 2 };
       const max = Math.hypot(Math.max(at.x, SCREEN_W - at.x), Math.max(at.y, SCREEN_H - at.y));

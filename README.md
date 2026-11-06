@@ -216,6 +216,9 @@ was.
   autosave: false, recap: false,         // on by default: save on arriving somewhere; recall the objective on "Continuar"
   transition: 'iris',                    // how warps change place: fade (default), iris, wipe, mosaic, blinds
   card(api, opts),                       // the game's own full-screen cards: every api.card call comes here (see "Scripts")
+  transitions: { swirl(ctx, f, o) {} },  // the game's own fades, by name: api.fadeOut(ms, c, { kind: 'swirl' }), a warp's transition (see "Scripts")
+  camera: { rooms: true },               // the camera by rooms or screens (see "Action games")
+  art: { colours: 4 },                   // the game's own limit of colours per picture, for tools/sheet.mjs (15 by default)
   collections: { shells: { name: 'col.shells', total: 12 } },  // see "Journal and credits"
   dev: { jumps: [{ label, run: async (api) => {} }] },          // see "Dev mode"
 }
@@ -824,7 +827,7 @@ await a.gesture('nod')                     // nod shake hop shiver bow
 await a.jump(); await a.jump('right', { n: 2 })   // scenes only: on the spot, or over cells (api.jump(id, dir, opts))
 a.nudge(4, 0)                              // a few pixels off the cell until the next step (a hug)
 await api.letterbox(true); await api.letterbox(false)     // cinema bars
-await api.fadeOut(400, '#000', { kind: 'iris', at: 'player' }); await api.fadeIn(400)  // fade iris wipe mosaic blinds
+await api.fadeOut(400, '#000', { kind: 'iris', at: 'player' }); await api.fadeIn(400)  // fade iris wipe mosaic blinds, or the game's own
 await api.warp('inn', 3, 4, 'up', { transition: 'wipe' })
 api.quest('lamps'); api.quest('lamps', 'done'); api.questState('lamps')   // the journal
 api.collect('shells', 'beach_1'); api.collected('shells')
@@ -897,6 +900,11 @@ Nothing asks a game to use it, and since 1.29 there are three ways past it:
   stage, play a song, or hand some calls to `api.plainCard(opts)`, the engine's card.
 - Or no card at all: a script is free to do the change of chapter as anything else, with
   `api.play(scene)`, `api.stage`, fades and effects.
+
+**Transitions of the game's own** (since 1.29): `game.transitions = { name(ctx, f, { in, at, color, frame }) {} }`
+draws every frame of a fade, `f` from 0 (clear) to 1 (covered), `in` true on the way
+back; `api.fadeOut(ms, color, { kind: 'name' })`, `fadeIn`, a warp's `transition` and
+`game.transition` take its name as they take the engine's. A function as `kind` works too.
 
 `api.menu` and `api.ask` scroll when there are more options than fit. For a cartridge's own
 screens `engine/ui.js` exports `panel`, `bar` (gauges; `steps` for hearts or pips) and
@@ -1287,6 +1295,24 @@ creature), drawn into a 64×64 picture whose bottom is the foot of its box.
 
 Entities are not saved and vanish when the map changes: add them in `enter`, from flags.
 `hud(ctx, api, e)` on the game or a map draws over the world (hearts, a counter).
+
+**A jump in play** (since 1.29): `await api.hop({ height: 10, ms: 420, sound: 'hop' })`
+lifts the player off the ground while they keep moving; up there they pass over what a
+flyer passes over (a gap of `medium: 'air'`, water, a `low` fence). It resolves with
+where they came down, `{ x, y, tile, def }`, or null if they were already up; feet that
+come down half over the edge are set on the firm side. Falling into the gap, or what
+landing in water costs, is the cartridge's. Call it from `update` on a button.
+
+**Rooms** (since 1.29): `camera: { rooms }` on a map or the game keeps the camera inside
+the room the player is in, and slides to the next when they cross into it, the world
+holding still meanwhile and the player carried a few pixels in. `rooms: true` is screens
+of the view's size; `{ w, h }` a grid of that many cells; `[{ x, y, w, h }]` rooms of
+their own (cells), outside which the camera follows as usual. `camera.slide` is the
+slide's frames (40; 0 cuts). Third person ignores it.
+
+**Kits.** A blade with hearts, battles with time gauges and an inventory are not the
+engine's: they are code a cartridge copies and makes its own, in the skill's
+`templates/kits/` (`sword.js`, `battle.js`, `inventory.js`).
 
 ## Music
 

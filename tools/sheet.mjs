@@ -1,7 +1,7 @@
 // Contact sheet of a cartridge's art: every ground tile repeated 3×3 (seams and grids show
 // up at once), every prop on its own, every doll in its 12 frames plus a black silhouette
 // at the frame's own size (a tall doll's 16×26 too), all at 2× on PNG pages. Prints a report:
-// colours per image and ground tiles whose edges stand out (right for a shore or a wall, a
+// colours per image (against the game's `art.colours`, 15 by default) and ground tiles whose edges stand out (right for a shore or a wall, a
 // visible grid on plain ground). Not part of the site.
 //   node tools/sheet.mjs <base-url> <game-id> <out.png> [--only tiles,props,dolls] [--match text]
 // e.g. node tools/sheet.mjs http://127.0.0.1:8765 diamante /tmp/diamante-sheet.png --only dolls
@@ -44,6 +44,8 @@ const res = await page.evaluate(async ({ id, only, match, pageH }) => {
   // the cast as the game shows it: its own defaults (`relief`), as cart.js sets them
   dollDefaults?.({ relief: game.relief });
   await game.setup?.();
+  // the game's own limit per picture (`art: { colours }` in game.js), the GBA's 15 by default
+  const LIMIT = game.art?.colours ?? 15;
   const tiles = new Tileset(game.tiles || {});
   const S = 2;
   const pad = 6;
@@ -87,7 +89,7 @@ const res = await page.evaluate(async ({ id, only, match, pageH }) => {
     const ground = c.opaque && img.width === 16 && img.height === 16;
     if (!want(ground ? 'tiles' : 'props', tid)) continue;
     const s = ground ? seam(c.d, 16, 16) : [];
-    report.push(`${ground ? 'tile' : 'prop'} ${tid}: ${c.n} colours${c.n > 15 ? ' (over 15)' : ''}${s.length ? ` · edge stands out: ${s.join(', ')}` : ''}`);
+    report.push(`${ground ? 'tile' : 'prop'} ${tid}: ${c.n} colours${c.n > LIMIT ? ` (over ${LIMIT})` : ''}${s.length ? ` · edge stands out: ${s.join(', ')}` : ''}`);
     items.push({ label: tid, w: ground ? 48 : img.width, h: ground ? 48 : img.height, draw(ctx, x, y) {
       if (ground) for (let j = 0; j < 3; j++) for (let i = 0; i < 3; i++) ctx.drawImage(img, x + i * 16, y + j * 16);
       else ctx.drawImage(img, x, y);

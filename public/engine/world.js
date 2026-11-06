@@ -703,6 +703,8 @@ export class World {
 
   load(mapId, x, y, dir) {
     if (this.map) this.city.leave();
+    this.room = null;
+    this.roomSlide = null;
     this.lintLeaving();
     this.rememberPlaces();
     for (const a of this.actors) if (a !== this.player) a.drop();
@@ -1517,7 +1519,7 @@ export class World {
     if (!this.busy && e.frame % 20 === 0 && (this.pending || (this.autoRefresh && JSON.stringify(this.save.flags) !== this.flagsSeen))) this.refresh();
     this.map.update?.(this.api, e, control);
     this.game.update?.(this.api, e, control);
-    if (this.busy || !this.onTop) { this.city.tick(e, false); return; }
+    if (this.busy || !this.onTop || this.roomSlide) { this.city.tick(e, false); return; }
     this.city.tick(e, true);
     // a big map may ask to move only what is near the camera (`sim: { radius }`, pixels);
     // an entity with `always` moves anyway (whatever chases the player, a kept vehicle)
@@ -2207,8 +2209,60 @@ export class World {
     const b = this.bounds();
     const vw = this.viewW;
     const vh = this.viewH;
+    const room = this.thirdPerson ? null : this.roomAt(p.px + 8, p.py + 8);
+    if (room) { this.roomCamera(room, p, vw, vh); return; }
+    this.room = null;
+    this.roomBox = null;
     this.cam.x = this.clampCam(p.px + 8 + this.lead.x - vw / 2, b.x1 - b.x0, vw, b.x0);
     this.cam.y = this.clampCam(p.py - p.ez + 8 + this.lead.y - vh / 2, b.y1 - b.y0, vh, b.y0);
+  }
+
+  // Rooms (`camera: { rooms }` on a map or the game): the camera keeps inside the room the
+  // player is in, and slides to the next one when they cross into it, the world holding
+  // still meanwhile. rooms: true (screens of the view's size), { w, h } (a grid, in cells)
+  // or [{ x, y, w, h }] (cells; outside them the camera follows as usual).
+  roomAt(px, py) {
+    const cfg = this.map.camera?.rooms ?? this.game.camera?.rooms;
+    if (!cfg) return null;
+    if (Array.isArray(cfg)) {
+      const i = cfg.findIndex((r) => px >= r.x * TILE && px < (r.x + r.w) * TILE && py >= r.y * TILE && py < (r.y + r.h) * TILE);
+      if (i < 0) return null;
+      const r = cfg[i];
+      return { key: `r${i}`, x: r.x * TILE, y: r.y * TILE, w: r.w * TILE, h: r.h * TILE };
+    }
+    const w = cfg === true ? this.viewW : cfg.w * TILE;
+    const h = cfg === true ? this.viewH : cfg.h * TILE;
+    const cx = Math.floor(px / w);
+    const cy = Math.floor(py / h);
+    return { key: `${cx},${cy}`, x: cx * w, y: cy * h, w, h };
+  }
+
+  roomCamera(room, p, vw, vh) {
+    const tx = this.clampCam(p.px + 8 - vw / 2, room.w, vw, room.x);
+    const ty = this.clampCam(p.py - p.ez + 8 - vh / 2, room.h, vh, room.y);
+    if (this.room && this.room !== room.key && !this.roomSlide) {
+      const n = this.map.camera?.slide ?? this.game.camera?.slide ?? 40;
+      // the way they crossed, to carry them a little into the new room as it slides in
+      const was = this.roomBox;
+      const dx = was ? Math.sign(room.x - was.x) : 0;
+      const dy = was ? Math.sign(room.y - was.y) : 0;
+      if (n > 0) this.roomSlide = { fx: this.cam.x, fy: this.cam.y, t: 0, n, dx, dy };
+    }
+    this.room = room.key;
+    this.roomBox = room;
+    const s = this.roomSlide;
+    if (s) {
+      s.t++;
+      if (this.free && s.t <= 12) this.moveBox(p, s.dx, s.dy);
+      const k = Math.min(1, s.t / s.n);
+      const e = k * k * (3 - 2 * k);
+      this.cam.x = Math.round(s.fx + (tx - s.fx) * e);
+      this.cam.y = Math.round(s.fy + (ty - s.fy) * e);
+      if (k >= 1) this.roomSlide = null;
+      return;
+    }
+    this.cam.x = tx;
+    this.cam.y = ty;
   }
 
   bounds() {
@@ -2984,9 +3038,12 @@ export class StoryApi {
 
   wait(ms) { return this.engine.waitMs(ms); }
   frames(n) { return this.engine.wait(n); }
-  // opts: { kind: 'fade' | 'iris' | 'wipe' | 'mosaic' | 'blinds', at: 'player' | an actor id | { x, y } (screen) }
-  fadeOut(ms = 350, color, opts = {}) { return this.engine.fadeOut(ms / 16.67, color, opts.kind, this.screenAt(opts.at)); }
-  fadeIn(ms = 350, opts = {}) { return this.engine.fadeIn(ms / 16.67, opts.kind, this.screenAt(opts.at)); }
+  // opts: { kind: 'fade' | 'iris' | 'wipe' | 'mosaic' | 'blinds' | a name in game.transitions
+  //   | a function (engine.js fadeOut), at: 'player' | an actor id | { x, y } (screen) }
+  fadeOut(ms = 350, color, opts = {}) { return this.engine.fadeOut(ms / 16.67, color, this.transitionOf(opts.kind), this.screenAt(opts.at)); }
+  fadeIn(ms = 350, opts = {}) { return this.engine.fadeIn(ms / 16.67, this.transitionOf(opts.kind), this.screenAt(opts.at)); }
+  // A transition by name: the cartridge's own (game.transitions) before the engine's.
+  transitionOf(kind) { return (typeof kind === 'string' && this.game.transitions?.[kind]) || kind; }
   letterbox(on = true, ms = 350) { return this.engine.letterbox(on, ms / 16.67); }
 
   // The current map from the air, in Mode 7 (engine/mode7.js, README "Mode 7"): the camera
@@ -3180,6 +3237,48 @@ export class StoryApi {
       w.busy += back;
       if (w.busy) hushLife(w);
     }
+  }
+
+  // A jump in play, not a scene: the player leaves the ground for `ms` and goes on moving
+  // as they were; up there they pass over what a flyer passes over (a gap, water, a low
+  // fence). Call it from the cartridge (a button in game.update, an item). Resolves with
+  // where they came down, { x, y, tile, def }, or null if they were already up: what
+  // landing in a gap or in water does is the cartridge's.
+  async hop({ height = 10, ms = 420, sound = 'hop', dust = true } = {}) {
+    const p = this.player;
+    const w = this.world;
+    if (!p || p.hopping || p.jumping) return null;
+    p.hopping = true;
+    p.jumping = true;
+    if (sound) sfx(sound);
+    const n = Math.max(8, Math.round(ms / 16.67));
+    for (let i = 1; i <= n && p === this.player; i++) {
+      p.lift = Math.round(Math.sin((Math.PI * i) / n) * height);
+      await this.engine.wait(1);
+    }
+    p.lift = 0;
+    p.hopping = false;
+    p.jumping = false;
+    // came down with the feet half over what the ground no longer lets them on (the edge
+    // of a gap): onto the nearest firm pixels, the way they faced first
+    if (w.boxBlocked(w.box(p), p)) {
+      const [fx, fy] = DIRS[p.dir] || [0, 0];
+      const ways = [[fx, fy], [-fx, -fy], [fy, fx], [-fy, -fx]].filter(([a, b]) => a || b);
+      out: for (let k = 1; k <= TILE; k++) {
+        for (const [a, b] of ways) {
+          const bx = w.box(p);
+          if (!w.boxBlocked({ ...bx, x: bx.x + a * k, y: bx.y + b * k }, p)) { p.px += a * k; p.py += b * k; break out; }
+        }
+      }
+    }
+    const x = Math.round(p.px / TILE);
+    const y = Math.round(p.py / TILE);
+    const tile = w.tileAt(x, y);
+    const def = tile ? w.game.tiles[tile] : null;
+    if (dust && def && def.dust !== false && w.map?.dust !== false && w.game.dust !== false && !def.medium) {
+      w.vfx.burst('dust', p, { color: typeof def.dust === 'string' ? [def.dust] : undefined, amount: 0.5, scale: 0.6 });
+    }
+    return { x, y, tile, def };
   }
 
   // Someone jumps, in a scene (see Actor.jump): api.jump('ana'), api.jump('ana', 'up', { n: 2 }).

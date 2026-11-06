@@ -3,10 +3,14 @@
 // warps to its map), faces it and presses A, reads every box, picks choices — and prints
 // what happened: every line said, every objective, every [luma] warning. Not part of the site.
 //   node tools/play.mjs <name> [--secs S] [--max N] [--choice i,j,…] [--jump N]
-//                              [--stopobj prefix] [--stopmap map] [--target actorId] [--nopress]
+//                              [--stopobj prefix] [--stopmap map] [--target actorId] [--nopress] [--fight]
 // --secs is wall-clock time for this call (100 by default: keep each call under two minutes).
 // --jump N runs the cartridge's dev jump N first. --choice gives the option picked at each
 // choice, in order; past those, a menu seen again gets its next option. It stops on --stopobj / --stopmap, or when stuck.
+// --fight is for action games: a foe near the player (an entity with `foe`, or with `hp`
+// and no kind of the engine's) is faced and hit with A before walking on, and a screen of
+// the game's own (a battle) gets A pressed for longer before it counts as stuck. It shows
+// that the stretch can be fought through, not that the fight is fair: play that by hand.
 // Open the page with ?turbo=4 and it plays four times sooner: every wait and hold here is
 // game time (steps.mjs divides them), so it plays exactly the same.
 // The way to another map goes through warps (an open `when` only) and map `connections`
@@ -80,16 +84,31 @@ const pathJs = (target) => `JSON.stringify((() => {
 
 const key = (d) => `Arrow${d[0].toUpperCase()}${d.slice(1)}`;
 
+// the nearest foe within reach, from the player's box: where it is and how much it has left
+const FOE = `JSON.stringify((() => {
+  const w = luma.engine.scenes[0], p = w.player;
+  if (!p || !w.entities) return null;
+  const b = w.box(p), cx = b.x + b.w / 2, cy = b.y + b.h / 2;
+  let best = null;
+  for (const en of w.entities) {
+    if (en.removed || !(en.foe || (en.hp > 0 && !en.kind))) continue;
+    const e = w.box(en), dx = e.x + e.w / 2 - cx, dy = e.y + e.h / 2 - cy, d = Math.hypot(dx, dy);
+    if (d < 64 && (!best || d < best.d)) best = { d: Math.round(d), dx, dy, hp: en.hp };
+  }
+  return best && { ...best, life: w.save?.flags?.hp };
+})())`;
+
 // The loop. io: { post(steps) → output lines, ev(js) → value } on the page being played.
 // opts: { max, secs, stopmap, stopobj, target, choices, nopress, newobj (stop when the
 // objective is no longer the one it started with) }. Returns { out, end, why } — why:
 // 'stopobj' | 'stopmap' | 'newobj' | 'stuck' | 'time' | 'max' | 'nopress'.
-export async function playStretch(io, { max = 400, secs = 100, stopmap = '', stopobj = '', target = '', choices = [], nopress = false, newobj = false } = {}) {
+export async function playStretch(io, { max = 400, secs = 100, stopmap = '', stopobj = '', target = '', choices = [], nopress = false, newobj = false, fight = false } = {}) {
   const out = [];
   const t0 = Date.now();
   const PATH = pathJs(target);
   let lastText = '', lastObj, firstObj, lastPos = '', stuck = 0, picked = 0, inScene = 0, why = 'max';
   const seen = {};
+  let fighting = false, blows = 0;
   for (let i = 0; ; i++) {
     if (i >= max) { why = 'max'; break; }
     if ((Date.now() - t0) / 1000 >= secs) { why = 'time'; break; }
@@ -116,11 +135,26 @@ export async function playStretch(io, { max = 400, secs = 100, stopmap = '', sto
     // a minigame or any other screen of its own: pressing A is all this can do there
     if (s.n > 1) {
       if (!inScene++) out.push(`  [scene ${s.top}]`);
-      if (inScene > 40) { out.push(`STUCK in the scene ${s.top}: play it by hand`); why = 'stuck'; break; }
+      if (inScene > (fight ? 240 : 40)) { out.push(`STUCK in the scene ${s.top}: play it by hand`); why = 'stuck'; break; }
       await io.post([{ key: 'KeyZ' }, { wait: 700 }]);
       continue;
     }
     inScene = 0;
+    if (fight) {
+      const F = await io.ev(FOE);
+      if (F) {
+        if (!fighting) out.push(`  ⚔ [${s.map} ${s.p}] a foe ${F.d}px away (hp ${F.hp ?? '?'}; the player's ${F.life ?? '?'})`);
+        fighting = true;
+        blows++;
+        const d = Math.abs(F.dx) > Math.abs(F.dy) ? (F.dx > 0 ? 'right' : 'left') : (F.dy > 0 ? 'down' : 'up');
+        // close in, face it, swing
+        await io.post([...(F.d > 22 ? [{ key: key(d), hold: 120 }] : [{ key: key(d), hold: 30 }]), { key: 'KeyZ' }, { wait: 220 }]);
+        if (blows < 400) continue;
+        out.push(`STUCK fighting at ${s.map} ${s.p}: ${blows} blows`); why = 'stuck'; break;
+      }
+      if (fighting) out.push(`  ⚔ done after ${blows} blows`);
+      fighting = false; blows = 0;
+    }
     const pos = `${s.map} ${s.p}`;
     stuck = pos === lastPos ? stuck + 1 : 0;
     lastPos = pos;
@@ -190,6 +224,7 @@ async function main() {
     target: opt('target', ''),
     choices: (opt('choice', '') || '').split(',').filter(Boolean).map(Number),
     nopress: args.includes('--nopress'),
+    fight: args.includes('--fight'),
   });
   console.log([...pre, ...out].join('\n'));
   console.log(`END ${end.map} ${end.p} · objective ${end.obj} · ${end.t}s played · ${end.top}`);

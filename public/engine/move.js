@@ -52,6 +52,8 @@ export function modeConf(world, mode) {
 export function can(world, a, k) {
   // entities (action games) have no abilities: only actors do
   if (!a?.def) return false;
+  // in the air on a hop (api.hop) the player passes over what a flyer passes over
+  if (k === 'fly' && a.hopping) return true;
   if (a.held === k || a.def.mode === k) return true;
   if (a.def.can?.includes(k)) return true;
   if (a !== world.player && !a.party) return false;
@@ -100,7 +102,7 @@ export function modeOf(world, a) {
 export function tickModes(world, e) {
   const f = e.frame;
   for (const a of world.actors) {
-    if (!a.visible) continue;
+    if (!a.visible || a.hopping) continue;
     const m = modeOf(world, a);
     const was = a.mode || m;
     a.mode = m;
