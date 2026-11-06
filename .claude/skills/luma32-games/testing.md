@@ -35,7 +35,8 @@ node tools/shot.mjs "http://127.0.0.1:8765/?game=<id>" /tmp/out script.json
   ```bash
   node tools/play.mjs <game>-<role> --jump 12 --secs 100 --choice 1,0 --stopobj obj.c4_
   ```
-  `--target <actorId>` walks to someone instead; `STUCK` and `!!` lines are where a player
+  `--fight` (action games) faces and hits the foes near the player before walking on,
+  and presses A longer in a screen of the game's own (a battle); `--target <actorId>` walks to someone instead; `STUCK` and `!!` lines are where a player
   would be lost too — look there by hand. It crosses maps by warps (only those whose
   `when` is open) and `connections` (walking off the shared edge). Writing and debugging a harness of your own is
   what used to eat the first half hour of every review round.

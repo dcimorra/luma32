@@ -8,6 +8,28 @@ Moments the console has no mechanic for (a song, a match, a puzzle, a card game,
 a flight) are **scenes**: `{ update(e), draw(ctx, e) }` pushed with `api.play(scene)`,
 resolving with a result the story reads (`story.md`).
 
+## The shape of each genre
+
+Chapters, beat lists and minutes of reading are the shape of a **story** game. Other
+genres are measured by their own unit, and the plan, the dev jumps, the length and the
+review use that unit wherever the other files say "chapter". The commissioner can always
+set another shape; this is the default when nobody says.
+
+| Genre | Unit | A first play, by default | Reading at most | The played core of each unit |
+| --- | --- | --- | --- | --- |
+| Story adventure, visual novel, graphic adventure | chapter | 90–120 min (`length.md`) | half | a played stretch of 5+ min |
+| Open world | a story on the world | 90–120 min per story | half | the world's freedom on the thread |
+| Action adventure | dungeon (and the overworld stretch that leads to it) | 2–4 h, 4–8 dungeons | a fifth | the dungeon itself: 15–30 min of rooms, one item, one boss |
+| RPG with battles | area (a town, the way out of it, its dungeon or boss) | 3–6 h, 5–10 areas | a third | the way through the area: fights, a shop, a secret |
+| Puzzle or arcade | level (or a world of levels) | as many levels as there are ideas, each idea taught, twisted, combined | a tenth | the level |
+
+- **The beat list becomes the unit list**: each unit with what it adds (the item, the
+  idea, the enemy), what it tests, and its minutes, measured as `length.md` says.
+- **"Done" is the unit's too**: a dev jump per unit start and per boss or set piece; the
+  newcomer test at each unit start; the reviewer reports time per unit.
+- **Reading over its ceiling** is a game that is read where it should be played, the same
+  defect as in `length.md`, by the genre's measure.
+
 ## Story adventure (walk, talk, live the story)
 
 The most common game here: a story told by walking its places and talking to its
@@ -161,7 +183,14 @@ Sword (A on what is in front, examine twice): `classics.md`, "Story games".
 ## Action adventure (Zelda style)
 
 - **Engine:** `movement: 'free'` with a hitbox, entities (`api.addEntity`, `api.move`,
-  `api.overlaps`) for enemies, projectiles and blocks, `hud`, `actionA` to free A.
+  `api.overlaps`, `api.seek`, `api.shoot`, `api.damage`) for enemies, projectiles and
+  blocks, `hud`, `actionA` to free A, X Y Z for items (`buttons`); `api.hop()` for a jump in
+  play (over a gap, a stream, a low fence: where it lands is the game's); a camera by
+  rooms or screens (`camera: { rooms }`, sliding from one to the next); maps joined by
+  their edges for the overworld.
+- **Kits** (`templates/kits/`, to copy and make the game's own): `sword.js` (a blade,
+  hearts, knockback, a moment of safety after a hit, foes that wander and chase) and
+  `inventory.js` (items in the flags, a bag, an item on a button).
 - **Cartridge:** combat, health, items, enemy behaviour, dungeons' puzzles. The items
   that open the world — flippers, a feather, a climbing glove — are the engine's
   abilities (`api.grant('swim')`); ice floors and currents are dungeon puzzles for free.
@@ -169,3 +198,32 @@ Sword (A on what is in front, examine twice): `classics.md`, "Story games".
   a hit flash), enemies with one readable pattern each, a dungeon built around the item
   found in it, a boss that tests that item. Death returns to a nearby point, never to
   the title.
+
+## RPG with battles (turns, or time gauges)
+
+- **Engine:** exploring, companions (`party`), dialogue and the stage, `api.list` for
+  menus, shops and the bag, `bar` / `panel` / `textBox`, several save slots, `onStep`
+  for encounters, transitions of the game's own for the way into a battle
+  (`game.transitions`), Mode 7 for a world map, a flight or a ship.
+- **Kits** (`templates/kits/`): `battle.js`, battles with time gauges (each acts when
+  their bar fills; the clock waits while the player chooses), attack, skills that cost
+  points, items, fleeing, and `encounter()` for random battles on a step; `inventory.js`.
+  The formulas, the screen and what foes do are the game's: change them, or write
+  another kind of battle (turn order, a grid of tactics, cards).
+- **Cartridge:** the party's growth (experience, levels, equipment), the bestiary, the
+  shops, the story.
+- **What makes it good:** a battle that asks a choice every turn (a weakness, a cost, a
+  risk), not A held down; encounters that don't wear the player out (a rate that drops in
+  places already cleared, or foes seen on the map); growth the player feels within an
+  area; a boss that tests what the area taught; a place to heal and save before it.
+- **Trap:** a battle screen built before the world: one fight that plays well comes
+  first, then the area around it.
+
+## Puzzle or arcade
+
+- **Engine:** a scene of the game's own (`api.play`), or the map itself with `movement:
+  'free'`, entities and the hooks (`canEnter`, `onStep`, `onBump`); ice and currents;
+  the save for the levels reached.
+- **What makes it good:** each idea taught alone, then twisted, then combined; a level
+  that fails fast and restarts at once; the next level one press away.
+- **Trap:** a story wrapped round it that the player has to read to reach the next level.

@@ -1,5 +1,10 @@
 # Length: how long a game lasts, and where the time comes from
 
+This file measures a **story** game (a story adventure, a visual novel, a story on an
+open world). An action adventure, an RPG with battles or a puzzle game takes its unit,
+its length and its reading ceiling from `genres.md`, "The shape of each genre", and
+measures them the same way: on paper first, then played.
+
 Read before the beat list and the pitch, with `feel.md`. A game retelling a whole book,
 film or season is commissioned at **90 to 120 minutes of a first play**, by someone who
 doesn't know the answers, and more if the work is long. A shorter game is a decision the

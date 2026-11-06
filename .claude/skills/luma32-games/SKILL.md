@@ -1,6 +1,6 @@
 ---
 name: luma32-games
-description: How to build a game (a "cartridge") for the LUMA 32 engine — the GBA-style browser console — where a story happens: maps to walk, people to talk to, scenes, minigames, music — or an open world / sandbox: a city or a region to roam freely ("mundo abierto", "sandbox", GTA-like, no loading screens, a whole saga in one world). Use when asked to create a new game, port a story into the engine, improve, fix or review an existing cartridge, add maps, characters, minigames, songs, story scenes or a cover to a cartridge, or test a game in the browser.
+description: How to build a game (a "cartridge") for the LUMA 32 engine — the GBA-style browser console — where a story happens: maps to walk, people to talk to, scenes, minigames, music — an action adventure with a blade and dungeons, an RPG with battles, a puzzle or arcade game — or an open world / sandbox: a city or a region to roam freely ("mundo abierto", "sandbox", GTA-like, no loading screens, a whole saga in one world). Use when asked to create a new game, port a story into the engine, improve, fix or review an existing cartridge, add maps, characters, minigames, songs, story scenes or a cover to a cartridge, or test a game in the browser.
 ---
 
 # Building LUMA 32 cartridges
@@ -23,8 +23,8 @@ these rules, not from another game.
 | `done.md` | before handing a game or a chapter over, and as the reviewer's checklist |
 | `improving.md` | the cartridge already exists and people play it: improving or repairing it |
 | `classics.md` | before the beat list and the world contract: what the best GBA games did, and the bar a game here is held to |
-| `length.md` | before the beat list and the pitch: how long a game lasts (90–120 min for a whole story), and where that time comes from |
-| `genres.md` | before the beat list: what the engine offers for the genre, what makes it good; **before the plan**, when the brief asks for an open world or a sandbox: how to recognise it, the questions to ask, how the work is phased |
+| `length.md` | before the beat list and the pitch: how long a story game lasts (90–120 min for a whole story), and where that time comes from |
+| `genres.md` | before the beat list: **the shape of each genre** (its unit: chapter, dungeon, area, level; its length and its reading ceiling), what the engine and the kits offer for it, what makes it good; **before the plan**, when the brief asks for an open world or a sandbox: how to recognise it, the questions to ask, how the work is phased |
 | `feel.md` | before the beat list and before the play-through: what the player notices, and craft (the verb, set pieces, rhythm, minigames) |
 | `adapting.md` | the game retells a book or another work: the bible, fidelity, the fidelity review |
 | `world.md` | drawing maps, doors, the world map; water, sky, cliffs and the abilities that cross them; writing a world contract |
@@ -51,7 +51,9 @@ are specialists (`.claude/agents/`). Outside a commission there is no house and 
 The engine gives the screen, the controls, maps, people walking them, dialogue and
 choices, saving (position + flags), fades, music and hooks. **How the story unfolds is
 the cartridge's own design**: the engine has no notion of chapters, acts, quests or
-episodes, and this skill doesn't impose one. A story is *something that happens* on
+episodes, and this skill doesn't impose one. A story game is measured in chapters; an
+action adventure in dungeons, an RPG in areas, a puzzle game in levels (`genres.md`, "The
+shape of each genre"): where this skill says "chapter", read the game's unit. A story is *something that happens* on
 the maps, carried forward by flags. Decide per game how to structure it in code.
 
 What every story needs, whatever its shape:
@@ -129,7 +131,10 @@ console should not be told apart only by their maps.
    voice pitch under `theme.ui.speakers`.
 4. **It must look good, by a written standard.** All art follows **`art.md`** (palette
    ramps, light, outlines, seamless ground, characters with distinct silhouettes, the
-   GBA-era mistakes to avoid) and passes its checks with `tools/sheet.mjs`. All music
+   GBA-era mistakes to avoid) and passes its checks with `tools/sheet.mjs`. The GBA look
+   is the default style, not the only one: a game may choose its own (four tones of a
+   Game Boy, an 8-bit palette, a 16-bit one) and holds itself to that style's limits as
+   strictly (`art.md` § 1). All music
    follows **`music.md`** (a motif before any chord, a game-specific idea per song, no
    shared accompaniment kit). Read the one you need before painting or composing; whoever
    paints or composes for you gets it in their contract.
@@ -180,7 +185,7 @@ An existing cartridge is improved, not rebuilt: `improving.md`.
    line that tells the player what comes next, and the objective with its place** — plus
    the game's verb, the ★ set pieces, the ◆ minigames with why the map can't do each one
    (`feel.md`, "Minigames are spice") and the rhythm (`feel.md`, "Craft"), the genre's
-   needs (`genres.md`), and per chapter the door it shows before its key, what it teaches
+   needs (`genres.md`) and its shape (chapters, dungeons, areas or levels), and per unit the door it shows before its key, what it teaches
    before it tests, and the one idea each new place adds (`classics.md`). **Each beat gets
    its minutes**, of reading and of play, and each chapter its played stretch
    (`length.md`): a whole story is 90–120 minutes of a first play, and at most half of it
@@ -209,7 +214,9 @@ An existing cartridge is improved, not rebuilt: `improving.md`.
    and the console shows the empty shelf. Replace `<id>`, then `git init` the folder: each
    cartridge is its own repository. It boots with `?game=<id>` before it is on the shelf;
    add `{ "id": "<id>" }` to `public/games/index.json` only when it is playable. Give it
-   `dev.jumps` from the start (`testing.md`).
+   `dev.jumps` from the start (`testing.md`). A genre with fights, items or battles starts
+   from the kits in `templates/kits/` (`genres.md`): copied beside game.js and changed
+   until they are the game's, never imported from the skill's folder.
 4. **Look.** `art/palette.js` following `art.md` § 2 (ramps, light, the saturated budget); `theme.shell` recolours the plastic of the handheld and
    `theme.ui` the windows; `title.draw` and `cover(ctx, x, y, w, h, frame)` (the 58×56
    shelf label). They are the first thing a player sees.

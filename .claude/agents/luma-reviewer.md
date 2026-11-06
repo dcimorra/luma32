@@ -136,6 +136,10 @@ it. The audit proves the data; it doesn't play. Everything below still has to be
 - **People with each other and with the place** (`life.md`): on each map, does anyone
   chat with someone, do something at a stop, look up when you come? A map where everyone
   only walks or stands is a minor defect; a whole game like that, a major one.
+- **The unit.** A game measured by dungeons, areas or levels (`genres.md`, "The shape of
+  each genre") is reviewed by them: read "chapter" below as its unit, its length and its
+  reading ceiling as that table says. Fight every boss by hand; `tools/play.mjs --fight`
+  gets you through the stretches with foes.
 - **Length** (the skill's `length.md`): run `node tools/length.mjs <id>` for the minutes of
   reading, read `save.time` at every chapter card you reach, and for each chapter say
   what its played stretch is (a goal on a map with more than one step and order), or

@@ -1,6 +1,8 @@
 # Done means
 
 A cartridge goes on the shelf, or a chapter is handed over, only when all of this holds.
+"Chapter" is the game's unit: a dungeon, an area or a level in the genres measured by
+those (`genres.md`, "The shape of each genre").
 Each line points to the file whose rule it checks; the reviewer scores against it.
 
 - [ ] The plan (and, on your own, the key-art screen) was approved before the world was
@@ -35,7 +37,10 @@ Each line points to the file whose rule it checks; the reviewer scores against i
 - [ ] The length holds (`length.md`): the thread alone is 75+ minutes of a first play
       (90–120 with what's optional, for a whole story, unless the commission says
       otherwise), `tools/length.mjs` gives at most half of that as reading, and every
-      chapter has its played stretch of 5+ minutes.
+      chapter has its played stretch of 5+ minutes. A genre measured by another unit
+      holds its own length and reading ceiling instead (`genres.md`).
+- [ ] A game with fights is fought through: `tools/play.mjs --fight` gets past every
+      stretch with foes, and the reviewer plays each boss by hand.
 - [ ] Every map reads well in the modern look from above and from the ground
       (`tools/sweep-hd.mjs`, `tools/bench.mjs` over every dev jump with nothing under any
       picture, and the review is played with `&hd=1` and looks from behind at every

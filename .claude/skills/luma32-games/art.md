@@ -1,5 +1,12 @@
 # Art direction: the GBA standard, step by step
 
+**The GBA look is the default, not the only style.** A game may choose another (the four
+tones of a Game Boy, an 8-bit palette, a 16-bit one, its own) when the plan says so and
+why. Then it writes its limits at the top of `art/palette.js` (colours per picture, the
+whole palette, the pixel size) and `art: { colours: n }` in game.js, so `tools/sheet.mjs`
+counts against them, and it holds to them as strictly as this file holds to the GBA's.
+Everything after § 1 (light, value, outlines, ground, silhouettes) applies to any style.
+
 Read this before painting any tile, prop or character, and run its checks before calling
 art done. It is written from what the best-selling GBA games did on the same 240×160
 screen — Pokémon Ruby/Sapphire/Emerald and FireRed/LeafGreen, Zelda: The Minish Cap,
@@ -7,7 +14,7 @@ Golden Sun, Mother 3, Fire Emblem, Advance Wars, Mario & Luigi: Superstar Saga, 
 Aria of Sorrow, Harvest Moon: Friends of Mineral Town — and from the mistakes the
 GBA era is remembered for. Every rule has a check; "looks fine to me" is not one.
 
-## 1. The rules the hardware imposed (keep them: they are why it looks like a GBA)
+## 1. The rules the hardware imposed (the default style: keep them, they are why it looks like a GBA)
 
 - **15 colours per object.** A GBA tile or sprite used one 16-colour palette (one slot is
   transparent). A tile, a prop or a character with more than 15 colours is not GBA art,
