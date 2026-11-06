@@ -170,6 +170,8 @@ export default {
   direct: true,
   // what people say when they step out of the player's way: this game's own lines (life.md)
   makeWay: 'life.make_way',
+  // full-screen cards (a chapter, a change of character) are this game's to design, if it
+  // has any: `card(api, opts)` here takes every api.card call (README, "Cards")
   // SELECT: what the story wants from the player right now
   async onSelect(api) {
     await api.say(null, api.save.objective || 'obj.none', { style: 'box' });

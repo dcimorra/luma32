@@ -139,7 +139,7 @@ library only points to it.
   size (since 1.14) it is blown up sharp to the next whole multiple and shrunk smoothly to
   fit, so every pixel is the same size and nothing shimmers as the map scrolls.
 - `engine/world.js`: maps, actors, collisions, camera, and `StoryApi` (what scripts call).
-- `engine/ui.js`: dialogue boxes, choices, menus, chapter cards, location banners.
+- `engine/ui.js`: dialogue boxes, choices, menus, a plain fallback card, location banners.
 - `engine/font.js`, `engine/glyphs.js`: the bitmap font (accents composed, `¿¡ñ` included).
 - `engine/doll.js` (its header lists every option a cast may use, down to the marks of a
   life: relief, lines, weather, scars, belts, boots, worn clothes, since 1.21), `engine/creature.js`: people and animals (16×24, 4 directions × 3
@@ -215,6 +215,7 @@ was.
   direct: true, hint: false, memory: false,                     // see "Scripts", "Life on a map"
   autosave: false, recap: false,         // on by default: save on arriving somewhere; recall the objective on "Continuar"
   transition: 'iris',                    // how warps change place: fade (default), iris, wipe, mosaic, blinds
+  card(api, opts),                       // the game's own full-screen cards: every api.card call comes here (see "Scripts")
   collections: { shells: { name: 'col.shells', total: 12 } },  // see "Journal and credits"
   dev: { jumps: [{ label, run: async (api) => {} }] },          // see "Dev mode"
 }
@@ -845,7 +846,7 @@ await api.music('win'); api.music('j_item', { over: true, duck: 0.3 })   // see 
 api.objective('obj.door', 'ana')            // what next, and where: a person, [x, y], { map, x, y } (see "The objective and the guide")
 api.bark('ana', 'market.shout')             // a line over a head that doesn't stop the game
 api.banner('place.market')
-await api.card({ kicker, title, sub, bg, color, accent, frames })
+await api.card({ kicker, title, sub, bg, color, accent, frames, draw, text, skip })   // see "Cards" below
 const result = await api.play(new MyMinigame())   // any scene: { update(e), draw(ctx, e) }, calls this.done(v)
 api.persist()                                     // write the save slot
 await api.say('ana', 'key', { mood: 'smile' })    // mood reaches the portrait (and figure)
@@ -879,6 +880,23 @@ actor it keeps that one secret.
 `{c=#e05038}…{/}` or `{c=accent}…{/}` (a theme colour; `{c=speaker}`) colours, `{p}` pauses
 the typing a moment and `{p=800}` for that many ms. Unknown braces stay as written, so
 `{name}` variables are untouched.
+
+**Cards** (chapter titles, a change of character, any pause between moments): how they
+look is the cartridge's, not the engine's. The engine's plain card (`engine/ui.js`) is a
+neutral fallback for a game that hasn't drawn its own: black, three centred lines, a fade.
+Nothing asks a game to use it, and since 1.29 there are three ways past it:
+
+- `draw(ctx, t, engine, card)` paints each frame under the texts (`t` counts frames from
+  0 to `card.frames`); `text: false` leaves the texts out, so `draw` paints the whole card
+  with `card.kicker`, `card.title` and `card.sub` already translated. `bg: null` paints no
+  background; `skip: false` keeps A from cutting it short (`skip: 60`, not before frame 60).
+- `game.card(api, opts)` in game.js takes every `api.card(opts)` call: the options come
+  untouched (keys not yet translated, and any field the game invents, such as
+  `{ kind: 'chapter', n: 3 }` or `{ kind: 'hero', who: 'ana' }`), and what it returns is
+  what `api.card` resolves with. It may push a scene of its own (`api.play`), run a
+  stage, play a song, or hand some calls to `api.plainCard(opts)`, the engine's card.
+- Or no card at all: a script is free to do the change of chapter as anything else, with
+  `api.play(scene)`, `api.stage`, fades and effects.
 
 `api.menu` and `api.ask` scroll when there are more options than fit. For a cartridge's own
 screens `engine/ui.js` exports `panel`, `bar` (gauges; `steps` for hearts or pips) and

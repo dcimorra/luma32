@@ -3431,7 +3431,16 @@ export class StoryApi {
 
   banner(key) { showBanner(this.engine, this.text(key)); }
 
-  card(opts) {
+  // A full-screen card between moments of the story. The cartridge owns how it looks:
+  // `game.card(api, opts)`, when there is one, gets every call (opts untouched, keys not
+  // yet translated, any field the game invents) and its result is the card's result. It
+  // may still use the engine's plain card for some calls with api.plainCard(opts).
+  card(opts = {}) {
+    if (typeof this.game.card === 'function') return Promise.resolve(this.game.card(this, opts));
+    return this.plainCard(opts);
+  }
+
+  plainCard(opts = {}) {
     return this.world.show(new Card({ ...opts, kicker: opts.kicker && this.text(opts.kicker, opts.vars), title: opts.title && this.text(opts.title), sub: opts.sub && this.text(opts.sub) }));
   }
 

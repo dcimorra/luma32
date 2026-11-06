@@ -94,6 +94,13 @@ and the clock in `world.md`, "Vehicles, the clock and the street"): use them bef
 cartridge that writes its own version of one of these (its own followers, its own
 markers) gets none of the engine's checks and comes back with the bugs they prevent.
 
+That rule is about behaviour, not looks. **How a game looks is the game's**: its title,
+its cards between chapters or when the character changes, its transitions, its menus'
+colours. The engine's plain card is a neutral fallback, not a house style, and no game
+has to use it: `game.card` takes every `api.card` call, `draw` and `text: false` repaint
+it, or the script does the moment its own way (README, "Cards"). Two games of the
+console should not be told apart only by their maps.
+
 ## Non-negotiables
 
 0. **The engine stays abstract.** `public/engine/` knows no game: no mechanics, no

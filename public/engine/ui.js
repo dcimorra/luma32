@@ -504,9 +504,12 @@ export function panel(ctx, x, y, w, h, title = '') {
 
 // ---------- full-screen card (chapter titles, interstitials) ----------
 
+// The engine's plain card: a neutral default, not a house style. A cartridge that wants its
+// own look paints under the text with `draw`, paints everything with `text: false`, or
+// replaces the card altogether with `game.card` (see StoryApi.card).
 export class Card {
-  constructor({ kicker = '', title = '', sub = '', bg = '#000000', color = '#ffffff', accent = theme.accent, frames = 150, draw = null }) {
-    Object.assign(this, { kicker, title, sub, bg, color, accent, frames, custom: draw });
+  constructor({ kicker = '', title = '', sub = '', bg = '#000000', color = '#ffffff', accent = theme.accent, frames = 150, draw = null, text = true, skip = 30 }) {
+    Object.assign(this, { kicker, title, sub, bg, color, accent, frames, custom: draw, text, skip });
     this.t = 0;
     // a card paints its own background, so it shows even when the world is faded out
     this.aboveFade = true;
@@ -515,14 +518,19 @@ export class Card {
 
   update(e) {
     this.t++;
-    if (this.t > 30 && (e.input.pressed('a') || e.input.pressed('start') || clicked(e.input))) this.t = Math.max(this.t, this.frames);
+    if (this.skip !== false && this.t > this.skip && (e.input.pressed('a') || e.input.pressed('start') || clicked(e.input))) this.t = Math.max(this.t, this.frames);
     if (this.t >= this.frames) this.done();
   }
 
   draw(ctx, e) {
-    ctx.fillStyle = this.bg;
-    ctx.fillRect(0, 0, SCREEN_W, SCREEN_H);
-    if (this.custom) this.custom(ctx, this.t, e);
+    if (this.bg) {
+      ctx.fillStyle = this.bg;
+      ctx.fillRect(0, 0, SCREEN_W, SCREEN_H);
+    }
+    // draw(ctx, t, engine, card): the card itself carries the texts (already translated)
+    // and its length, for a cartridge that lays them out its own way
+    if (this.custom) this.custom(ctx, this.t, e, this);
+    if (!this.text) return;
     const a = Math.min(1, this.t / 30, (this.frames - this.t) / 25);
     ctx.globalAlpha = Math.max(0, Math.round(a * 6) / 6);
     if (this.kicker) drawText(ctx, this.kicker, centerX(this.kicker), 58, this.accent);

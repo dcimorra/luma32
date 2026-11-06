@@ -148,6 +148,11 @@ added at the end.
   (`parallax`: mountains, clouds, the sea) moving slower than the ground; still water
   that reflects whoever stands at its edge (`reflect`); a transition with character for
   the game (`transition`).
+- **The game's own seams.** The moments between moments (a new chapter, the story
+  passing to another character, a jump in time) are part of the game's art direction,
+  decided with its palette and its music: whether they are a card at all, and what it
+  shows. The engine's plain card is there for a game that hasn't decided yet (README,
+  "Cards").
 - **The ending lands.** The last beat gets a set piece, a song of its own and the
   credits (`api.credits`, over a backdrop of the game's own art: who made what, then
   what the player found and the time played). The final save leaves the
